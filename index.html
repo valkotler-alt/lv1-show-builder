@@ -572,6 +572,9 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
 .sitem img{width:100%;height:auto;display:block;pointer-events:none;-webkit-user-drag:none;}
 .sitem .slab{position:absolute;top:calc(100% + 1px);left:50%;transform:translateX(-50%);font:600 11px var(--font-ui);color:#23252a;background:rgba(255,255,255,.75);padding:0 4px;border-radius:3px;white-space:nowrap;pointer-events:none;}
 .sitem.sel{outline:2px dashed var(--accent);outline-offset:2px;}
+.sitem.riser .rbox{width:100%;height:100%;border:3px solid #444;background:rgba(80,80,80,.06);border-radius:2px;box-sizing:border-box;}
+.sitem.riser .rlabel{position:absolute;top:4px;left:0;right:0;text-align:center;font:700 12px var(--font-ui);color:#333;pointer-events:none;}
+.palshape{width:52px;height:36px;border:2.5px solid currentColor;border-radius:2px;}
 .sinsp{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:8px;font-size:12px;color:var(--dim);}
 .sinsp label{display:inline-flex;gap:6px;align-items:center;}
 @media (max-width:860px){ .sbwrap{flex-direction:column;} .sbpal{width:100%;} #palGrid{max-height:200px;} }
@@ -727,6 +730,8 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
       <div id="sinsp" class="sinsp" hidden>
         <label>Label <input id="siLabel" size="14" list="chanNames" placeholder="input / name" spellcheck="false"></label>
         <label>Size <input type="range" id="siSize" min="3" max="45" step="0.5"></label>
+        <label id="siHWrap" hidden>Height <input type="range" id="siH" min="5" max="80" step="0.5"></label>
+        <label id="siNoteWrap" hidden>Dimensions <input id="siNote" size="14" placeholder="e.g. 2.5m x 2m x 20cm"></label>
         <label>Rotate <input type="range" id="siRot" min="-180" max="180" step="5"></label>
         <button class="small" id="siFlip">Flip</button>
         <button class="small" id="siDup">Duplicate</button>
@@ -1296,7 +1301,8 @@ function loadSpec(spec){
     master:{rack:rackIn(spec.master?.rack)},
     stage:{
       items:((spec.stage&&spec.stage.items)||[]).map(it=>({img:String(it.img||""),
-        x:+it.x||0.5,y:+it.y||0.5,w:+it.w||0.12,rot:+it.rot||0,flip:!!it.flip,label:it.label||""})),
+        x:+it.x||0.5,y:+it.y||0.5,w:+it.w||0.12,h:+it.h||0.3,rot:+it.rot||0,
+        flip:!!it.flip,label:it.label||"",note:it.note||""})),
       custom:(spec.stage&&spec.stage.custom)||{},
     },
   };
@@ -1343,7 +1349,11 @@ function renderPalette(q){
     .map(([id,c])=>({id:"custom:"+id,name:c.name||"custom",cat:"Custom",data:c.data}));
   const all=[...customs,...STAGELIB.map(e=>({id:e.id,name:e.name,cat:e.cat}))];
   const hits=all.filter(e=>!q||(e.name+" "+e.cat).toLowerCase().includes(q));
-  let html="",lastCat=null;
+  let html="";
+  if(!q||"riser shapes".includes(q))
+    html+=`<div class="palcat">Shapes</div>
+      <button class="palit" data-add="riser" title="Riser / platform outline"><span class="palshape"></span><span>Riser</span></button>`;
+  let lastCat=null;
   for(const e of hits){
     if(e.cat!==lastCat){html+=`<div class="palcat">${esc(e.cat)}</div>`;lastCat=e.cat;}
     html+=`<button class="palit" data-add="${esc(e.id)}" title="${esc(e.name)}">
@@ -1357,12 +1367,21 @@ function renderStage(){
   st.querySelectorAll(".sitem").forEach(e=>e.remove());
   stg().items.forEach((it,i)=>{
     const d=document.createElement("div");
-    d.className="sitem"+(i===stageSel?" sel":"");
+    const riser=it.img==="riser";
+    d.className="sitem"+(riser?" riser":"")+(i===stageSel?" sel":"");
     d.dataset.si=i;
     d.style.left=(it.x*100)+"%";d.style.top=(it.y*100)+"%";d.style.width=(it.w*100)+"%";
-    d.innerHTML=`<div class="srot" style="transform:rotate(${it.rot||0}deg)${it.flip?" scaleX(-1)":""}">
-      <img draggable="false" src="${esc(imgSrc(it.img))}"></div>`+
-      (it.label?`<div class="slab">${esc(it.label)}</div>`:"");
+    if(riser){
+      d.style.height=((it.h||0.3)*100)+"%";
+      d.innerHTML=`<div class="srot" style="width:100%;height:100%;transform:rotate(${it.rot||0}deg)">
+        <div class="rbox"></div></div>`+
+        (it.label?`<div class="rlabel">${esc(it.label)}</div>`:"")+
+        (it.note?`<div class="slab">${esc(it.note)}</div>`:"");
+    }else{
+      d.innerHTML=`<div class="srot" style="transform:rotate(${it.rot||0}deg)${it.flip?" scaleX(-1)":""}">
+        <img draggable="false" src="${esc(imgSrc(it.img))}"></div>`+
+        (it.label?`<div class="slab">${esc(it.label)}</div>`:"");
+    }
     st.appendChild(d);
   });
   $("#stageCount").textContent=stg().items.length?`${stg().items.length} item${stg().items.length===1?"":"s"}`:"";
@@ -1372,12 +1391,24 @@ function renderInspector(){
   const it=stg().items[stageSel];
   $("#sinsp").hidden=!it;
   if(!it)return;
+  const riser=it.img==="riser";
   if(document.activeElement!==$("#siLabel"))$("#siLabel").value=it.label||"";
+  $("#siSize").max=riser?80:45;
   $("#siSize").value=it.w*100;
   $("#siRot").value=it.rot||0;
+  $("#siHWrap").hidden=!riser;
+  $("#siNoteWrap").hidden=!riser;
+  $("#siFlip").hidden=riser;
+  if(riser){
+    $("#siH").value=(it.h||0.3)*100;
+    if(document.activeElement!==$("#siNote"))$("#siNote").value=it.note||"";
+  }
 }
 function addStageItem(ref){
-  stg().items.push({img:ref,x:0.5,y:0.55,w:0.12,rot:0,flip:false,label:""});
+  const it=ref==="riser"
+    ?{img:"riser",x:0.5,y:0.4,w:0.22,h:0.3,rot:0,flip:false,label:"",note:""}
+    :{img:ref,x:0.5,y:0.55,w:0.12,rot:0,flip:false,label:""};
+  stg().items.push(it);
   stageSel=stg().items.length-1;
   render();
 }
@@ -1426,6 +1457,21 @@ $("#siSize").addEventListener("input",e=>{
   const el=$("#stage").querySelector(".sitem.sel");if(el)el.style.width=(it.w*100)+"%";
 });
 $("#siSize").addEventListener("change",()=>render());
+$("#siH").addEventListener("input",e=>{
+  const it=stg().items[stageSel];if(!it||it.img!=="riser")return;
+  it.h=+e.target.value/100;
+  const el=$("#stage").querySelector(".sitem.sel");if(el)el.style.height=(it.h*100)+"%";
+});
+$("#siH").addEventListener("change",()=>render());
+$("#siNote").addEventListener("input",e=>{
+  const it=stg().items[stageSel];if(!it||it.img!=="riser")return;
+  it.note=e.target.value;
+  const el=$("#stage").querySelector(".sitem.sel");if(!el)return;
+  let lab=el.querySelector(".slab");
+  if(it.note){if(!lab){lab=document.createElement("div");lab.className="slab";el.appendChild(lab);}lab.textContent=it.note;}
+  else if(lab)lab.remove();
+});
+$("#siNote").addEventListener("change",()=>render());
 $("#siRot").addEventListener("input",e=>{
   const it=stg().items[stageSel];if(!it)return;
   it.rot=+e.target.value;
@@ -1509,7 +1555,7 @@ function zoneCoords(text){
   return {x,y};
 }
 $("#stageToInputs").onclick=()=>{
-  const labeled=stg().items.filter(it=>it.label.trim());
+  const labeled=stg().items.filter(it=>it.label.trim()&&it.img!=="riser");
   if(!labeled.length){setStatus("Label some stage items first (select an item, type the input name).",true);return;}
   const byName=new Map(state.channels.map((c,i)=>[c.name.trim().toUpperCase(),c]));
   let created=0,updated=0,full=false;
@@ -1554,6 +1600,19 @@ async function stageBitmap(){
   const title=(state.show.name||"").trim();
   if(title){cx.fillStyle="#222";cx.font="700 30px Arial";cx.textAlign="left";cx.fillText(title+"  —  STAGE PLOT",20,42);}
   for(const it of stg().items){
+    if(it.img==="riser"){
+      const w=it.w*W,h=(it.h||0.3)*H;
+      cx.save();
+      cx.translate(it.x*W,it.y*H);
+      cx.rotate((it.rot||0)*Math.PI/180);
+      cx.fillStyle="rgba(80,80,80,0.05)";cx.fillRect(-w/2,-h/2,w,h);
+      cx.strokeStyle="#444";cx.lineWidth=5;cx.strokeRect(-w/2,-h/2,w,h);
+      cx.restore();
+      cx.fillStyle="#333";cx.textAlign="center";
+      if(it.label){cx.font="700 26px Arial";cx.fillText(it.label,it.x*W,it.y*H-h/2+34);}
+      if(it.note){cx.font="600 20px Arial";cx.fillText(it.note,it.x*W,it.y*H+h/2+26);}
+      continue;
+    }
     const src=imgSrc(it.img);if(!src)continue;
     const img=await new Promise(res=>{const i=new Image();i.crossOrigin="anonymous";
       i.onload=()=>res(i);i.onerror=()=>res(null);i.src=src;});
