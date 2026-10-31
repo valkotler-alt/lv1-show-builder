@@ -542,12 +542,17 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
 .cfg small{display:block;color:var(--dim);font-family:var(--font-num);font-size:11px;margin-top:2px;}
 #warnings{margin:14px 0;display:flex;flex-direction:column;gap:6px;}
 .warn{background:var(--warn-bg);color:var(--warn-fg);border-radius:6px;padding:8px 12px;font-size:13px;}
-#cloudbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0;font-size:13px;color:var(--dim);}
-#savedshows{display:flex;flex-wrap:wrap;gap:6px;}
-.savedchip{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--line);border-radius:6px;padding:4px 8px;background:var(--panel);}
-.savedchip.cur{border-color:var(--accent);}
-.savedchip .name{font-weight:600;color:var(--fg);}
-.savedchip .when{font-family:var(--font-num);font-size:11px;}
+.menuwrap{position:relative;}
+.menu{position:absolute;top:calc(100% + 6px);left:0;z-index:40;background:var(--panel);border:1px solid var(--line);border-radius:8px;min-width:300px;max-height:60vh;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.4);padding:8px;}
+.menuhead{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);font-weight:600;padding:2px 6px 8px;}
+.menuact{display:block;width:100%;text-align:left;margin-bottom:8px;}
+.showrow{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;border:1px solid transparent;}
+.showrow:hover{background:var(--panel2);}
+.showrow.cur{border-color:var(--accent);}
+.showrow .name{font-weight:600;color:var(--fg);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.showrow .when{font-family:var(--font-num);font-size:11px;color:var(--dim);flex:none;}
+.showrow button{flex:none;}
+.menuempty{font-size:12px;color:var(--dim);padding:4px 6px;}
 #status{font-size:13px;color:var(--ok);min-height:18px;margin:6px 0;}
 #status.err{color:var(--mtx);}
 .foot{margin-top:34px;color:var(--dim);font-size:12px;border-top:1px solid var(--line);padding-top:12px;line-height:1.6;}
@@ -562,17 +567,19 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
 <div class="toolbar">
   <button class="primary" id="btnSpec">Export LV1 spec (.json)</button>
   <button id="btnPdf">Vendor input list (.pdf)</button>
-  <button id="btnSave">Save to cloud</button>
+  <div class="menuwrap" id="showsWrap">
+    <button id="btnShows">Shows ▾</button>
+    <div id="showsMenu" class="menu" hidden>
+      <div class="menuhead" id="menuHead">Saved shows</div>
+      <button class="menuact" id="btnSave">💾 Save current show</button>
+      <div id="savedshows"></div>
+    </div>
+  </div>
   <button id="btnImport">Import spec…</button>
   <button id="btnExample">Load RIVKA example</button>
   <button id="btnNew">New empty show</button>
   <input type="file" id="fileImport" accept=".json,application/json" hidden>
   <span id="status" role="status"></span>
-</div>
-
-<div id="cloudbar" hidden>
-  <span>Saved shows:</span>
-  <div id="savedshows"></div>
 </div>
 
 <div class="showmeta">
@@ -1718,48 +1725,53 @@ function nativeSave({filename,data}){
    Google Sheet). On claude.ai they live in the artifact's cloud database;
    in the standalone app they live in this computer's browser storage. */
 const slugShow=n=>n.toUpperCase().replace(/[^A-Z0-9]+/g,"-").replace(/^-+|-+$/g,"")||"SHOW";
-const showChip=(id,s,cur)=>`<span class="savedchip${id===cur?" cur":""}"><span class="name">${esc(s.show?.name||id)}</span><span class="when">${esc((s.savedAt||"").slice(0,10))}</span>
-  <button class="small" data-load="${esc(id)}">Load</button><button class="small danger" data-rm="${esc(id)}" title="Delete this saved show">✕</button></span>`;
+const showRow=(id,s,cur)=>`<div class="showrow${id===cur?" cur":""}" data-load="${esc(id)}" title="Load this show">
+  <span class="name">${esc(s.show?.name||id)}</span><span class="when">${esc((s.savedAt||"").slice(0,10))}</span>
+  <button class="small danger" data-rm="${esc(id)}" title="Delete this saved show">✕</button></div>`;
 function lsShows(){try{return JSON.parse(localStorage.getItem("lv1.shows")||"{}");}catch(_){return {};}}
 function lsSetShows(o){try{localStorage.setItem("lv1.shows",JSON.stringify(o));}catch(e){setStatus("Could not save locally: "+(e.message||e),true);}}
 function renderLocalShows(){
   if(IS_ARTIFACT)return;
   const o=lsShows();const cur=slugShow(state.show.name.trim());
   const items=Object.entries(o).sort((a,b)=>(b[1].savedAt||"").localeCompare(a[1].savedAt||""));
-  $("#savedshows").innerHTML=items.map(([id,s])=>showChip(id,s,cur)).join("")
-    ||'<span style="font-size:12px">none yet — name the show and press “Save show”</span>';
+  $("#savedshows").innerHTML=items.map(([id,s])=>showRow(id,s,cur)).join("")
+    ||'<div class="menuempty">none yet — name the show, then “Save current show”</div>';
 }
+$("#btnShows").onclick=()=>{const m=$("#showsMenu");m.hidden=!m.hidden;};
+document.addEventListener("click",e=>{ // click outside closes the menu
+  if(!e.target.closest("#showsWrap"))$("#showsMenu").hidden=true;
+});
 (async()=>{
   db=IS_ARTIFACT?await (window.claude.use("db")??null):null;
-  if(!db){
-    if(IS_ARTIFACT){$("#btnSave").hidden=true;return;}
-    $("#btnSave").textContent="Save show";
-    $("#cloudbar").hidden=false;
-    $("#cloudbar").querySelector("span").textContent="Saved shows (this computer):";
+  if(IS_ARTIFACT&&!db){$("#showsWrap").hidden=true;return;}
+  $("#menuHead").textContent=db?"Saved shows — cloud":"Saved shows — this computer";
+  if(db){
+    try{
+      db.collection("shows").orderBy("savedAt","desc").limit(50).onSnapshot(snap=>{
+        $("#savedshows").innerHTML=snap.docs.map(d=>showRow(d.id,d.data(),slugShow(state.show.name.trim())))
+          .join("")||'<div class="menuempty">none yet</div>';
+      },()=>{ $("#showsWrap").hidden=true; });
+    }catch(_){ $("#showsWrap").hidden=true; }
+  }else{
     renderLocalShows();
-    return;
   }
-  $("#cloudbar").hidden=false;
-  try{
-    db.collection("shows").orderBy("savedAt","desc").limit(20).onSnapshot(snap=>{
-      $("#savedshows").innerHTML=snap.docs.map(d=>showChip(d.id,d.data(),slugShow(state.show.name.trim())))
-        .join("")||'<span style="font-size:12px">none yet</span>';
-    },()=>{ $("#cloudbar").hidden=true; });
-  }catch(_){ $("#cloudbar").hidden=true; }
 })();
 document.addEventListener("click",async e=>{
-  const load=e.target.dataset?.load, rm=e.target.dataset?.rm;
-  if(load){
-    if(db){const snap=await db.doc("shows/"+load).get();
-      if(snap.exists){try{loadSpec(snap.data().spec);setStatus("Loaded “"+(snap.data().show?.name||load)+"”.");}catch(err){setStatus(err.message,true);}}}
-    else if(!IS_ARTIFACT){const doc=lsShows()[load];
-      if(doc){try{loadSpec(doc.spec);setStatus("Loaded “"+(doc.show?.name||load)+"”.");}catch(err){setStatus(err.message,true);}}}
-    return;
-  }
-  if(rm){
+  const rmBtn=e.target.closest("[data-rm]");
+  if(rmBtn){
+    const rm=rmBtn.dataset.rm;
     if(db){await db.doc("shows/"+rm).delete();setStatus("Deleted.");}
     else if(!IS_ARTIFACT){const o=lsShows();delete o[rm];lsSetShows(o);renderLocalShows();setStatus("Deleted.");}
+    return;
   }
+  const row=e.target.closest("[data-load]");
+  if(!row)return;
+  const load=row.dataset.load;
+  if(db){const snap=await db.doc("shows/"+load).get();
+    if(snap.exists){try{loadSpec(snap.data().spec);setStatus("Loaded “"+(snap.data().show?.name||load)+"”.");}catch(err){setStatus(err.message,true);}}}
+  else if(!IS_ARTIFACT){const doc=lsShows()[load];
+    if(doc){try{loadSpec(doc.spec);setStatus("Loaded “"+(doc.show?.name||load)+"”.");}catch(err){setStatus(err.message,true);}}}
+  $("#showsMenu").hidden=true;
 });
 $("#btnSave").onclick=async()=>{
   const name=state.show.name.trim();if(!name){setStatus("Give the show a name first.",true);return;}
