@@ -580,6 +580,7 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
 .sinsp{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:8px;font-size:12px;color:var(--dim);}
 .sinsp label{display:inline-flex;gap:6px;align-items:center;}
 .rotbtns{display:inline-flex;gap:4px;}
+.tplconfirm{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;padding:8px 10px;border:1px solid var(--accent);border-radius:8px;background:var(--panel);font-size:12px;}
 .gname{position:absolute;transform:translate(-50%,-100%);font:600 11px var(--font-ui);font-style:italic;color:#555;background:rgba(255,255,255,.65);padding:0 4px;border-radius:3px;pointer-events:none;white-space:nowrap;}
 @media (max-width:860px){ .sbwrap{flex-direction:column;} .sbpal{width:100%;} #palGrid{max-height:200px;} }
 #status{font-size:13px;color:var(--ok);min-height:18px;margin:6px 0;}
@@ -735,6 +736,11 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
       <div class="stagedims">Stage width <input type="number" id="stageW" min="4" max="40" step="0.5" style="width:60px"> m
         <span class="hint">· depth <span id="stageD"></span> m (items are drawn at their real size — the chair is 50 cm)</span></div>
       <div id="stage"><div class="stagelabel">A U D I E N C E</div><div class="stagesize" id="stageSizeLab"></div></div>
+      <div id="tplConfirm" class="tplconfirm" hidden>
+        <span id="tplText"></span>
+        <button class="small" id="tplApply">Add</button>
+        <button class="small" id="tplSkip">Skip</button>
+      </div>
       <div id="sinsp" class="sinsp" hidden>
         <label id="siLabelWrap">Label <input id="siLabel" size="14" list="chanNames" placeholder="input / name" spellcheck="false"></label>
         <label id="siCmWrap">Width <input type="number" id="siCm" min="5" max="1200" step="1" style="width:68px"> cm</label>
@@ -1327,12 +1333,15 @@ function loadSpec(spec){
         if(+it.h>0)o.h=+it.h;
         if(it.note)o.note=String(it.note);
         if(it.grp)o.grp=String(it.grp);
+        if(Array.isArray(it.ins)&&it.ins.length)o.ins=it.ins.map(String);
+        if(it.auxl)o.auxl=String(it.auxl);
         return o;}),
       custom:(spec.stage&&spec.stage.custom)||{},
       widthM:+(spec.stage&&spec.stage.widthM)||12,
     },
   };
   stageSel=-1;mSel=new Set();
+  if(typeof tplPending!=="undefined"){tplPending=null;try{$("#tplConfirm").hidden=true;}catch(_){}}
   clearSel();rackOpen=null;pendingCfg=null;
   applyConfig();
   render();
@@ -1361,6 +1370,106 @@ function imgSrc(ref){
     return (stg().custom[id]||lsCustoms()[id]||{}).data||"";}
   return STAGELIB_BASE+ref+".png";
 }
+/* ---------- instrument -> inputs templates ----------
+   What each library image implies for the input list (or, for monitors,
+   the aux list). Entries: [name, stereo, mic, stand]; plain names by the
+   house convention ("GT AC", "PNO Pickup") — rename in the list as needed.
+   Kits: base Kick/Snr Top/Snr Bottom/HH/OH + toms per image
+   (1 rack + floor = 8 inputs, 2 racks = 9, 3 racks = 10).
+   Piano is always PNO (stereo) + PNO Pickup. */
+const _KIT_BASE=[["Kick",0,"B52","short"],["Snr Top",0,"SM57","clip"],["Snr Bottom",0,"SM57","clip"],["HH",0,"SM81","short"]];
+const _KIT_END=[["FLR",0,"e604","clip"],["OH",1,"KM184","tall"]];
+const _PIANO={ins:[["PNO",1,"C414","boom"],["PNO Pickup",0,"DI",""]]};
+const TPL={
+  "drums-percussion-twotoms":{ins:[..._KIT_BASE,["Tom 1",0,"e604","clip"],..._KIT_END]},
+  "drums-percussion-threetoms":{ins:[..._KIT_BASE,["Tom 1",0,"e604","clip"],["Tom 2",0,"e604","clip"],..._KIT_END]},
+  "drums-percussion-fourtoms":{ins:[..._KIT_BASE,["Tom 1",0,"e604","clip"],["Tom 2",0,"e604","clip"],["Tom 3",0,"e604","clip"],..._KIT_END]},
+  "drums-percussion-bassdrum":{ins:[["Kick",0,"B52","short"]]},
+  "drums-percussion-snare":{ins:[["Snr Top",0,"SM57","clip"],["Snr Bottom",0,"SM57","clip"]]},
+  "drums-percussion-hihat":{ins:[["HH",0,"SM81","short"]]},
+  "drums-percussion-floortom":{ins:[["FLR",0,"e604","clip"]]},
+  "drums-percussion-bongos":{ins:[["Bongos",0,"e604","clip"]]},
+  "drums-percussion-conga-double":{ins:[["Congas",1,"e604","clip"]]},
+  "drums-percussion-conga-drum-percussion-1":{ins:[["Conga",0,"e604","clip"]]},
+  "drums-percussion-djembe":{ins:[["Djembe",0,"e604","clip"]]},
+  "drums-percussion-cajonla":{ins:[["Cajon",0,"B91A",""]]},
+  "drums-percussion-surdo":{ins:[["Surdo",0,"e604","clip"]]},
+  "drums-percussion-tarabuka":{ins:[["Darbuka",0,"e604","clip"]]},
+  "drums-percussion-timbale":{ins:[["Timbales",0,"SM57","short"]]},
+  "drums-percussion-timpani2":{ins:[["Timpani",0,"SM81","tall"]]},
+  "drums-percussion-marimba":{ins:[["Marimba",1,"KM184","tall"]]},
+  "drums-percussion-glock":{ins:[["Glock",0,"SM81","tall"]]},
+  "drums-percussion-chimes":{ins:[["Chimes",0,"SM81","tall"]]},
+  "drums-percussion-gong":{ins:[["Gong",0,"SM57","tall"]]},
+  "drums-percussion-cowbell":{ins:[["Cowbell",0,"SM57","short"]]},
+  "drums-percussion-percussionpad":{ins:[["Perc Pad",1,"DI",""]]},
+  "drums-percussion-drummachine":{ins:[["Drum Machine",1,"DI",""]]},
+  "amps-fenderamp":{ins:[["GT Amp",0,"SM57","short"]]},
+  "amps-fourtens":{ins:[["Bass Amp",0,"D112","short"]]},
+  "amps-eighttens":{ins:[["Bass Amp",0,"D112","short"]]},
+  "amps-guitarsynth":{ins:[["GT Synth",1,"DI",""]]},
+  "keys-stands-grandpiano":_PIANO,
+  "keys-stands-babygrand":_PIANO,
+  "keys-stands-fantom":{ins:[["KEYS",1,"DI",""]]},
+  "keys-stands-doublekey":{ins:[["KEYS 1",1,"DI",""],["KEYS 2",1,"DI",""]]},
+  "keys-stands-hammondb3back":{ins:[["HAMMOND",1,"DI",""]]},
+  "keys-stands-lesliel":{ins:[["Leslie Top",1,"SM57","boom"],["Leslie Bottom",0,"D112","short"]]},
+  "keys-stands-accordion":{ins:[["Accordion",0,"Clip","clip"]]},
+  "mic-di-power-di":{ins:[["DI",0,"DI",""]]},
+  "mic-di-power-stereodi":{ins:[["ST DI",1,"DI",""]]},
+  "mic-di-power-clipon":{ins:[["Clip Mic",0,"e604","clip"]]},
+  "mic-di-power-headsetmic":{ins:[["Headset",0,"DPA headset",""]]},
+  "mic-di-power-wireless-mic":{ins:[["VOX WL",0,"Wireless SM58",""]]},
+  "mic-di-power-mackie402":{ins:[["Submix",1,"DI",""]]},
+  "monitors-mxr-pa-dj-small-drum-mixer":{ins:[["Submix",1,"DI",""]]},
+  "monitors-mxr-pa-dj-mixer":{ins:[["Submix",1,"DI",""]]},
+  "monitors-mxr-pa-dj-dj-setupb":{ins:[["DJ",1,"DI",""]]},
+  "monitors-mxr-pa-dj-laptoplb":{ins:[["Playback",1,"DI",""]]},
+  "monitors-mxr-pa-dj-in-ear":{aux:["IEM",1,"Wireless IEM"]},
+  "strings-p-bass":{ins:[["BASS",0,"DI",""]]},
+  "strings-stringbass":{ins:[["C BASS",0,"Clip","clip"]]},
+  "strings-electricguitar":{ins:[["GT EL",0,"DI",""]]},
+  "strings-acousticguitar":{ins:[["GT AC",0,"DI",""]]},
+  "strings-twelvestring":{ins:[["GT 12str",0,"DI",""]]},
+  "strings-violin":{ins:[["VIOLIN",0,"Clip","clip"]]},
+  "strings-viola":{ins:[["VIOLA",0,"Clip","clip"]]},
+  "strings-cello":{ins:[["CELLO",0,"Clip","clip"]]},
+  "strings-mandolin":{ins:[["MANDOLIN",0,"DI",""]]},
+  "strings-banjo":{ins:[["BANJO",0,"DI",""]]},
+  "strings-ukulele":{ins:[["UKULELE",0,"DI",""]]},
+  "strings-oudra":{ins:[["OUD",0,"DI",""]]},
+  "strings-bouzouki":{ins:[["BOUZOUKI",0,"DI",""]]},
+  "strings-charangora":{ins:[["CHARANGO",0,"DI",""]]},
+  "strings-harpla":{ins:[["HARP",0,"DI",""]]},
+  "vocal-stands-boom57":{ins:[["MIC",0,"SM57","boom"]]},
+  "vocal-stands-boomlshortl":{ins:[["MIC",0,"SM57","short"]]},
+  "vocal-stands-center-vocal":{ins:[["VOX",0,"SM58","straight"]]},
+  "vocal-stands-left-vocal":{ins:[["VOX",0,"SM58","straight"]]},
+  "vocal-stands-right-vocal":{ins:[["VOX",0,"SM58","straight"]]},
+  "winds-trumpetla":{ins:[["TRUMPET",0,"Clip","clip"]]},
+  "winds-cornetla":{ins:[["CORNET",0,"Clip","clip"]]},
+  "winds-trombone":{ins:[["TBONE",0,"Clip","clip"]]},
+  "winds-trombonela":{ins:[["TBONE",0,"Clip","clip"]]},
+  "winds-saxla":{ins:[["SAX",0,"Clip","clip"]]},
+  "winds-altosaxla":{ins:[["ALTO SAX",0,"Clip","clip"]]},
+  "winds-sopranosax":{ins:[["SOP SAX",0,"Clip","clip"]]},
+  "winds-baritonesaxr":{ins:[["BARI SAX",0,"Clip","clip"]]},
+  "winds-clarinetla":{ins:[["CLARINET",0,"Clip","clip"]]},
+  "winds-bassclarinetla":{ins:[["BASS CLAR",0,"Clip","clip"]]},
+  "winds-contraclarinetr":{ins:[["CONTRA CLAR",0,"Clip","clip"]]},
+  "winds-flutela":{ins:[["FLUTE",0,"Clip","clip"]]},
+  "winds-piccolol":{ins:[["PICCOLO",0,"Clip","clip"]]},
+  "winds-oboela":{ins:[["OBOE",0,"Clip","clip"]]},
+  "winds-bassoonla":{ins:[["BASSOON",0,"Clip","clip"]]},
+  "winds-frenchhornla":{ins:[["FR HORN",0,"Clip","clip"]]},
+  "winds-euphonium":{ins:[["EUPHONIUM",0,"Clip","clip"]]},
+  "winds-tubala":{ins:[["TUBA",0,"Clip","clip"]]},
+  "winds-harmonica":{ins:[["HARMONICA",0,"SM58",""]]},
+};
+// Every wedge image maps to a mono Wedge aux.
+for(const id of ["wedge","wedgel","wedgela","wedger","wedgera","wedgeb","wedgelb","wedgerb"])
+  TPL["monitors-mxr-pa-dj-"+id]={aux:["WEDGE",0,"Wedge"]};
+
 function palCats(){
   const cats=[...new Set([...STAGELIB.map(e=>e.cat),
     ...Object.values({...lsCustoms(),...stg().custom}).map(c=>c.cat||"Custom")])].sort();
@@ -1532,8 +1641,63 @@ function addStageItem(ref){
   stg().items.push(it);
   stageSel=stg().items.length-1;
   mSel=new Set([stageSel]);
+  offerTemplate(it,ref);
   render();
 }
+/* Instrument -> input-list correlation: placing an item with a template
+   offers (never silently adds) its inputs / aux. */
+let tplPending=null;
+function offerTemplate(it,ref){
+  const t=TPL[ref];
+  tplPending=null;$("#tplConfirm").hidden=true;
+  if(!t)return;
+  tplPending={it,t};
+  if(t.ins){
+    const names=t.ins.map(e=>e[0]+(e[1]?" (st)":""));
+    const ports=t.ins.reduce((s,e)=>s+(e[1]?2:1),0);
+    $("#tplText").textContent=`${libName(ref)}: add ${ports} input${ports===1?"":"s"} — ${names.join(", ")}?`;
+  }else if(t.aux){
+    $("#tplText").textContent=`${libName(ref)}: add aux “${t.aux[0]}”${t.aux[1]?" (st)":""} → ${t.aux[2]}?`;
+  }
+  $("#tplConfirm").hidden=false;
+}
+function libName(ref){const e=STAGELIB.find(x=>x.id===ref);return (e&&e.name)||ref;}
+function dedupeName(base,taken){
+  let n=base,k=2;
+  while(taken.has(n.toUpperCase()))n=`${base} ${k++}`;
+  taken.add(n.toUpperCase());
+  return n;
+}
+$("#tplSkip").onclick=()=>{tplPending=null;$("#tplConfirm").hidden=true;};
+$("#tplApply").onclick=()=>{
+  if(!tplPending)return;
+  const {it,t}=tplPending;
+  tplPending=null;$("#tplConfirm").hidden=true;
+  if(t.ins){
+    const taken=new Set(state.channels.filter(c=>c.name.trim()).map(c=>c.name.trim().toUpperCase()));
+    const made=[];let full=false;
+    for(const [base,st,mic,stand] of t.ins){
+      const free=state.channels.find(c=>!c.name.trim());
+      if(!free){full=true;break;}
+      const name=dedupeName(base,taken);
+      Object.assign(free,{name,stereo:!!st,mic:mic||"",stand:stand||"",pos:stageZone(it)});
+      made.push(name);
+    }
+    if(made.length)it.ins=made;
+    render();
+    setStatus(`Added ${made.length} input${made.length===1?"":"s"}: ${made.join(", ")}.`+(full?" Input bank is full — some were skipped.":""),full);
+  }else if(t.aux){
+    const free=state.auxes.find(a=>!a.name.trim());
+    if(!free){setStatus("Aux bank is full.",true);return;}
+    const taken=new Set(state.auxes.filter(a=>a.name.trim()).map(a=>a.name.trim().toUpperCase()));
+    const name=dedupeName(t.aux[0],taken);
+    Object.assign(free,{name,stereo:!!t.aux[1],dest:t.aux[2]});
+    it.label=it.label||name;
+    it.auxl=name; // marks the label as an AUX link, not an input name
+    render();
+    setStatus(`Added aux “${name}” → ${t.aux[2]}.`);
+  }
+};
 document.addEventListener("click",e=>{
   const p=e.target.closest("[data-add]");
   if(p)addStageItem(p.dataset.add);
@@ -1655,7 +1819,7 @@ $("#giUngroup").onclick=()=>{
 };
 $("#siFlip").onclick=()=>{const it=stg().items[stageSel];if(!it)return;it.flip=!it.flip;render();};
 $("#siDup").onclick=()=>{const it=stg().items[stageSel];if(!it)return;
-  const copy={...it};delete copy.grp;
+  const copy={...it};delete copy.grp;delete copy.ins;
   stg().items.push({...copy,x:Math.min(1,it.x+0.05),y:Math.min(1,it.y+0.05)});
   stageSel=stg().items.length-1;mSel=new Set([stageSel]);render();};
 function deleteSelection(){
@@ -1739,25 +1903,39 @@ function zoneCoords(text){
   return {x,y};
 }
 $("#stageToInputs").onclick=()=>{
-  const labeled=stg().items.filter(it=>it.label.trim()&&it.img!=="riser");
-  if(!labeled.length){setStatus("Label some stage items first (select an item, type the input name).",true);return;}
-  const byName=new Map(state.channels.map((c,i)=>[c.name.trim().toUpperCase(),c]));
-  let created=0,updated=0,full=false;
-  for(const it of labeled){
-    const key=it.label.trim().toUpperCase();
+  const byName=new Map(state.channels.map(c=>[c.name.trim().toUpperCase(),c]));
+  let created=0,updated=0,full=false,any=false;
+  for(const it of stg().items){
+    if(it.img==="riser")continue;
     const zone=stageZone(it);
+    // Inputs this item spawned from its template: refresh their position
+    // zone (names that were renamed in the list are dropped from the link).
+    if(Array.isArray(it.ins)&&it.ins.length){
+      any=true;
+      it.ins=it.ins.filter(n=>{
+        const ch=byName.get(n.trim().toUpperCase());
+        if(ch){ch.pos=zone;updated++;return true;}
+        return false;
+      });
+      if(!it.ins.length)delete it.ins;
+    }
+    if(!it.label.trim()||it.auxl)continue; // aux-linked labels are not inputs
+    any=true;
+    const key=it.label.trim().toUpperCase();
     const ch=byName.get(key);
-    if(ch){ch.pos=zone;updated++;continue;}
+    if(ch){if(!it.ins||!it.ins.includes(ch.name)){ch.pos=zone;updated++;}continue;}
     const free=state.channels.find(c=>!c.name.trim());
     if(!free){full=true;continue;}
     free.name=it.label.trim();free.pos=zone;
     byName.set(key,free);created++;
   }
+  if(!any){setStatus("Nothing to sync — place instruments with templates, or label items with input names.",true);return;}
   render();
   setStatus(`Stage → inputs: ${created} input${created===1?"":"s"} created, ${updated} position${updated===1?"":"s"} updated.`+(full?" Input bank is full — some items were skipped.":""),full);
 };
 $("#inputsToStage").onclick=()=>{
-  const have=new Set(stg().items.map(it=>it.label.trim().toUpperCase()).filter(Boolean));
+  const have=new Set(stg().items.flatMap(it=>[it.label.trim(),...(it.ins||[])])
+    .map(s=>s.trim().toUpperCase()).filter(Boolean));
   const missing=state.channels.filter(c=>c.name.trim()&&!have.has(c.name.trim().toUpperCase()));
   if(!missing.length){setStatus("Every named input already has a stage item.");return;}
   const mic=STAGELIB.find(e=>/boom57/.test(e.id))||STAGELIB.find(e=>e.cat==="Vocal Stands")||STAGELIB[0];
