@@ -553,6 +553,28 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
 .showrow .when{font-family:var(--font-num);font-size:11px;color:var(--dim);flex:none;}
 .showrow button{flex:none;}
 .menuempty{font-size:12px;color:var(--dim);padding:4px 6px;}
+/* Stage Builder: library palette + a paper-like stage canvas (kept light in
+   both themes -- it is what gets exported/printed). */
+.sbwrap{display:flex;gap:12px;align-items:flex-start;}
+.sbpal{width:248px;flex:none;border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:8px;display:flex;flex-direction:column;gap:8px;}
+.sbpal input[type="text"],.sbpal input:not([type]){width:100%;box-sizing:border-box;}
+#palGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;max-height:430px;overflow-y:auto;}
+.palcat{grid-column:1/-1;font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);font-weight:600;margin-top:6px;}
+.palit{display:flex;flex-direction:column;align-items:center;gap:2px;border:1px solid transparent;border-radius:6px;padding:4px 2px;cursor:pointer;font-size:9px;color:var(--dim);text-align:center;background:none;}
+.palit:hover{border-color:var(--accent);background:var(--panel2);}
+.palit img{width:56px;height:42px;object-fit:contain;pointer-events:none;}
+.palit span{max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.sbmain{flex:1;min-width:0;}
+#stage{position:relative;width:100%;aspect-ratio:16/9;background:#f7f6f2;border:2px solid var(--line);border-radius:8px;overflow:hidden;touch-action:none;}
+.stagelabel{position:absolute;bottom:4px;left:50%;transform:translateX(-50%);font-size:10px;letter-spacing:.35em;color:#b5b0a6;pointer-events:none;}
+.sitem{position:absolute;transform:translate(-50%,-50%);cursor:grab;user-select:none;}
+.sitem .srot{pointer-events:none;}
+.sitem img{width:100%;height:auto;display:block;pointer-events:none;-webkit-user-drag:none;}
+.sitem .slab{position:absolute;top:calc(100% + 1px);left:50%;transform:translateX(-50%);font:600 11px var(--font-ui);color:#23252a;background:rgba(255,255,255,.75);padding:0 4px;border-radius:3px;white-space:nowrap;pointer-events:none;}
+.sitem.sel{outline:2px dashed var(--accent);outline-offset:2px;}
+.sinsp{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:8px;font-size:12px;color:var(--dim);}
+.sinsp label{display:inline-flex;gap:6px;align-items:center;}
+@media (max-width:860px){ .sbwrap{flex-direction:column;} .sbpal{width:100%;} #palGrid{max-height:200px;} }
 #status{font-size:13px;color:var(--ok);min-height:18px;margin:6px 0;}
 #status.err{color:var(--mtx);}
 .foot{margin-top:34px;color:var(--dim);font-size:12px;border-top:1px solid var(--line);padding-top:12px;line-height:1.6;}
@@ -684,6 +706,38 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
   </table></div>
 </section>
 
+<section style="--seccolor:var(--grp)" id="stageSec">
+  <div class="sechead"><h2>Stage plot</h2><span class="count" id="stageCount"></span>
+    <span class="hint">Click a library item to place it, drag to position, label it with the input it belongs to.
+    Drawn from the audience; position zones use stage left/right (performer's view).</span>
+    <span class="selops">
+      <button class="small" id="stageToInputs" title="Create/update inputs from labeled stage items (sets their stage-position zone)">Stage → inputs</button>
+      <button class="small" id="inputsToStage" title="Add a stage item for every named input that has none">Inputs → stage</button>
+      <button class="small" id="stagePng">Export PNG</button>
+      <button class="small danger" id="stageClear">Clear stage</button></span></div>
+  <div class="sbwrap">
+    <div class="sbpal">
+      <input id="palSearch" placeholder="search the library…" spellcheck="false">
+      <div id="palGrid"><div class="menuempty">loading library…</div></div>
+      <button class="small" id="palImport">＋ Import image…</button>
+      <input type="file" id="palFile" accept="image/*" hidden>
+    </div>
+    <div class="sbmain">
+      <div id="stage"><div class="stagelabel">A U D I E N C E</div></div>
+      <div id="sinsp" class="sinsp" hidden>
+        <label>Label <input id="siLabel" size="14" list="chanNames" placeholder="input / name" spellcheck="false"></label>
+        <label>Size <input type="range" id="siSize" min="3" max="45" step="0.5"></label>
+        <label>Rotate <input type="range" id="siRot" min="-180" max="180" step="5"></label>
+        <button class="small" id="siFlip">Flip</button>
+        <button class="small" id="siDup">Duplicate</button>
+        <button class="small danger" id="siDel">Delete</button>
+        <span class="hint">…or drag to move, Delete key removes</span>
+      </div>
+      <datalist id="chanNames"></datalist>
+    </div>
+  </div>
+</section>
+
 <p class="foot">
 The exported <code>.json</code> is the LV1 conversion spec: feed it to <code>make_lv1_session.py --spec</code> to generate the <code>.emo</code>
 (the show name becomes the file name). Only named strips are built, packed top-down; the vendor PDF carries only #, name, format, mic,
@@ -739,7 +793,8 @@ const clearSel=k=>{if(k)sel[k].clear();else Object.values(sel).forEach(s=>s.clea
 function defaultShow(){
   // Start empty: pick the mixer config, name strips, route, export.
   return {show:{name:"",date:"",venue:"",sheetUrl:""},configId:"80-16",
-          channels:[],groups:[],fx:[],auxes:[],matrixes:[],master:{rack:null}};
+          channels:[],groups:[],fx:[],auxes:[],matrixes:[],master:{rack:null},
+          stage:{items:[],custom:{}}};
 }
 function applyConfig(){
   const c=cfg();
@@ -788,6 +843,7 @@ function exampleShow(){
     fx:[fx("Drum REV"),fx("Inst Rev"),fx("VX Rev")],
     auxes:[], matrixes:[],
     master:{rack:rk(["Curves AQ Live"])},
+    stage:{items:[],custom:{}},
   };
 }
 
@@ -810,6 +866,9 @@ function render(){
   renderConfig(); renderChannels(); renderGroups(); renderFx();
   renderAux(); renderSimple("mtx",state.matrixes,"#mtxTable");
   renderMaster(); renderWarnings();
+  renderStage();
+  $("#chanNames").innerHTML=state.channels.filter(c=>c.name.trim())
+    .map(c=>`<option value="${esc(c.name.trim())}">`).join("");
   if(typeof renderLocalShows==="function")renderLocalShows();
 }
 function renderConfig(){
@@ -1196,6 +1255,13 @@ function buildSpec(){
   };
   const mr=rackOut(state.master.rack);
   if(mr)spec.master={rack:mr};
+  const sitems=(state.stage&&state.stage.items)||[];
+  if(sitems.length){
+    const usedCustom={};
+    sitems.forEach(it=>{if(it.img.startsWith("custom:")){const id=it.img.slice(7);
+      if(state.stage.custom[id])usedCustom[id]=state.stage.custom[id];}});
+    spec.stage={items:sitems.map(it=>({...it})),custom:usedCustom};
+  }
   return spec;
 }
 function inferConfig(spec){
@@ -1228,12 +1294,294 @@ function loadSpec(spec){
     auxes:(spec.auxes||[]).map(a=>({...defAux(),name:a.name||"",stereo:!!a.stereo,dest:a.dest||"",notes:a.notes||""})),
     matrixes:(spec.matrixes||[]).map(m=>({name:m.name||"",stereo:!!m.stereo})),
     master:{rack:rackIn(spec.master?.rack)},
+    stage:{
+      items:((spec.stage&&spec.stage.items)||[]).map(it=>({img:String(it.img||""),
+        x:+it.x||0.5,y:+it.y||0.5,w:+it.w||0.12,rot:+it.rot||0,flip:!!it.flip,label:it.label||""})),
+      custom:(spec.stage&&spec.stage.custom)||{},
+    },
   };
+  stageSel=-1;
   clearSel();rackOpen=null;pendingCfg=null;
   applyConfig();
   render();
 }
 function fileStem(){return (state.show.name.trim()||"LV1 Show").replace(/[\\/:*?"<>|]/g,"_");}
+
+/* ---------- Stage Builder ----------
+   The image library is built from StagePlot/ by build_stagelib.py and hosted
+   with the app on GitHub Pages (transparent, tight-cropped PNGs + a
+   manifest). Items live in state.stage.items as fractions of the stage
+   (x,y = center, w = width/stage-width), so the same data renders in the
+   editor, in the exported PNG and on the vendor PDF. Custom imports are
+   processed in the browser the same way (border flood fill -> crop ->
+   downscale) and travel inside the spec, plus a personal library in
+   localStorage for future shows. */
+const STAGELIB_BASE=/\.github\.io$/.test(location.hostname)?"stagelib/"
+  :(location.hostname==="localhost"||location.hostname==="127.0.0.1")?"site/stagelib/"
+  :"https://valkotler-alt.github.io/lv1-show-builder/stagelib/";
+let STAGELIB=[];
+let stageSel=-1;
+const stg=()=>{if(!state.stage)state.stage={items:[],custom:{}};return state.stage;};
+function lsCustoms(){try{return JSON.parse(localStorage.getItem("lv1.customImgs")||"{}");}catch(_){return {};}}
+function imgSrc(ref){
+  if(ref.startsWith("custom:")){const id=ref.slice(7);
+    return (stg().custom[id]||lsCustoms()[id]||{}).data||"";}
+  return STAGELIB_BASE+ref+".png";
+}
+async function loadStageLib(){
+  try{
+    const r=await fetch(STAGELIB_BASE+"manifest.json");
+    STAGELIB=await r.json();
+    renderPalette($("#palSearch").value);
+  }catch(_){
+    $("#palGrid").innerHTML='<div class="menuempty">Library needs an internet connection — imports and existing items still work.</div>';
+  }
+}
+function renderPalette(q){
+  q=(q||"").trim().toLowerCase();
+  const customs=Object.entries({...lsCustoms(),...stg().custom})
+    .map(([id,c])=>({id:"custom:"+id,name:c.name||"custom",cat:"Custom",data:c.data}));
+  const all=[...customs,...STAGELIB.map(e=>({id:e.id,name:e.name,cat:e.cat}))];
+  const hits=all.filter(e=>!q||(e.name+" "+e.cat).toLowerCase().includes(q));
+  let html="",lastCat=null;
+  for(const e of hits){
+    if(e.cat!==lastCat){html+=`<div class="palcat">${esc(e.cat)}</div>`;lastCat=e.cat;}
+    html+=`<button class="palit" data-add="${esc(e.id)}" title="${esc(e.name)}">
+      <img loading="lazy" src="${esc(e.data||STAGELIB_BASE+e.id+".png")}"><span>${esc(e.name)}</span></button>`;
+  }
+  $("#palGrid").innerHTML=html||'<div class="menuempty">no matches</div>';
+}
+$("#palSearch").addEventListener("input",e=>renderPalette(e.target.value));
+function renderStage(){
+  const st=$("#stage");
+  st.querySelectorAll(".sitem").forEach(e=>e.remove());
+  stg().items.forEach((it,i)=>{
+    const d=document.createElement("div");
+    d.className="sitem"+(i===stageSel?" sel":"");
+    d.dataset.si=i;
+    d.style.left=(it.x*100)+"%";d.style.top=(it.y*100)+"%";d.style.width=(it.w*100)+"%";
+    d.innerHTML=`<div class="srot" style="transform:rotate(${it.rot||0}deg)${it.flip?" scaleX(-1)":""}">
+      <img draggable="false" src="${esc(imgSrc(it.img))}"></div>`+
+      (it.label?`<div class="slab">${esc(it.label)}</div>`:"");
+    st.appendChild(d);
+  });
+  $("#stageCount").textContent=stg().items.length?`${stg().items.length} item${stg().items.length===1?"":"s"}`:"";
+  renderInspector();
+}
+function renderInspector(){
+  const it=stg().items[stageSel];
+  $("#sinsp").hidden=!it;
+  if(!it)return;
+  if(document.activeElement!==$("#siLabel"))$("#siLabel").value=it.label||"";
+  $("#siSize").value=it.w*100;
+  $("#siRot").value=it.rot||0;
+}
+function addStageItem(ref){
+  stg().items.push({img:ref,x:0.5,y:0.55,w:0.12,rot:0,flip:false,label:""});
+  stageSel=stg().items.length-1;
+  render();
+}
+document.addEventListener("click",e=>{
+  const p=e.target.closest("[data-add]");
+  if(p)addStageItem(p.dataset.add);
+});
+/* Drag items on the stage (pointer events; coordinates as stage fractions). */
+let sdrag=null;
+$("#stage").addEventListener("pointerdown",e=>{
+  const el=e.target.closest(".sitem");
+  const r=$("#stage").getBoundingClientRect();
+  if(!el){if(stageSel!==-1){stageSel=-1;renderStage();}return;}
+  stageSel=+el.dataset.si;
+  renderStage();
+  const sel=$("#stage").querySelector('.sitem.sel');
+  const it=stg().items[stageSel];
+  sdrag={dx:it.x-(e.clientX-r.left)/r.width, dy:it.y-(e.clientY-r.top)/r.height, el:sel, moved:false};
+  sel.setPointerCapture(e.pointerId);
+});
+$("#stage").addEventListener("pointermove",e=>{
+  if(!sdrag||stageSel<0)return;
+  const r=$("#stage").getBoundingClientRect();
+  const it=stg().items[stageSel];
+  it.x=Math.min(1,Math.max(0,(e.clientX-r.left)/r.width+sdrag.dx));
+  it.y=Math.min(1,Math.max(0,(e.clientY-r.top)/r.height+sdrag.dy));
+  sdrag.el.style.left=(it.x*100)+"%";sdrag.el.style.top=(it.y*100)+"%";
+  sdrag.moved=true;
+});
+$("#stage").addEventListener("pointerup",()=>{
+  if(sdrag&&sdrag.moved)render(); // persists via autosave
+  sdrag=null;
+});
+$("#siLabel").addEventListener("input",e=>{
+  const it=stg().items[stageSel];if(!it)return;
+  it.label=e.target.value;
+  const el=$("#stage").querySelector(".sitem.sel");if(!el)return;
+  let lab=el.querySelector(".slab");
+  if(it.label){if(!lab){lab=document.createElement("div");lab.className="slab";el.appendChild(lab);}lab.textContent=it.label;}
+  else if(lab)lab.remove();
+});
+$("#siLabel").addEventListener("change",()=>render());
+$("#siSize").addEventListener("input",e=>{
+  const it=stg().items[stageSel];if(!it)return;
+  it.w=+e.target.value/100;
+  const el=$("#stage").querySelector(".sitem.sel");if(el)el.style.width=(it.w*100)+"%";
+});
+$("#siSize").addEventListener("change",()=>render());
+$("#siRot").addEventListener("input",e=>{
+  const it=stg().items[stageSel];if(!it)return;
+  it.rot=+e.target.value;
+  const el=$("#stage").querySelector(".sitem.sel .srot");
+  if(el)el.style.transform=`rotate(${it.rot}deg)${it.flip?" scaleX(-1)":""}`;
+});
+$("#siRot").addEventListener("change",()=>render());
+$("#siFlip").onclick=()=>{const it=stg().items[stageSel];if(!it)return;it.flip=!it.flip;render();};
+$("#siDup").onclick=()=>{const it=stg().items[stageSel];if(!it)return;
+  stg().items.push({...it,x:Math.min(1,it.x+0.05),y:Math.min(1,it.y+0.05)});
+  stageSel=stg().items.length-1;render();};
+$("#siDel").onclick=()=>{if(stageSel<0)return;stg().items.splice(stageSel,1);stageSel=-1;render();};
+document.addEventListener("keydown",e=>{
+  if(e.key!=="Delete"&&e.key!=="Backspace")return;
+  if(/INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName||""))return;
+  if(stageSel>=0){stg().items.splice(stageSel,1);stageSel=-1;render();e.preventDefault();}
+});
+$("#stageClear").onclick=()=>{
+  if(!stg().items.length)return;
+  stg().items=[];stageSel=-1;render();setStatus("Stage cleared.");
+};
+/* Import a custom image: background removal + tight crop + downscale in the
+   browser, mirroring build_stagelib.py; saved to the personal library. */
+$("#palImport").onclick=()=>$("#palFile").click();
+$("#palFile").addEventListener("change",async e=>{
+  const f=e.target.files[0];e.target.value="";if(!f)return;
+  try{
+    const img=await new Promise((res,rej)=>{const i=new Image();
+      i.onload=()=>res(i);i.onerror=()=>rej(new Error("could not read the image"));
+      i.src=URL.createObjectURL(f);});
+    const cv=document.createElement("canvas");cv.width=img.naturalWidth;cv.height=img.naturalHeight;
+    const cx=cv.getContext("2d");cx.drawImage(img,0,0);
+    const d=cx.getImageData(0,0,cv.width,cv.height);
+    const W=cv.width,H=cv.height,px=d.data,T=213; // near-white threshold
+    const white=o=>px[o+3]>0&&px[o]>T&&px[o+1]>T&&px[o+2]>T;
+    const stack=[];
+    for(let x=0;x<W;x++){if(white(4*x))stack.push(x);if(white(4*((H-1)*W+x)))stack.push((H-1)*W+x);}
+    for(let y=0;y<H;y++){if(white(4*y*W))stack.push(y*W);if(white(4*(y*W+W-1)))stack.push(y*W+W-1);}
+    while(stack.length){ // flood fill border-connected near-white -> transparent
+      const p=stack.pop(),o=4*p;
+      if(px[o+3]===0||!white(o))continue;
+      px[o+3]=0;
+      const x=p%W;
+      if(x>0)stack.push(p-1);
+      if(x<W-1)stack.push(p+1);
+      if(p>=W)stack.push(p-W);
+      if(p<W*(H-1))stack.push(p+W);
+    }
+    let minX=W,minY=H,maxX=-1,maxY=-1; // tight crop to visible pixels
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+      if(px[4*(y*W+x)+3]>8){if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y;}}
+    if(maxX<0)throw new Error("nothing left after background removal");
+    cx.putImageData(d,0,0);
+    const cw=maxX-minX+1,ch=maxY-minY+1,r=Math.min(1,320/Math.max(cw,ch));
+    const out=document.createElement("canvas");out.width=Math.round(cw*r);out.height=Math.round(ch*r);
+    out.getContext("2d").drawImage(cv,minX,minY,cw,ch,0,0,out.width,out.height);
+    const data=out.toDataURL("image/png");
+    const name=f.name.replace(/\.[^.]+$/,"");
+    const id=name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"")+"-"+Date.now().toString(36);
+    const entry={name,data,w:out.width,h:out.height};
+    stg().custom[id]=entry;
+    const all=lsCustoms();all[id]=entry;
+    try{localStorage.setItem("lv1.customImgs",JSON.stringify(all));}catch(_){/* quota: spec still carries it */}
+    renderPalette($("#palSearch").value);
+    addStageItem("custom:"+id);
+    setStatus(`“${name}” imported — background removed, cropped, added to your library.`);
+  }catch(err){setStatus("Import failed: "+(err.message||err),true);}
+});
+/* Stage <-> input list. Zones: audience at the bottom, so stage left is the
+   drawing's right (performer's perspective). */
+function stageZone(it){
+  const col=it.x<1/3?"SR":it.x>2/3?"SL":"C";
+  const row=it.y<1/3?"US":it.y>2/3?"DS":"MS";
+  return row+(col==="C"?"C":" "+col);
+}
+function zoneCoords(text){
+  const t=(text||"").toUpperCase();
+  let x=0.5,y=0.55;
+  if(/\bSL\b|STAGE LEFT/.test(t))x=5/6;else if(/\bSR\b|STAGE RIGHT/.test(t))x=1/6;
+  if(/\bUS|UP ?STAGE/.test(t))y=1/6;else if(/\bDS|DOWN ?STAGE/.test(t))y=5/6;else if(/\bMS|MID/.test(t))y=0.5;
+  return {x,y};
+}
+$("#stageToInputs").onclick=()=>{
+  const labeled=stg().items.filter(it=>it.label.trim());
+  if(!labeled.length){setStatus("Label some stage items first (select an item, type the input name).",true);return;}
+  const byName=new Map(state.channels.map((c,i)=>[c.name.trim().toUpperCase(),c]));
+  let created=0,updated=0,full=false;
+  for(const it of labeled){
+    const key=it.label.trim().toUpperCase();
+    const zone=stageZone(it);
+    const ch=byName.get(key);
+    if(ch){ch.pos=zone;updated++;continue;}
+    const free=state.channels.find(c=>!c.name.trim());
+    if(!free){full=true;continue;}
+    free.name=it.label.trim();free.pos=zone;
+    byName.set(key,free);created++;
+  }
+  render();
+  setStatus(`Stage → inputs: ${created} input${created===1?"":"s"} created, ${updated} position${updated===1?"":"s"} updated.`+(full?" Input bank is full — some items were skipped.":""),full);
+};
+$("#inputsToStage").onclick=()=>{
+  const have=new Set(stg().items.map(it=>it.label.trim().toUpperCase()).filter(Boolean));
+  const missing=state.channels.filter(c=>c.name.trim()&&!have.has(c.name.trim().toUpperCase()));
+  if(!missing.length){setStatus("Every named input already has a stage item.");return;}
+  const mic=STAGELIB.find(e=>/boom57/.test(e.id))||STAGELIB.find(e=>e.cat==="Vocal Stands")||STAGELIB[0];
+  if(!mic){setStatus("The image library hasn't loaded yet.",true);return;}
+  let n=0;
+  for(const c of missing){
+    const p=zoneCoords(c.pos);
+    stg().items.push({img:mic.id,x:Math.min(0.95,p.x+(n%5)*0.02),y:Math.min(0.92,p.y+(n%3)*0.03),
+      w:0.07,rot:0,flip:false,label:c.name.trim()});
+    n++;
+  }
+  render();
+  setStatus(`${n} stage item${n===1?"":"s"} added from the input list (generic mic stand — swap images as needed).`);
+};
+/* Render the stage to a bitmap (used by Export PNG and the vendor PDF). */
+async function stageBitmap(){
+  const W=1600,H=900;
+  const cv=document.createElement("canvas");cv.width=W;cv.height=H;
+  const cx=cv.getContext("2d");
+  cx.fillStyle="#ffffff";cx.fillRect(0,0,W,H);
+  cx.strokeStyle="#333";cx.lineWidth=3;cx.strokeRect(1.5,1.5,W-3,H-3);
+  cx.fillStyle="#999";cx.font="600 22px Arial";cx.textAlign="center";
+  cx.fillText("A  U  D  I  E  N  C  E",W/2,H-16);
+  const title=(state.show.name||"").trim();
+  if(title){cx.fillStyle="#222";cx.font="700 30px Arial";cx.textAlign="left";cx.fillText(title+"  —  STAGE PLOT",20,42);}
+  for(const it of stg().items){
+    const src=imgSrc(it.img);if(!src)continue;
+    const img=await new Promise(res=>{const i=new Image();i.crossOrigin="anonymous";
+      i.onload=()=>res(i);i.onerror=()=>res(null);i.src=src;});
+    if(!img)continue;
+    const w=it.w*W,h=w*img.naturalHeight/img.naturalWidth;
+    cx.save();
+    cx.translate(it.x*W,it.y*H);
+    cx.rotate((it.rot||0)*Math.PI/180);
+    if(it.flip)cx.scale(-1,1);
+    cx.drawImage(img,-w/2,-h/2,w,h);
+    cx.restore();
+    if(it.label){
+      cx.fillStyle="#111";cx.font="600 22px Arial";cx.textAlign="center";
+      cx.fillText(it.label,it.x*W,it.y*H+h/2+24);
+    }
+  }
+  return cv;
+}
+$("#stagePng").onclick=async()=>{
+  if(!stg().items.length){setStatus("The stage is empty.",true);return;}
+  try{
+    const cv=await stageBitmap();
+    const blob=await new Promise(res=>cv.toBlob(res,"image/png"));
+    if(dl)await dl.save({filename:fileStem()+" stage plot.png",data:blob});
+    setStatus("Stage plot exported.");
+  }catch(err){if(err&&err.code==="declined")return;setStatus("Export failed: "+(err.message||err),true);}
+};
+loadStageLib();
 
 /* ---------- Google Sheets sync (via the user's Apps Script bridge) ----------
    The bridge is a tiny Apps Script web app deployed once in the user's Google
@@ -1821,6 +2169,16 @@ $("#btnPdf").onclick=async()=>{
     alternateRowStyles:{fillColor:[245,245,243]},
     margin:{left:14,right:14},
   });
+  // Stage plot as a landscape page of the same rider.
+  if(stg().items.length){
+    try{
+      const cv=await stageBitmap();
+      doc.addPage("a4","landscape");
+      doc.setFont("helvetica","bold");doc.setFontSize(14);
+      doc.text((state.show.name.trim()||"STAGE PLOT").toUpperCase()+" — STAGE PLOT",14,14);
+      doc.addImage(cv.toDataURL("image/jpeg",0.92),"JPEG",14,20,269,151);
+    }catch(_){/* cross-origin image without CORS: skip the page */}
+  }
   const out=doc.output("blob");
   try{ await dl.save({filename:fileStem()+" input list.pdf",data:out}); setStatus("PDF exported."); }
   catch(err){ if(err&&err.code==="declined")return; setStatus("PDF export failed: "+(err.message||""),true); }
