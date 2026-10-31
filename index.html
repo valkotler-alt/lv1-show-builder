@@ -567,6 +567,8 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
 .sbmain{flex:1;min-width:0;}
 #stage{position:relative;width:100%;aspect-ratio:16/9;background:#f7f6f2;border:2px solid var(--line);border-radius:8px;overflow:hidden;touch-action:none;}
 .stagelabel{position:absolute;bottom:4px;left:50%;transform:translateX(-50%);font-size:10px;letter-spacing:.35em;color:#b5b0a6;pointer-events:none;}
+.stagesize{position:absolute;bottom:4px;right:8px;font:600 10px var(--font-num);color:#b5b0a6;pointer-events:none;}
+.stagedims{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--dim);margin-bottom:6px;}
 .sitem{position:absolute;transform:translate(-50%,-50%);cursor:grab;user-select:none;}
 .sitem .srot{pointer-events:none;}
 .sitem img{width:100%;height:auto;display:block;pointer-events:none;-webkit-user-drag:none;}
@@ -726,12 +728,19 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
       <input type="file" id="palFile" accept="image/*" hidden>
     </div>
     <div class="sbmain">
-      <div id="stage"><div class="stagelabel">A U D I E N C E</div></div>
+      <div class="stagedims">Stage width <input type="number" id="stageW" min="4" max="40" step="0.5" style="width:60px"> m
+        <span class="hint">· depth <span id="stageD"></span> m (items are drawn at their real size — the chair is 50 cm)</span></div>
+      <div id="stage"><div class="stagelabel">A U D I E N C E</div><div class="stagesize" id="stageSizeLab"></div></div>
       <div id="sinsp" class="sinsp" hidden>
         <label>Label <input id="siLabel" size="14" list="chanNames" placeholder="input / name" spellcheck="false"></label>
-        <label>Size <input type="range" id="siSize" min="3" max="45" step="0.5"></label>
-        <label id="siHWrap" hidden>Height <input type="range" id="siH" min="5" max="80" step="0.5"></label>
-        <label id="siNoteWrap" hidden>Dimensions <input id="siNote" size="14" placeholder="e.g. 2.5m x 2m x 20cm"></label>
+        <label id="siCmWrap">Width <input type="number" id="siCm" min="5" max="1200" step="1" style="width:68px"> cm</label>
+        <label id="siRsWrap" hidden>Riser size <select id="siRsize">
+          <option value="" hidden>—</option>
+          <option value="240x240">240 × 240 cm</option>
+          <option value="240x180">240 × 180 cm</option>
+          <option value="240x120">240 × 120 cm</option>
+          <option value="240x60">240 × 60 cm</option></select></label>
+        <label id="siNoteWrap" hidden>Note <input id="siNote" size="14" placeholder="e.g. 240x120x20cm"></label>
         <label>Rotate <input type="range" id="siRot" min="-180" max="180" step="5"></label>
         <button class="small" id="siFlip">Flip</button>
         <button class="small" id="siDup">Duplicate</button>
@@ -799,7 +808,7 @@ function defaultShow(){
   // Start empty: pick the mixer config, name strips, route, export.
   return {show:{name:"",date:"",venue:"",sheetUrl:""},configId:"80-16",
           channels:[],groups:[],fx:[],auxes:[],matrixes:[],master:{rack:null},
-          stage:{items:[],custom:{}}};
+          stage:{items:[],custom:{},widthM:12}};
 }
 function applyConfig(){
   const c=cfg();
@@ -848,7 +857,7 @@ function exampleShow(){
     fx:[fx("Drum REV"),fx("Inst Rev"),fx("VX Rev")],
     auxes:[], matrixes:[],
     master:{rack:rk(["Curves AQ Live"])},
-    stage:{items:[],custom:{}},
+    stage:{items:[],custom:{},widthM:12},
   };
 }
 
@@ -1265,7 +1274,7 @@ function buildSpec(){
     const usedCustom={};
     sitems.forEach(it=>{if(it.img.startsWith("custom:")){const id=it.img.slice(7);
       if(state.stage.custom[id])usedCustom[id]=state.stage.custom[id];}});
-    spec.stage={items:sitems.map(it=>({...it})),custom:usedCustom};
+    spec.stage={items:sitems.map(it=>({...it})),custom:usedCustom,widthM:+stg().widthM||12};
   }
   return spec;
 }
@@ -1300,10 +1309,18 @@ function loadSpec(spec){
     matrixes:(spec.matrixes||[]).map(m=>({name:m.name||"",stereo:!!m.stereo})),
     master:{rack:rackIn(spec.master?.rack)},
     stage:{
-      items:((spec.stage&&spec.stage.items)||[]).map(it=>({img:String(it.img||""),
-        x:+it.x||0.5,y:+it.y||0.5,w:+it.w||0.12,h:+it.h||0.3,rot:+it.rot||0,
-        flip:!!it.flip,label:it.label||"",note:it.note||""})),
+      items:((spec.stage&&spec.stage.items)||[]).map(it=>{
+        const o={img:String(it.img||""),x:+it.x||0.5,y:+it.y||0.5,rot:+it.rot||0,
+          flip:!!it.flip,label:it.label||""};
+        if(+it.cm>0)o.cm=+it.cm;
+        if(+it.rw>0)o.rw=+it.rw;
+        if(+it.rd>0)o.rd=+it.rd;
+        if(+it.w>0)o.w=+it.w;   // legacy fraction fallback
+        if(+it.h>0)o.h=+it.h;
+        if(it.note)o.note=String(it.note);
+        return o;}),
       custom:(spec.stage&&spec.stage.custom)||{},
+      widthM:+(spec.stage&&spec.stage.widthM)||12,
     },
   };
   stageSel=-1;
@@ -1362,17 +1379,31 @@ function renderPalette(q){
   $("#palGrid").innerHTML=html||'<div class="menuempty">no matches</div>';
 }
 $("#palSearch").addEventListener("input",e=>renderPalette(e.target.value));
+/* Real-world scale: stage width (meters) sets the scale; depth is width*9/16
+   (same ratio as the canvas, so the scale is isotropic and rotations stay
+   true). Library items carry their real width in cm (calibrated: the chair
+   drawing is 50 cm); risers come in the four standard footprints. */
+const stageWcm=()=>((+stg().widthM||12)*100);
+const stageDcm=()=>stageWcm()*9/16;
+const itemWfrac=it=>it.img==="riser"
+  ?(it.rw?it.rw/stageWcm():(it.w||0.2))
+  :(it.cm?it.cm/stageWcm():(it.w||0.12));
+const riserHfrac=it=>it.rd?it.rd/stageDcm():(it.h||0.3);
+/* Risers always render UNDER the instruments. */
+const stageOrder=()=>stg().items.map((it,i)=>i)
+  .sort((a,b)=>((stg().items[a].img==="riser"?0:1)-(stg().items[b].img==="riser"?0:1))||a-b);
 function renderStage(){
   const st=$("#stage");
   st.querySelectorAll(".sitem").forEach(e=>e.remove());
-  stg().items.forEach((it,i)=>{
+  for(const i of stageOrder()){
+    const it=stg().items[i];
     const d=document.createElement("div");
     const riser=it.img==="riser";
     d.className="sitem"+(riser?" riser":"")+(i===stageSel?" sel":"");
     d.dataset.si=i;
-    d.style.left=(it.x*100)+"%";d.style.top=(it.y*100)+"%";d.style.width=(it.w*100)+"%";
+    d.style.left=(it.x*100)+"%";d.style.top=(it.y*100)+"%";d.style.width=(itemWfrac(it)*100)+"%";
     if(riser){
-      d.style.height=((it.h||0.3)*100)+"%";
+      d.style.height=(riserHfrac(it)*100)+"%";
       d.innerHTML=`<div class="srot" style="width:100%;height:100%;transform:rotate(${it.rot||0}deg)">
         <div class="rbox"></div></div>`+
         (it.label?`<div class="rlabel">${esc(it.label)}</div>`:"")+
@@ -1383,7 +1414,10 @@ function renderStage(){
         (it.label?`<div class="slab">${esc(it.label)}</div>`:"");
     }
     st.appendChild(d);
-  });
+  }
+  $("#stageW").value=+stg().widthM||12;
+  $("#stageD").textContent=(((+stg().widthM||12))*9/16).toFixed(1);
+  $("#stageSizeLab").textContent=`${+stg().widthM||12} m × ${(((+stg().widthM||12))*9/16).toFixed(1)} m`;
   $("#stageCount").textContent=stg().items.length?`${stg().items.length} item${stg().items.length===1?"":"s"}`:"";
   renderInspector();
 }
@@ -1393,21 +1427,27 @@ function renderInspector(){
   if(!it)return;
   const riser=it.img==="riser";
   if(document.activeElement!==$("#siLabel"))$("#siLabel").value=it.label||"";
-  $("#siSize").max=riser?80:45;
-  $("#siSize").value=it.w*100;
   $("#siRot").value=it.rot||0;
-  $("#siHWrap").hidden=!riser;
+  $("#siCmWrap").hidden=riser;
+  $("#siRsWrap").hidden=!riser;
   $("#siNoteWrap").hidden=!riser;
   $("#siFlip").hidden=riser;
   if(riser){
-    $("#siH").value=(it.h||0.3)*100;
+    $("#siRsize").value=(it.rw&&it.rd)?`${it.rw}x${it.rd}`:"";
     if(document.activeElement!==$("#siNote"))$("#siNote").value=it.note||"";
+  }else if(document.activeElement!==$("#siCm")){
+    $("#siCm").value=it.cm?Math.round(it.cm):"";
   }
+}
+function libCm(ref){
+  if(ref==="riser")return 0;
+  if(ref.startsWith("custom:")){const c=stg().custom[ref.slice(7)]||lsCustoms()[ref.slice(7)];return (c&&c.cm)||0;}
+  const e=STAGELIB.find(x=>x.id===ref);return (e&&e.cm)||0;
 }
 function addStageItem(ref){
   const it=ref==="riser"
-    ?{img:"riser",x:0.5,y:0.4,w:0.22,h:0.3,rot:0,flip:false,label:"",note:""}
-    :{img:ref,x:0.5,y:0.55,w:0.12,rot:0,flip:false,label:""};
+    ?{img:"riser",x:0.5,y:0.4,rot:0,flip:false,label:"",rw:240,rd:240}
+    :{img:ref,x:0.5,y:0.55,rot:0,flip:false,label:"",cm:libCm(ref)||100};
   stg().items.push(it);
   stageSel=stg().items.length-1;
   render();
@@ -1451,18 +1491,35 @@ $("#siLabel").addEventListener("input",e=>{
   else if(lab)lab.remove();
 });
 $("#siLabel").addEventListener("change",()=>render());
-$("#siSize").addEventListener("input",e=>{
-  const it=stg().items[stageSel];if(!it)return;
-  it.w=+e.target.value/100;
-  const el=$("#stage").querySelector(".sitem.sel");if(el)el.style.width=(it.w*100)+"%";
+$("#siCm").addEventListener("input",e=>{
+  const it=stg().items[stageSel];if(!it||it.img==="riser")return;
+  const v=+e.target.value;
+  if(v>0){it.cm=v;delete it.w;
+    const el=$("#stage").querySelector(".sitem.sel");
+    if(el)el.style.width=(itemWfrac(it)*100)+"%";}
 });
-$("#siSize").addEventListener("change",()=>render());
-$("#siH").addEventListener("input",e=>{
+$("#siCm").addEventListener("change",e=>{
+  // A custom image's real width becomes its library standard for future shows.
+  const it=stg().items[stageSel];
+  if(it&&it.img.startsWith("custom:")&&+e.target.value>0){
+    const id=it.img.slice(7),v=+e.target.value;
+    if(stg().custom[id])stg().custom[id].cm=v;
+    const all=lsCustoms();
+    if(all[id]){all[id].cm=v;try{localStorage.setItem("lv1.customImgs",JSON.stringify(all));}catch(_){}}
+  }
+  render();
+});
+$("#siRsize").addEventListener("change",e=>{
   const it=stg().items[stageSel];if(!it||it.img!=="riser")return;
-  it.h=+e.target.value/100;
-  const el=$("#stage").querySelector(".sitem.sel");if(el)el.style.height=(it.h*100)+"%";
+  const m=/^(\d+)x(\d+)$/.exec(e.target.value);if(!m)return;
+  it.rw=+m[1];it.rd=+m[2];delete it.w;delete it.h;
+  if(!it.note)it.note=`${it.rw} × ${it.rd} cm`;
+  render();
 });
-$("#siH").addEventListener("change",()=>render());
+$("#stageW").addEventListener("change",e=>{
+  const v=+e.target.value;
+  if(v>=4&&v<=40){stg().widthM=v;render();}
+});
 $("#siNote").addEventListener("input",e=>{
   const it=stg().items[stageSel];if(!it||it.img!=="riser")return;
   it.note=e.target.value;
@@ -1531,13 +1588,14 @@ $("#palFile").addEventListener("change",async e=>{
     const data=out.toDataURL("image/png");
     const name=f.name.replace(/\.[^.]+$/,"");
     const id=name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"")+"-"+Date.now().toString(36);
-    const entry={name,data,w:out.width,h:out.height};
+    const entry={name,data,w:out.width,h:out.height,cm:100}; // set the real width after placing
     stg().custom[id]=entry;
     const all=lsCustoms();all[id]=entry;
     try{localStorage.setItem("lv1.customImgs",JSON.stringify(all));}catch(_){/* quota: spec still carries it */}
     renderPalette($("#palSearch").value);
     addStageItem("custom:"+id);
-    setStatus(`“${name}” imported — background removed, cropped, added to your library.`);
+    setStatus(`“${name}” imported — background removed, cropped, added to your library. Now type its REAL WIDTH in the “Width cm” field (it is remembered for future shows).`);
+    $("#siCm").focus();$("#siCm").select();
   }catch(err){setStatus("Import failed: "+(err.message||err),true);}
 });
 /* Stage <-> input list. Zones: audience at the bottom, so stage left is the
@@ -1582,7 +1640,7 @@ $("#inputsToStage").onclick=()=>{
   for(const c of missing){
     const p=zoneCoords(c.pos);
     stg().items.push({img:mic.id,x:Math.min(0.95,p.x+(n%5)*0.02),y:Math.min(0.92,p.y+(n%3)*0.03),
-      w:0.07,rot:0,flip:false,label:c.name.trim()});
+      cm:mic.cm||65,rot:0,flip:false,label:c.name.trim()});
     n++;
   }
   render();
@@ -1599,9 +1657,12 @@ async function stageBitmap(){
   cx.fillText("A  U  D  I  E  N  C  E",W/2,H-16);
   const title=(state.show.name||"").trim();
   if(title){cx.fillStyle="#222";cx.font="700 30px Arial";cx.textAlign="left";cx.fillText(title+"  —  STAGE PLOT",20,42);}
-  for(const it of stg().items){
+  cx.fillStyle="#999";cx.font="600 20px Arial";cx.textAlign="right";
+  cx.fillText(`${+stg().widthM||12} m × ${(((+stg().widthM||12))*9/16).toFixed(1)} m`,W-14,H-16);
+  for(const idx of stageOrder()){
+    const it=stg().items[idx];
     if(it.img==="riser"){
-      const w=it.w*W,h=(it.h||0.3)*H;
+      const w=itemWfrac(it)*W,h=riserHfrac(it)*H;
       cx.save();
       cx.translate(it.x*W,it.y*H);
       cx.rotate((it.rot||0)*Math.PI/180);
@@ -1617,7 +1678,7 @@ async function stageBitmap(){
     const img=await new Promise(res=>{const i=new Image();i.crossOrigin="anonymous";
       i.onload=()=>res(i);i.onerror=()=>res(null);i.src=src;});
     if(!img)continue;
-    const w=it.w*W,h=w*img.naturalHeight/img.naturalWidth;
+    const w=itemWfrac(it)*W,h=w*img.naturalHeight/img.naturalWidth;
     cx.save();
     cx.translate(it.x*W,it.y*H);
     cx.rotate((it.rot||0)*Math.PI/180);
