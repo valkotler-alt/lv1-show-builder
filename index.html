@@ -580,6 +580,7 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
 .sinsp{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:8px;font-size:12px;color:var(--dim);}
 .sinsp label{display:inline-flex;gap:6px;align-items:center;}
 .rotbtns{display:inline-flex;gap:4px;}
+.colsel{min-width:52px;font-family:var(--font-num);font-size:11px;}
 .tplconfirm{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;padding:8px 10px;border:1px solid var(--accent);border-radius:8px;background:var(--panel);font-size:12px;}
 .gname{position:absolute;transform:translate(-50%,-100%);font:600 11px var(--font-ui);font-style:italic;color:#555;background:rgba(255,255,255,.65);padding:0 4px;border-radius:3px;pointer-events:none;white-space:nowrap;}
 @media (max-width:860px){ .sbwrap{flex-direction:column;} .sbpal{width:100%;} #palGrid{max-height:200px;} }
@@ -660,7 +661,7 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
     <span class="hint">MGB ports patch to named inputs top-down (stereo takes two). Mic / stand / position go to the vendor PDF only.</span>
     <span class="selops"><button class="small" data-k="ch" data-f="selUp">▲ Selected</button><button class="small" data-k="ch" data-f="selDown">▼ Selected</button><button class="small danger" data-k="ch" data-f="selRst" title="Reset selected strips to defaults">⟲ Selected</button></span></div>
   <div class="tblwrap"><table id="chTable">
-    <thead><tr><th></th><th>#</th><th>Patch</th><th>Name</th><th>M/ST</th><th>Group</th><th>Link</th><th>Matrix</th><th>Mic</th><th>Stand</th><th>Stage position</th><th>Notes</th><th>Rack</th><th></th></tr></thead>
+    <thead><tr><th></th><th>#</th><th>Patch</th><th>Name</th><th>M/ST</th><th>Color</th><th>Group</th><th>Link</th><th>Matrix</th><th>Mic</th><th>Stand</th><th>Stage position</th><th>Notes</th><th>Rack</th><th></th></tr></thead>
     <tbody></tbody>
   </table></div>
 </section>
@@ -670,7 +671,7 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
     <span class="hint">Pre/Post FX is the LV1 group processing point. Destination MASTER = LR.</span>
     <span class="selops"><button class="small" data-k="grp" data-f="selUp">▲ Selected</button><button class="small" data-k="grp" data-f="selDown">▼ Selected</button><button class="small danger" data-k="grp" data-f="selRst">⟲ Selected</button></span></div>
   <div class="tblwrap"><table id="grpTable">
-    <thead><tr><th></th><th>#</th><th>Name</th><th>M/ST</th><th>Destination</th><th>FX point</th><th>Matrix feeds</th><th>Rack</th><th></th></tr></thead>
+    <thead><tr><th></th><th>#</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>FX point</th><th>Matrix feeds</th><th>Rack</th><th></th></tr></thead>
     <tbody></tbody>
   </table></div>
 </section>
@@ -680,7 +681,7 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
     <span class="hint">LV1 FX strips 1–8.</span>
     <span class="selops"><button class="small" data-k="fx" data-f="selUp">▲ Selected</button><button class="small" data-k="fx" data-f="selDown">▼ Selected</button><button class="small danger" data-k="fx" data-f="selRst">⟲ Selected</button></span></div>
   <div class="tblwrap"><table id="fxTable">
-    <thead><tr><th></th><th>#</th><th>Name</th><th>M/ST</th><th>Destination</th><th>Rack</th><th></th></tr></thead>
+    <thead><tr><th></th><th>#</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>Rack</th><th></th></tr></thead>
     <tbody></tbody>
   </table></div>
 </section>
@@ -690,7 +691,7 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
     <span class="hint">LV1 aux strips ("Mon" bank). Output ports patch to named auxes top-down (stereo takes two). Destination / notes go to the Google Sheet.</span>
     <span class="selops"><button class="small" data-k="aux" data-f="selUp">▲ Selected</button><button class="small" data-k="aux" data-f="selDown">▼ Selected</button><button class="small danger" data-k="aux" data-f="selRst">⟲ Selected</button></span></div>
   <div class="tblwrap"><table id="auxTable">
-    <thead><tr><th></th><th>#</th><th>Patch</th><th>Name</th><th>M/ST</th><th>Destination</th><th>Notes</th><th></th></tr></thead>
+    <thead><tr><th></th><th>#</th><th>Patch</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>Notes</th><th></th></tr></thead>
     <tbody></tbody>
   </table></div>
 </section>
@@ -709,7 +710,7 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
     <span class="hint">LV1 matrix strips 1–8. Feed them from inputs or groups above.</span>
     <span class="selops"><button class="small" data-k="mtx" data-f="selUp">▲ Selected</button><button class="small" data-k="mtx" data-f="selDown">▼ Selected</button><button class="small danger" data-k="mtx" data-f="selRst">⟲ Selected</button></span></div>
   <div class="tblwrap"><table id="mtxTable">
-    <thead><tr><th></th><th>#</th><th>Name</th><th>M/ST</th><th></th></tr></thead>
+    <thead><tr><th></th><th>#</th><th>Name</th><th>M/ST</th><th>Color</th><th></th></tr></thead>
     <tbody></tbody>
   </table></div>
 </section>
@@ -756,6 +757,7 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
         <button class="small" id="giUngroup" hidden>Ungroup</button>
         <label id="siRotWrap">Rotate <input type="range" id="siRot" min="-180" max="180" step="4.5"></label>
         <span class="rotbtns"><button class="small" id="siRotM" title="Rotate −4.5°">−4.5°</button><button class="small" id="siRotP" title="Rotate +4.5°">+4.5°</button><button class="small" id="siRotR" title="Reset rotation to 0°">⟲ 0°</button></span>
+        <label title="Apply an LV1 strip color to every input linked to the selected item(s)">Strip color <select id="siCol" class="colsel"></select></label>
         <button class="small" id="siFlip">Flip</button>
         <button class="small" id="siDup">Duplicate</button>
         <button class="small danger" id="siDel">Delete</button>
@@ -800,15 +802,27 @@ const cfg=()=>CONFIGS.find(c=>c.id===state.configId)||CONFIGS[3];
 const PLUGINS=[["Abbey Road RS124","MS"],["Abbey Road Saturator","MS"],["Abbey Road Studio 3","S"],["Abbey Road TG Mastering","MS"],["Abbey Road Vinyl","MS"],["Atlas Reverb","SX"],["Berzerk Distortion","MS"],["CLA EchoSphere","SX"],["CLA Epic","SX"],["CLA MixDown","MS"],["CLA Nx","S"],["Clarity Vx","MS"],["Clarity Vx Pro","MS"],["Clarix LB","MS"],["COSMOS Sample Finder","S"],["CR8 Sampler","S"],["Curves AQ","MS"],["Curves AQ Live","MS"],["Curves Equator","MS"],["Curves Equator Live","MS"],["Curves Resolve","MS"],["Curves Resolve Live","MS"],["DPR-402","MS"],["EMO-D5","MS"],["EMO-F2","MS"],["EMO-Q4","MS"],["GEQ Classic","MS"],["GEQ Modern","MS"],["IDX Intelligent Dynamics","MS"],["Kaleidoscopes","MSX"],["L4 Ultramaximizer","M"],["Lil Tube","MS"],["Lofi Space","MSX"],["Magma Channel Strip","MS"],["Magma StressBox","MS"],["MultiMod Rack","MSX"],["Nx Germano Studios","S"],["Nx Ocean Way Nashville","S"],["PlaylistRider","MS"],["PRS Archon","MX"],["PSE","MS"],["RChannel","MSX"],["Retro Fi","MSX"],["Rogue Rack","MSX"],["Scheps Omni Channel 2","MS"],["Scheps Parallel Particles","MS"],["Sibilance","MS"],["Silk Vocal","MS"],["Smack Attack","MS"],["SSL EV2 Channel","MS"],["StudioRack","MS"],["Submarine","MS"],["Sync Vx","M"],["Torque","MS"],["TRACT","MS"],["TRACT LinPhase","MS"],["Vocal Bender","MS"]];
 const PLUGIN_FMT=new Map(PLUGINS);
 
+/* LV1's 32-color strip palette (SurfaceDriver_App/Resources/Palettes/LV1.xml);
+   a strip's color is PARAM_COLOR_VALUE = the 0-based index. */
+const LV1PAL=["94,152,160","68,138,255","104,159,56","26,142,102","146,195,199","92,113,130","245,187,65","238,0,116","41,98,255","56,201,255","141,247,255","19,106,132","135,165,210","15,162,171","0,230,118","117,246,183","140,81,192","239,154,154","243,250,29","255,79,79","231,231,231","163,0,0","140,255,0","160,160,160","250,123,20","255,0,255","206,147,216","240,98,146","130,119,23","148,107,124","160,65,130","124,77,255"];
+const palCss=i=>`rgb(${LV1PAL[i]})`;
+const palInk=i=>{const [r,g,b]=LV1PAL[i].split(",").map(Number);return (r*0.299+g*0.587+b*0.114)>150?"#111":"#fff";};
+const palOpts=sel=>'<option value="">—</option>'+LV1PAL.map((c,x)=>
+  `<option value="${x}" style="background:rgb(${c});color:${palInk(x)}"${sel===x?" selected":""}>${x+1}</option>`).join("");
+function colorCell(kind,i,val){
+  const has=val!==null&&val!==undefined;
+  return `<td><select class="colsel" data-k="${kind}" data-i="${i}" data-f="color"${has?` style="background:${palCss(val)};color:${palInk(val)}"`:""}>${palOpts(has?val:-1)}</select></td>`;
+}
+
 /* ---------- state ---------- */
 /* Strip defaults mirror LV1's: channels/FX/auxes/matrixes are mono, groups
    are stereo; default (unnamed) strips are not exported. */
-const defCh=()=>({name:"",stereo:false,group:"",link:"",matrix:"",mic:"",stand:"",pos:"",notes:"",rack:null});
-const defGrp=()=>({name:"",stereo:true,dest:"MASTER",postFx:false,matrix:[],rack:null});
-const defFx=()=>({name:"",stereo:true,dest:"MASTER",rack:null}); // fresh LV1 FX strips are stereo
-const defAux=()=>({name:"",stereo:false,dest:"",notes:""});
+const defCh=()=>({name:"",stereo:false,group:"",link:"",matrix:"",mic:"",stand:"",pos:"",notes:"",rack:null,color:null});
+const defGrp=()=>({name:"",stereo:true,dest:"MASTER",postFx:false,matrix:[],rack:null,color:null});
+const defFx=()=>({name:"",stereo:true,dest:"MASTER",rack:null,color:null}); // fresh LV1 FX strips are stereo
+const defAux=()=>({name:"",stereo:false,dest:"",notes:"",color:null});
 const AUX_DESTS=["Wedge","Wireless IEM","Wired IEM","Mixer"];
-const defMtx=()=>({name:"",stereo:false});
+const defMtx=()=>({name:"",stereo:false,color:null});
 const DEF={ch:defCh,grp:defGrp,fx:defFx,aux:defAux,mtx:defMtx};
 const DEFNAME={ch:i=>`Channel ${i+1}`,grp:i=>`Group ${i+1}`,fx:i=>`Fx ${i+1}`,aux:i=>`Mon ${i+1}`,mtx:i=>`Matrix ${i+1}`};
 
@@ -995,6 +1009,7 @@ function renderChannels(){
       <td class="num">${pts[i]?pts[i].join("–"):"—"}</td>
       ${nameCell("ch",i,ch.name,dups)}
       ${stCell("ch",i,ch.stereo)}
+      ${colorCell("ch",i,ch.color)}
       <td>${s("group",ch.group,grpOpts,"— Master")}</td>
       <td>${s("link",ch.link,["None",...grpOpts],"= Group")}</td>
       <td>${s("matrix",ch.matrix,mtxOpts,"—")}</td>
@@ -1003,7 +1018,7 @@ function renderChannels(){
       <td><input id="ch-${i}-pos" value="${esc(ch.pos)}" data-k="ch" data-i="${i}" data-f="pos" placeholder="e.g. DSC riser"></td>
       <td><input id="ch-${i}-notes" value="${esc(ch.notes)}" data-k="ch" data-i="${i}" data-f="notes"></td>
       ${rackCell("ch",i,ch.rack)}
-      ${opsCell("ch",i,state.channels.length)}</tr>`+rackRow("ch",i,ch.rack,14,ch.stereo);
+      ${opsCell("ch",i,state.channels.length)}</tr>`+rackRow("ch",i,ch.rack,15,ch.stereo);
   }).join("");
   const lastPts=[...pts].reverse().find(Boolean);
   const used=lastPts?lastPts[lastPts.length-1]:0;
@@ -1019,12 +1034,13 @@ function renderGroups(){
       <td class="num">${i+1}</td>
       ${nameCell("grp",i,g.name,dups)}
       ${stCell("grp",i,g.stereo)}
+      ${colorCell("grp",i,g.color)}
       <td><select id="grp-${i}-dest" data-k="grp" data-i="${i}" data-f="dest">${destOpts.map(o=>`<option${o===g.dest?" selected":""}>${esc(o)}</option>`).join("")}</select></td>
       <td><button class="pfbtn small ${g.postFx?"post":""}" id="grp-${i}-pf" data-k="grp" data-i="${i}" data-f="postFx">${g.postFx?"POST":"PRE"}</button></td>
       <td><div class="chips">${mtxOpts.length?mtxOpts.map(m=>`<label class="${g.matrix.includes(m)?"on":""}"><input type="checkbox" id="grp-${i}-mx-${esc(m)}" data-k="grp" data-i="${i}" data-f="mx" data-m="${esc(m)}" ${g.matrix.includes(m)?"checked":""}>${esc(m)}</label>`).join(""):'<span style="color:var(--dim);font-size:11px">no matrixes named</span>'}</div></td>
       ${rackCell("grp",i,g.rack)}
-      ${opsCell("grp",i,state.groups.length)}</tr>`+rackRow("grp",i,g.rack,9,g.stereo);
-  }).join("")||emptyRow(9,"This mixer configuration has no group strips.");
+      ${opsCell("grp",i,state.groups.length)}</tr>`+rackRow("grp",i,g.rack,10,g.stereo);
+  }).join("")||emptyRow(10,"This mixer configuration has no group strips.");
   $("#grpCount").textContent=state.groups.length?`${named(state.groups).length} named / ${cfg().grp} strips`:"";
 }
 function renderFx(){
@@ -1032,9 +1048,10 @@ function renderFx(){
   tb.innerHTML=state.fx.map((f,i)=>{
     const destOpts=["MASTER",...state.groups.map(x=>x.name.trim()).filter(Boolean)];
     return `<tr${rowCls("fx",i)}>${selCell("fx",i)}<td class="num">${i+1}</td>${nameCell("fx",i,f.name,dups)}${stCell("fx",i,f.stereo)}
+      ${colorCell("fx",i,f.color)}
       <td><select id="fx-${i}-dest" data-k="fx" data-i="${i}" data-f="dest">${destOpts.map(o=>`<option${o===f.dest?" selected":""}>${esc(o)}</option>`).join("")}</select></td>
       ${rackCell("fx",i,f.rack)}
-      ${opsCell("fx",i,state.fx.length)}</tr>`+rackRow("fx",i,f.rack,7,f.stereo);
+      ${opsCell("fx",i,state.fx.length)}</tr>`+rackRow("fx",i,f.rack,8,f.stereo);
   }).join("");
   $("#fxCount").textContent=`${named(state.fx).length} named / ${FX_COUNT} strips`;
 }
@@ -1051,18 +1068,19 @@ function renderAux(){
       <td class="num">${pts[i]?pts[i].join("–"):"—"}</td>
       ${nameCell("aux",i,a.name,dups)}
       ${stCell("aux",i,a.stereo)}
+      ${colorCell("aux",i,a.color)}
       <td><select id="aux-${i}-dest" data-k="aux" data-i="${i}" data-f="dest">
         <option value=""${(a.dest||"")===""?" selected":""}>—</option>
         ${AUX_DESTS.map(o=>`<option${o===a.dest?" selected":""}>${o}</option>`).join("")}</select></td>
       <td><input id="aux-${i}-notes" value="${esc(a.notes||"")}" data-k="aux" data-i="${i}" data-f="notes"></td>
       ${opsCell("aux",i,state.auxes.length)}</tr>`).join("")
-    ||emptyRow(8,"This mixer configuration has no aux strips.");
+    ||emptyRow(9,"This mixer configuration has no aux strips.");
   $("#auxCount").textContent=cfg().mon?`${named(state.auxes).length} named / ${cfg().mon} strips`:"";
 }
 function renderSimple(kind,list,tableSel){
   const tb=$(tableSel+" tbody"); const dups=dupNames(list);
-  tb.innerHTML=list.map((it,i)=>`<tr${rowCls(kind,i)}>${selCell(kind,i)}<td class="num">${i+1}</td>${nameCell(kind,i,it.name,dups)}${stCell(kind,i,it.stereo)}${opsCell(kind,i,list.length)}</tr>`).join("")
-    ||emptyRow(5,kind==="aux"?"This mixer configuration has no aux strips.":"No matrix strips in this configuration.");
+  tb.innerHTML=list.map((it,i)=>`<tr${rowCls(kind,i)}>${selCell(kind,i)}<td class="num">${i+1}</td>${nameCell(kind,i,it.name,dups)}${stCell(kind,i,it.stereo)}${colorCell(kind,i,it.color)}${opsCell(kind,i,list.length)}</tr>`).join("")
+    ||emptyRow(6,kind==="aux"?"This mixer configuration has no aux strips.":"No matrix strips in this configuration.");
   const total=kind==="aux"?cfg().mon:MTX_COUNT;
   $(kind==="aux"?"#auxCount":"#mtxCount").textContent=total?`${named(list).length} named / ${total} strips`:"";
 }
@@ -1134,6 +1152,12 @@ document.addEventListener("input",e=>{
     return;
   }
   const list=listFor[k]();const it=list[+t.dataset.i];if(!it)return;
+  if(f==="color"){
+    it.color=t.value===""?null:+t.value;
+    if(it.color===null){t.style.background="";t.style.color="";}
+    else{t.style.background=palCss(it.color);t.style.color=palInk(it.color);}
+    return;
+  }
   if(f==="mx"){const m=t.dataset.m;it.matrix=t.checked?[...it.matrix,m]:it.matrix.filter(x=>x!==m);renderGroups();return;}
   if(["name","group","link","matrix","mic","stand","pos","notes","dest"].includes(f)){it[f]=t.value;
     if(f==="name"&&(k==="grp"||k==="mtx")){render();t&&focusBack(k,t.dataset.i,"name");return;}
@@ -1275,11 +1299,16 @@ function buildSpec(){
       link:ch.link==="None"?null:(ch.link||ch.group||null),
       matrix:ch.matrix?[ch.matrix]:[],
       mic:ch.mic.trim(),stand:ch.stand.trim(),position:ch.pos.trim(),notes:(ch.notes||"").trim(),
+      ...(ch.color!==null&&ch.color!==undefined?{color:ch.color}:{}),
     },ch.rack):null).filter(Boolean),
-    groups:named(state.groups).map(g=>withRack({name:g.name.trim(),stereo:g.stereo,dest:g.dest==="MASTER"?null:g.dest,postFx:!!g.postFx,matrix:g.matrix},g.rack)),
-    fx:named(state.fx).map(f=>withRack({name:f.name.trim(),stereo:f.stereo,dest:f.dest==="MASTER"?null:f.dest},f.rack)),
-    auxes:named(state.auxes).map(a=>({name:a.name.trim(),stereo:a.stereo,dest:a.dest||"",notes:(a.notes||"").trim()})),
-    matrixes:named(state.matrixes).map(m=>({name:m.name.trim(),stereo:m.stereo})),
+    groups:named(state.groups).map(g=>withRack({name:g.name.trim(),stereo:g.stereo,dest:g.dest==="MASTER"?null:g.dest,postFx:!!g.postFx,matrix:g.matrix,
+      ...(g.color!==null&&g.color!==undefined?{color:g.color}:{})},g.rack)),
+    fx:named(state.fx).map(f=>withRack({name:f.name.trim(),stereo:f.stereo,dest:f.dest==="MASTER"?null:f.dest,
+      ...(f.color!==null&&f.color!==undefined?{color:f.color}:{})},f.rack)),
+    auxes:named(state.auxes).map(a=>({name:a.name.trim(),stereo:a.stereo,dest:a.dest||"",notes:(a.notes||"").trim(),
+      ...(a.color!==null&&a.color!==undefined?{color:a.color}:{})})),
+    matrixes:named(state.matrixes).map(m=>({name:m.name.trim(),stereo:m.stereo,
+      ...(m.color!==null&&m.color!==undefined?{color:m.color}:{})})),
   };
   const mr=rackOut(state.master.rack);
   if(mr)spec.master={rack:mr};
@@ -1300,6 +1329,7 @@ function inferConfig(spec){
 function loadSpec(spec){
   if(!spec||spec.format!=="lv1-input-list")throw new Error("Not an LV1 input-list spec file.");
   const grpName=x=>x===null||x===undefined?"":x;
+  const colIn=o=>{const v=o.color;return (typeof v==="number"&&v>=0&&v<=31)?Math.round(v):null;};
   const rackIn=r=>{ // v4 {slots}; v3 {filter,dyn,eq,inserts} converted to slots
     if(!r)return null;
     if(r.slots)return {slots:[...r.slots]};
@@ -1316,11 +1346,11 @@ function loadSpec(spec){
     configId:id,
     channels:(spec.channels||[]).map(c=>({...defCh(),name:c.name||"",stereo:!!c.stereo,group:grpName(c.group),
       link:c.link===null?"None":(c.link&&c.link!==c.group?c.link:""),
-      matrix:(c.matrix&&c.matrix[0])||"",mic:c.mic||"",stand:c.stand||"",pos:c.position||"",notes:c.notes||"",rack:rackIn(c.rack)})),
-    groups:(spec.groups||[]).map(g=>({...defGrp(),name:g.name||"",stereo:g.stereo!==false,dest:g.dest||"MASTER",postFx:!!g.postFx,matrix:g.matrix||[],rack:rackIn(g.rack)})),
-    fx:(spec.fx||[]).map(f=>({...defFx(),name:f.name||"",stereo:f.stereo!==false,dest:f.dest||"MASTER",rack:rackIn(f.rack)})),
-    auxes:(spec.auxes||[]).map(a=>({...defAux(),name:a.name||"",stereo:!!a.stereo,dest:a.dest||"",notes:a.notes||""})),
-    matrixes:(spec.matrixes||[]).map(m=>({name:m.name||"",stereo:!!m.stereo})),
+      matrix:(c.matrix&&c.matrix[0])||"",mic:c.mic||"",stand:c.stand||"",pos:c.position||"",notes:c.notes||"",rack:rackIn(c.rack),color:colIn(c)})),
+    groups:(spec.groups||[]).map(g=>({...defGrp(),name:g.name||"",stereo:g.stereo!==false,dest:g.dest||"MASTER",postFx:!!g.postFx,matrix:g.matrix||[],rack:rackIn(g.rack),color:colIn(g)})),
+    fx:(spec.fx||[]).map(f=>({...defFx(),name:f.name||"",stereo:f.stereo!==false,dest:f.dest||"MASTER",rack:rackIn(f.rack),color:colIn(f)})),
+    auxes:(spec.auxes||[]).map(a=>({...defAux(),name:a.name||"",stereo:!!a.stereo,dest:a.dest||"",notes:a.notes||"",color:colIn(a)})),
+    matrixes:(spec.matrixes||[]).map(m=>({...defMtx(),name:m.name||"",stereo:!!m.stereo,color:colIn(m)})),
     master:{rack:rackIn(spec.master?.rack)},
     stage:{
       items:((spec.stage&&spec.stage.items)||[]).map(it=>{
@@ -1801,6 +1831,28 @@ $("#siRot").addEventListener("input",e=>{
   if(el)el.style.transform=`rotate(${it.rot}deg)${it.flip?" scaleX(-1)":""}`;
 });
 $("#siRot").addEventListener("change",()=>render());
+/* Share one LV1 strip color across everything linked to the selected stage
+   item(s) — a whole musician position colored in one pick. */
+$("#siCol").innerHTML='<option value="" hidden>pick…</option>'+palOpts(-1).replace('<option value="">—</option>','<option value="">— none</option>');
+$("#siCol").addEventListener("change",e=>{
+  const v=e.target.value===""?null:+e.target.value;
+  const chBy=new Map(state.channels.map(c=>[c.name.trim().toUpperCase(),c]));
+  const axBy=new Map(state.auxes.map(a=>[a.name.trim().toUpperCase(),a]));
+  let n=0;
+  for(const i of mSel){
+    const it=stg().items[i];if(!it)continue;
+    const names=[...(it.ins||[])];
+    if(it.label&&it.label.trim())names.push(it.label.trim());
+    for(const nm of new Set(names.map(s=>s.toUpperCase()))){
+      const tgt=(it.auxl&&nm===it.auxl.toUpperCase())?axBy.get(nm):chBy.get(nm);
+      if(tgt){tgt.color=v;n++;}
+    }
+  }
+  e.target.value="";
+  render();
+  setStatus(n?`Color applied to ${n} linked strip${n===1?"":"s"}.`
+    :"No linked inputs on the selected item(s) — add them via the template confirm or a label first.",!n);
+});
 $("#siRotP").onclick=()=>rotateSelection(4.5);
 $("#siRotM").onclick=()=>rotateSelection(-4.5);
 $("#siRotR").onclick=()=>{ // reset rotation to the original (0°) state
