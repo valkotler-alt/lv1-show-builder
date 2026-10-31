@@ -579,6 +579,8 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
 .palshape{width:52px;height:36px;border:2.5px solid currentColor;border-radius:2px;}
 .sinsp{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:8px;font-size:12px;color:var(--dim);}
 .sinsp label{display:inline-flex;gap:6px;align-items:center;}
+.rotbtns{display:inline-flex;gap:4px;}
+.gname{position:absolute;transform:translate(-50%,-100%);font:600 11px var(--font-ui);font-style:italic;color:#555;background:rgba(255,255,255,.65);padding:0 4px;border-radius:3px;pointer-events:none;white-space:nowrap;}
 @media (max-width:860px){ .sbwrap{flex-direction:column;} .sbpal{width:100%;} #palGrid{max-height:200px;} }
 #status{font-size:13px;color:var(--ok);min-height:18px;margin:6px 0;}
 #status.err{color:var(--mtx);}
@@ -734,7 +736,7 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
         <span class="hint">· depth <span id="stageD"></span> m (items are drawn at their real size — the chair is 50 cm)</span></div>
       <div id="stage"><div class="stagelabel">A U D I E N C E</div><div class="stagesize" id="stageSizeLab"></div></div>
       <div id="sinsp" class="sinsp" hidden>
-        <label>Label <input id="siLabel" size="14" list="chanNames" placeholder="input / name" spellcheck="false"></label>
+        <label id="siLabelWrap">Label <input id="siLabel" size="14" list="chanNames" placeholder="input / name" spellcheck="false"></label>
         <label id="siCmWrap">Width <input type="number" id="siCm" min="5" max="1200" step="1" style="width:68px"> cm</label>
         <label id="siRsWrap" hidden>Riser size <select id="siRsize">
           <option value="" hidden>—</option>
@@ -743,11 +745,15 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
           <option value="240x120">240 × 120 cm</option>
           <option value="240x60">240 × 60 cm</option></select></label>
         <label id="siNoteWrap" hidden>Note <input id="siNote" size="14" placeholder="e.g. 240x120x20cm"></label>
-        <label>Rotate <input type="range" id="siRot" min="-180" max="180" step="5"></label>
+        <label id="giNameWrap" hidden>Group name <input id="giName" size="10" placeholder="e.g. IDO" spellcheck="false"></label>
+        <button class="small" id="giGroup" hidden>Group</button>
+        <button class="small" id="giUngroup" hidden>Ungroup</button>
+        <label id="siRotWrap">Rotate <input type="range" id="siRot" min="-180" max="180" step="4.5"></label>
+        <span class="rotbtns"><button class="small" id="siRotM" title="Rotate −4.5°">−4.5°</button><button class="small" id="siRotP" title="Rotate +4.5°">+4.5°</button><button class="small" id="siRotR" title="Reset rotation to 0°">⟲ 0°</button></span>
         <button class="small" id="siFlip">Flip</button>
         <button class="small" id="siDup">Duplicate</button>
         <button class="small danger" id="siDel">Delete</button>
-        <span class="hint">…or drag to move, Delete key removes</span>
+        <span class="hint">drag moves · Shift-click multi-selects · click selects the whole group (Alt-click one member) · Delete key removes</span>
       </div>
       <datalist id="chanNames"></datalist>
     </div>
@@ -1320,12 +1326,13 @@ function loadSpec(spec){
         if(+it.w>0)o.w=+it.w;   // legacy fraction fallback
         if(+it.h>0)o.h=+it.h;
         if(it.note)o.note=String(it.note);
+        if(it.grp)o.grp=String(it.grp);
         return o;}),
       custom:(spec.stage&&spec.stage.custom)||{},
       widthM:+(spec.stage&&spec.stage.widthM)||12,
     },
   };
-  stageSel=-1;
+  stageSel=-1;mSel=new Set();
   clearSel();rackOpen=null;pendingCfg=null;
   applyConfig();
   render();
@@ -1345,7 +1352,8 @@ const STAGELIB_BASE=/\.github\.io$/.test(location.hostname)?"stagelib/"
   :(location.hostname==="localhost"||location.hostname==="127.0.0.1")?"site/stagelib/"
   :"https://valkotler-alt.github.io/lv1-show-builder/stagelib/";
 let STAGELIB=[];
-let stageSel=-1;
+let stageSel=-1;        // the last-clicked item (drives the single-item fields)
+let mSel=new Set();     // the full selection (a whole group, or Shift-built)
 const stg=()=>{if(!state.stage)state.stage={items:[],custom:{}};return state.stage;};
 function lsCustoms(){try{return JSON.parse(localStorage.getItem("lv1.customImgs")||"{}");}catch(_){return {};}}
 function imgSrc(ref){
@@ -1413,12 +1421,12 @@ const stageOrder=()=>stg().items.map((it,i)=>i)
   .sort((a,b)=>((stg().items[a].img==="riser"?0:1)-(stg().items[b].img==="riser"?0:1))||a-b);
 function renderStage(){
   const st=$("#stage");
-  st.querySelectorAll(".sitem").forEach(e=>e.remove());
+  st.querySelectorAll(".sitem,.gname").forEach(e=>e.remove());
   for(const i of stageOrder()){
     const it=stg().items[i];
     const d=document.createElement("div");
     const riser=it.img==="riser";
-    d.className="sitem"+(riser?" riser":"")+(i===stageSel?" sel":"");
+    d.className="sitem"+(riser?" riser":"")+(mSel.has(i)?" sel":"");
     d.dataset.si=i;
     d.style.left=(it.x*100)+"%";d.style.top=(it.y*100)+"%";d.style.width=(itemWfrac(it)*100)+"%";
     if(riser){
@@ -1434,6 +1442,18 @@ function renderStage(){
     }
     st.appendChild(d);
   }
+  // Group name badges above each group's constellation.
+  const groups={};
+  stg().items.forEach(it=>{if(it.grp){(groups[it.grp]=groups[it.grp]||[]).push(it);}});
+  for(const [name,members] of Object.entries(groups)){
+    const cx=members.reduce((s,m)=>s+m.x,0)/members.length;
+    const top=Math.min(...members.map(m=>m.y));
+    const g=document.createElement("div");
+    g.className="gname";
+    g.style.left=(cx*100)+"%";g.style.top=(Math.max(0.02,top-0.06)*100)+"%";
+    g.textContent=name;
+    st.appendChild(g);
+  }
   $("#stageW").value=+stg().widthM||12;
   $("#stageD").textContent=(((+stg().widthM||12))*9/16).toFixed(1);
   $("#stageSizeLab").textContent=`${+stg().widthM||12} m × ${(((+stg().widthM||12))*9/16).toFixed(1)} m`;
@@ -1442,21 +1462,63 @@ function renderStage(){
 }
 function renderInspector(){
   const it=stg().items[stageSel];
-  $("#sinsp").hidden=!it;
-  if(!it)return;
-  const riser=it.img==="riser";
+  const multi=mSel.size>1;
+  $("#sinsp").hidden=!it&&!multi;
+  if(!it&&!multi)return;
+  const riser=!multi&&it&&it.img==="riser";
+  // Single-item fields hide in group mode.
+  $("#siLabelWrap").hidden=multi;
+  $("#siCmWrap").hidden=multi||riser;
+  $("#siRsWrap").hidden=multi||!riser;
+  $("#siNoteWrap").hidden=multi||!riser;
+  $("#siRotWrap").hidden=multi; // a constellation rotates by steps only
+  $("#siFlip").hidden=multi||riser;
+  $("#siDup").hidden=multi;
+  // Group controls.
+  $("#giNameWrap").hidden=!multi;
+  $("#giGroup").hidden=!multi;
+  const selGrps=[...mSel].map(i=>stg().items[i]&&stg().items[i].grp).filter(Boolean);
+  $("#giUngroup").hidden=!selGrps.length;
+  if(multi){
+    $("#giGroup").textContent=selGrps.length===mSel.size&&new Set(selGrps).size===1?"Rename":"Group";
+    if(document.activeElement!==$("#giName"))
+      $("#giName").value=new Set(selGrps).size===1?selGrps[0]:"";
+    return;
+  }
   if(document.activeElement!==$("#siLabel"))$("#siLabel").value=it.label||"";
   $("#siRot").value=it.rot||0;
-  $("#siCmWrap").hidden=riser;
-  $("#siRsWrap").hidden=!riser;
-  $("#siNoteWrap").hidden=!riser;
-  $("#siFlip").hidden=riser;
   if(riser){
     $("#siRsize").value=(it.rw&&it.rd)?`${it.rw}x${it.rd}`:"";
     if(document.activeElement!==$("#siNote"))$("#siNote").value=it.note||"";
   }else if(document.activeElement!==$("#siCm")){
     $("#siCm").value=it.cm?Math.round(it.cm):"";
   }
+}
+const groupOf=i=>{const g=stg().items[i]&&stg().items[i].grp;
+  if(!g)return new Set([i]);
+  return new Set(stg().items.map((it,j)=>it.grp===g?j:-1).filter(j=>j>=0));};
+const normRot=r=>((r+180)%360+360)%360-180;
+function rotateSelection(delta){
+  const ms=[...mSel];if(!ms.length)return;
+  if(ms.length>1){
+    // Rotate the constellation around its center in canvas (16:9) units,
+    // where the physical scale is isotropic, so the angle is true.
+    const pts=ms.map(i=>({i,X:stg().items[i].x*16,Y:stg().items[i].y*9}));
+    const cx=pts.reduce((s,p)=>s+p.X,0)/pts.length;
+    const cy=pts.reduce((s,p)=>s+p.Y,0)/pts.length;
+    const a=delta*Math.PI/180,cos=Math.cos(a),sin=Math.sin(a);
+    for(const p of pts){
+      const dx=p.X-cx,dy=p.Y-cy;
+      const it=stg().items[p.i];
+      it.x=Math.min(1,Math.max(0,(cx+dx*cos-dy*sin)/16));
+      it.y=Math.min(1,Math.max(0,(cy+dx*sin+dy*cos)/9));
+      it.rot=normRot((it.rot||0)+delta);
+    }
+  }else{
+    const it=stg().items[ms[0]];
+    it.rot=normRot((it.rot||0)+delta);
+  }
+  render();
 }
 function libCm(ref){
   if(ref==="riser")return 0;
@@ -1469,32 +1531,52 @@ function addStageItem(ref){
     :{img:ref,x:0.5,y:0.55,rot:0,flip:false,label:"",cm:libCm(ref)||100};
   stg().items.push(it);
   stageSel=stg().items.length-1;
+  mSel=new Set([stageSel]);
   render();
 }
 document.addEventListener("click",e=>{
   const p=e.target.closest("[data-add]");
   if(p)addStageItem(p.dataset.add);
 });
-/* Drag items on the stage (pointer events; coordinates as stage fractions). */
+/* Selection + drag (pointer events; coordinates as stage fractions).
+   Click selects the whole group of the clicked item; Alt-click just that
+   item; Shift-click toggles into / out of the selection. Dragging moves
+   every selected item together. */
 let sdrag=null;
 $("#stage").addEventListener("pointerdown",e=>{
   const el=e.target.closest(".sitem");
   const r=$("#stage").getBoundingClientRect();
-  if(!el){if(stageSel!==-1){stageSel=-1;renderStage();}return;}
-  stageSel=+el.dataset.si;
+  if(!el){
+    if(mSel.size||stageSel!==-1){stageSel=-1;mSel=new Set();renderStage();}
+    return;
+  }
+  const i=+el.dataset.si;
+  const unit=e.altKey?new Set([i]):groupOf(i);
+  if(e.shiftKey){
+    const on=[...unit].every(j=>mSel.has(j));
+    for(const j of unit){if(on)mSel.delete(j);else mSel.add(j);}
+    if(!mSel.size)stageSel=-1;else stageSel=i;
+    renderStage();
+    return; // shift-click adjusts the selection; no drag
+  }
+  if(!mSel.has(i))mSel=unit;
+  stageSel=i;
   renderStage();
-  const sel=$("#stage").querySelector('.sitem.sel');
-  const it=stg().items[stageSel];
-  sdrag={dx:it.x-(e.clientX-r.left)/r.width, dy:it.y-(e.clientY-r.top)/r.height, el:sel, moved:false};
-  sel.setPointerCapture(e.pointerId);
+  const px=(e.clientX-r.left)/r.width, py=(e.clientY-r.top)/r.height;
+  sdrag={moved:false,members:[...mSel].map(j=>({j,dx:stg().items[j].x-px,dy:stg().items[j].y-py}))};
+  el.setPointerCapture(e.pointerId);
 });
 $("#stage").addEventListener("pointermove",e=>{
-  if(!sdrag||stageSel<0)return;
+  if(!sdrag)return;
   const r=$("#stage").getBoundingClientRect();
-  const it=stg().items[stageSel];
-  it.x=Math.min(1,Math.max(0,(e.clientX-r.left)/r.width+sdrag.dx));
-  it.y=Math.min(1,Math.max(0,(e.clientY-r.top)/r.height+sdrag.dy));
-  sdrag.el.style.left=(it.x*100)+"%";sdrag.el.style.top=(it.y*100)+"%";
+  const px=(e.clientX-r.left)/r.width, py=(e.clientY-r.top)/r.height;
+  for(const m of sdrag.members){
+    const it=stg().items[m.j];if(!it)continue;
+    it.x=Math.min(1,Math.max(0,px+m.dx));
+    it.y=Math.min(1,Math.max(0,py+m.dy));
+    const el=$("#stage").querySelector(`.sitem[data-si="${m.j}"]`);
+    if(el){el.style.left=(it.x*100)+"%";el.style.top=(it.y*100)+"%";}
+  }
   sdrag.moved=true;
 });
 $("#stage").addEventListener("pointerup",()=>{
@@ -1555,19 +1637,42 @@ $("#siRot").addEventListener("input",e=>{
   if(el)el.style.transform=`rotate(${it.rot}deg)${it.flip?" scaleX(-1)":""}`;
 });
 $("#siRot").addEventListener("change",()=>render());
+$("#siRotP").onclick=()=>rotateSelection(4.5);
+$("#siRotM").onclick=()=>rotateSelection(-4.5);
+$("#siRotR").onclick=()=>{ // reset rotation to the original (0°) state
+  for(const i of mSel){const it=stg().items[i];if(it)it.rot=0;}
+  render();
+};
+$("#giGroup").onclick=()=>{
+  const name=$("#giName").value.trim();
+  if(!name){setStatus("Give the group a name first.",true);return;}
+  for(const i of mSel){const it=stg().items[i];if(it)it.grp=name;}
+  render();setStatus(`Grouped ${mSel.size} items as “${name}”.`);
+};
+$("#giUngroup").onclick=()=>{
+  for(const i of mSel){const it=stg().items[i];if(it)delete it.grp;}
+  render();setStatus("Ungrouped.");
+};
 $("#siFlip").onclick=()=>{const it=stg().items[stageSel];if(!it)return;it.flip=!it.flip;render();};
 $("#siDup").onclick=()=>{const it=stg().items[stageSel];if(!it)return;
-  stg().items.push({...it,x:Math.min(1,it.x+0.05),y:Math.min(1,it.y+0.05)});
-  stageSel=stg().items.length-1;render();};
-$("#siDel").onclick=()=>{if(stageSel<0)return;stg().items.splice(stageSel,1);stageSel=-1;render();};
+  const copy={...it};delete copy.grp;
+  stg().items.push({...copy,x:Math.min(1,it.x+0.05),y:Math.min(1,it.y+0.05)});
+  stageSel=stg().items.length-1;mSel=new Set([stageSel]);render();};
+function deleteSelection(){
+  if(!mSel.size)return;
+  const idx=[...mSel].sort((a,b)=>b-a);
+  for(const i of idx)stg().items.splice(i,1);
+  stageSel=-1;mSel=new Set();render();
+}
+$("#siDel").onclick=deleteSelection;
 document.addEventListener("keydown",e=>{
   if(e.key!=="Delete"&&e.key!=="Backspace")return;
   if(/INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName||""))return;
-  if(stageSel>=0){stg().items.splice(stageSel,1);stageSel=-1;render();e.preventDefault();}
+  if(mSel.size){deleteSelection();e.preventDefault();}
 });
 $("#stageClear").onclick=()=>{
   if(!stg().items.length)return;
-  stg().items=[];stageSel=-1;render();setStatus("Stage cleared.");
+  stg().items=[];stageSel=-1;mSel=new Set();render();setStatus("Stage cleared.");
 };
 /* Import a custom image: background removal + tight crop + downscale in the
    browser, mirroring build_stagelib.py; saved to the personal library. */
@@ -1710,6 +1815,15 @@ async function stageBitmap(){
       cx.fillStyle="#111";cx.font="600 22px Arial";cx.textAlign="center";
       cx.fillText(it.label,it.x*W,it.y*H+h/2+24);
     }
+  }
+  // Group name badges.
+  const groups={};
+  stg().items.forEach(it=>{if(it.grp){(groups[it.grp]=groups[it.grp]||[]).push(it);}});
+  cx.textAlign="center";cx.font="italic 600 24px Arial";cx.fillStyle="#555";
+  for(const [name,members] of Object.entries(groups)){
+    const gx=members.reduce((s,m)=>s+m.x,0)/members.length;
+    const top=Math.min(...members.map(m=>m.y));
+    cx.fillText(name,gx*W,Math.max(0.04,top-0.05)*H);
   }
   return cv;
 }
