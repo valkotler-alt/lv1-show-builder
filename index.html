@@ -579,7 +579,9 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
 .sitem{position:absolute;transform:translate(-50%,-50%);cursor:grab;user-select:none;}
 .sitem .srot{pointer-events:none;}
 .sitem img{width:100%;height:auto;display:block;pointer-events:none;-webkit-user-drag:none;}
-.sitem .slab{position:absolute;top:calc(100% + 1px);left:50%;transform:translateX(-50%);font:600 11px var(--font-ui);color:#23252a;background:rgba(255,255,255,.75);padding:0 4px;border-radius:3px;white-space:nowrap;pointer-events:none;}
+.sitem .slab{position:absolute;top:calc(100% + 1px);left:50%;transform:translateX(-50%);font:600 11px var(--font-ui);color:#23252a;background:rgba(255,255,255,.75);padding:0 4px;border-radius:3px;white-space:pre-line;text-align:center;line-height:1.3;pointer-events:none;}
+.disptoggles{display:inline-flex;gap:7px;align-items:center;font-size:12px;color:var(--dim);}
+.disptoggles label{display:inline-flex;gap:3px;align-items:center;font-size:11px;cursor:pointer;}
 .sitem.sel{outline:2px dashed var(--accent);outline-offset:2px;}
 .sitem.riser .rbox{width:100%;height:100%;border:3px solid #444;background:rgba(80,80,80,.06);border-radius:2px;box-sizing:border-box;}
 .sitem.riser .rlabel{position:absolute;top:4px;left:0;right:0;text-align:center;font:700 12px var(--font-ui);color:#333;pointer-events:none;}
@@ -776,7 +778,11 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
         <button class="small" id="tplSkip">Skip</button>
       </div>
       <div id="sinsp" class="sinsp" hidden>
-        <label id="siLabelWrap">Label <input id="siLabel" size="26" list="chanNames" placeholder="input / name" spellcheck="false"></label>
+        <label id="siLabelWrap">Name <input id="siLabel" size="26" list="chanNames" placeholder="input / name" spellcheck="false"></label>
+        <span id="siDispWrap" class="disptoggles" title="Which lines the caption under the instrument shows — Position, Name, IO patch">Caption
+          <label><input type="checkbox" id="dispP">Pos</label>
+          <label><input type="checkbox" id="dispN">Name</label>
+          <label><input type="checkbox" id="dispI">IO</label></span>
         <label id="siCmWrap">Width <input type="number" id="siCm" min="5" max="1200" step="1" style="width:68px"> cm</label>
         <label id="siRsWrap" hidden>Riser size <select id="siRsize">
           <option value="" hidden>—</option>
@@ -1557,6 +1563,8 @@ function loadSpec(spec){
         if(+it.h>0)o.h=+it.h;
         if(it.note)o.note=String(it.note);
         if(it.pos)o.pos=String(it.pos); // legacy it.grp is dropped by design
+        if(typeof it.disp==="string"&&it.disp!=="n")
+          o.disp=[..."pni"].filter(c=>it.disp.includes(c)).join(""); // caption lines
         if(Array.isArray(it.ins)&&it.ins.length)o.ins=it.ins.map(String);
         if(it.auxl)o.auxl=String(it.auxl);
         return o;}),
@@ -1784,21 +1792,25 @@ function renderStage(){
         (it.label?`<div class="rlabel">${esc(it.label)}</div>`:"")+
         (it.note?`<div class="slab">${esc(it.note)}</div>`:"");
     }else{
+      const cap=itemCaption(i,it);
       d.innerHTML=`<div class="srot" style="transform:rotate(${it.rot||0}deg)${it.flip?" scaleX(-1)":""}">
         <img draggable="false" src="${esc(imgSrc(it.img))}"></div>`+
-        (it.label?`<div class="slab">${esc(it.label)}</div>`:"");
+        (cap?`<div class="slab">${esc(cap)}</div>`:"");
     }
     st.appendChild(d);
   }
   // Position name badges UNDER each position's constellation — below the
   // bottom-most item's EDGE (not center) plus its label row, so nothing clips.
   for(const [name,members] of Object.entries(positionSets())){
+    // An item already showing its Position line covers the badge's job.
+    if(members.some(m=>itemDisp(m).includes("p")))continue;
     const cx=members.reduce((s,m)=>s+m.x,0)/members.length;
     const bot=Math.min(0.97,Math.max(...members.map(m=>m.y+itemHfrac(m)/2)));
-    const labeled=members.some(m=>m.label); // item labels are fixed-px overlays
+    const maxLines=Math.max(...members.map(m=>{
+      const c=itemCaption(stg().items.indexOf(m),m);return c?c.split("\n").length:0;}));
     const g=document.createElement("div");
     g.className="posname";
-    g.style.left=(cx*100)+"%";g.style.top=`calc(${(bot*100).toFixed(2)}% + ${labeled?18:3}px)`;
+    g.style.left=(cx*100)+"%";g.style.top=`calc(${(bot*100).toFixed(2)}% + ${maxLines?6+14*maxLines:3}px)`;
     g.textContent=name;
     st.appendChild(g);
   }
@@ -1860,6 +1872,12 @@ function renderInspector(){
     const ps=new Set([...mSel].map(j=>((stg().items[j]||{}).pos||"").trim()));
     $("#siPos").value=ps.size===1?[...ps][0]:"";
   }
+  // Caption line toggles (single or multi; applied to the whole selection).
+  $("#siDispWrap").hidden=!multi&&riser;
+  const d0=itemDisp(stg().items[multi?[...mSel][0]:stageSel]||{});
+  $("#dispP").checked=d0.includes("p");
+  $("#dispN").checked=d0.includes("n");
+  $("#dispI").checked=d0.includes("i");
   if(multi){$("#siIO").hidden=true;return;}
   renderItemIO(it);
   if(document.activeElement!==$("#siLabel"))$("#siLabel").value=it.label||"";
@@ -1871,6 +1889,27 @@ function renderInspector(){
     $("#siCm").value=it.cm?Math.round(it.cm):"";
   }
 }
+/* Item captions: up to three lines under the instrument — Position, Name
+   (the label), IO (the linked patch, computed live). it.disp holds the
+   picked lines as a subset of "pni"; undefined = "n" (the classic label). */
+const itemDisp=it=>it.disp!==undefined?it.disp:"n";
+function itemIoTag(idx){
+  const {chs,axs}=linkedRowsFor([idx]);
+  const pts=ports(),apts=auxPorts(),segs=[];
+  const nums=[...chs.values()].flatMap(c=>pts[state.channels.indexOf(c)]||[]);
+  if(nums.length){const a=Math.min(...nums),b=Math.max(...nums);segs.push("IN "+(a===b?a:a+"-"+b));}
+  const anums=[...axs.values()].flatMap(x=>apts[state.auxes.indexOf(x)]||[]);
+  if(anums.length){const a=Math.min(...anums),b=Math.max(...anums);segs.push("OUT "+(a===b?a:a+"-"+b));}
+  return segs.join(" · ");
+}
+function itemCaption(idx,it){
+  const d=itemDisp(it),lines=[];
+  if(d.includes("p")&&(it.pos||"").trim())lines.push(it.pos.trim());
+  if(d.includes("n")&&(it.label||"").trim())lines.push(it.label.trim());
+  if(d.includes("i")){const t=itemIoTag(idx);if(t)lines.push(t);}
+  return lines.join("\n");
+}
+
 /* Linked-IO panel in the inspector: the selected item's inputs / aux with
    their patch numbers; names are editable HERE without breaking the link
    (the ins/auxl/label references are renamed along). With exactly one IO
@@ -1895,14 +1934,10 @@ function renderItemIO(it){
     (rows.length===1?`<button class="small" id="siCopyLab" title="Copy the IO name into the item label">→ Label</button>`:"");
   const cp=$("#siCopyLab");
   if(cp)cp.onclick=()=>{
+    // Copies the IO name into the Name line; the patch has its own caption
+    // line now (tick IO in the Caption toggles).
     const it2=stg().items[stageSel];if(!it2)return;
-    const inp=box.querySelector(".iorow input");
-    // Label = IO name + its patch, e.g. "GT Amp 2 - IN15" / "MIX 1 - OUT3-4".
-    // The link itself lives in ins/auxl, so the decorated label stays safe.
-    const x=+inp.dataset.ioi;
-    const p=inp.dataset.iok==="ch"?ports()[x]:auxPorts()[x];
-    const tag=p?` - ${inp.dataset.iok==="ch"?"IN":"OUT"}${p.join("-")}`:"";
-    it2.label=inp.value.trim()+tag;
+    it2.label=box.querySelector(".iorow input").value.trim();
     render();
   };
 }
@@ -2091,8 +2126,10 @@ $("#siLabel").addEventListener("input",e=>{
   const it=stg().items[stageSel];if(!it)return;
   it.label=e.target.value;
   const el=$("#stage").querySelector(".sitem.sel");if(!el)return;
+  if(it.img==="riser"){const rl=el.querySelector(".rlabel");if(rl)rl.textContent=it.label;return;}
   let lab=el.querySelector(".slab");
-  if(it.label){if(!lab){lab=document.createElement("div");lab.className="slab";el.appendChild(lab);}lab.textContent=it.label;}
+  const cap=itemCaption(stageSel,it);
+  if(cap){if(!lab){lab=document.createElement("div");lab.className="slab";el.appendChild(lab);}lab.textContent=cap;}
   else if(lab)lab.remove();
 });
 $("#siLabel").addEventListener("change",()=>render());
@@ -2162,6 +2199,11 @@ $("#siCol").addEventListener("change",e=>{
   render();
   setStatus(n?`Color applied to ${n} linked strip${n===1?"":"s"}.`
     :"No linked inputs on the selected item(s) — add them via the template confirm or a label first.",!n);
+});
+for(const id of ["dispP","dispN","dispI"])$("#"+id).addEventListener("change",()=>{
+  const d=($("#dispP").checked?"p":"")+($("#dispN").checked?"n":"")+($("#dispI").checked?"i":"");
+  for(const j of mSel){const it=stg().items[j];if(it&&it.img!=="riser")it.disp=d;}
+  render();
 });
 $("#siRotP").onclick=()=>rotateSelection(4.5);
 $("#siRotM").onclick=()=>rotateSelection(-4.5);
@@ -2423,17 +2465,21 @@ async function stageBitmap(){
     if(it.flip)cx.scale(-1,1);
     cx.drawImage(img,-w/2,-h/2,w,h);
     cx.restore();
-    if(it.label){
+    const cap=itemCaption(idx,it);
+    if(cap){
       cx.fillStyle="#111";cx.font="600 22px Arial";cx.textAlign="center";
-      cx.fillText(it.label,it.x*W,it.y*H+h/2+24);
+      cap.split("\n").forEach((ln,k)=>cx.fillText(ln,it.x*W,it.y*H+h/2+24+k*25));
     }
   }
   // Position name badges, under each position's constellation (below the
   // bottom-most item's edge + its label line).
   cx.textAlign="center";cx.font="italic 600 24px Arial";cx.fillStyle="#555";
   for(const [name,members] of Object.entries(positionSets())){
+    if(members.some(m=>itemDisp(m).includes("p")))continue; // caption covers it
+    const bot=Math.max(...members.map(m=>{
+      const c=itemCaption(stg().items.indexOf(m),m);
+      return m.y+itemHfrac(m)/2+(c?c.split("\n").length*0.03:0);}));
     const gx=members.reduce((s,m)=>s+m.x,0)/members.length;
-    const bot=Math.max(...members.map(m=>m.y+itemHfrac(m)/2+(m.label?0.04:0)));
     cx.fillText(name,gx*W,Math.min(0.97,bot+0.035)*H);
   }
   return cv;
