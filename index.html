@@ -639,6 +639,9 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
     </div>
   </div>
   <button id="btnImport">Import spec…</button>
+  <button id="btnEmoImp" title="Load an LV1 session (.emo) into the builder">Import .emo…</button>
+  <button id="btnEmoExp" title="Build a ready-to-load LV1 session file in the browser">Export .emo</button>
+  <input type="file" id="fileEmo" accept=".emo" hidden>
   <button id="btnExample">Load RIVKA example</button>
   <button id="btnNew">New empty show</button>
   <input type="file" id="fileImport" accept=".json,application/json" hidden>
@@ -826,6 +829,17 @@ show. Plugins load with their factory default preset. “Stock” racks (F2 → 
   </div>
 </div>
 
+<script>/* js-sha3 0.8.0 (c) Chen Yi-Cyuan, MIT — inlined for the .emo exporter */
+/**
+ * [js-sha3]{@link https://github.com/emn178/js-sha3}
+ *
+ * @version 0.8.0
+ * @author Chen, Yi-Cyuan [emn178@gmail.com]
+ * @copyright Chen, Yi-Cyuan 2015-2018
+ * @license MIT
+ */
+!function(){"use strict";function t(t,e,r){this.blocks=[],this.s=[],this.padding=e,this.outputBits=r,this.reset=!0,this.finalized=!1,this.block=0,this.start=0,this.blockCount=1600-(t<<1)>>5,this.byteCount=this.blockCount<<2,this.outputBlocks=r>>5,this.extraBytes=(31&r)>>3;for(var n=0;n<50;++n)this.s[n]=0}function e(e,r,n){t.call(this,e,r,n)}var r="input is invalid type",n="object"==typeof window,i=n?window:{};i.JS_SHA3_NO_WINDOW&&(n=!1);var o=!n&&"object"==typeof self;!i.JS_SHA3_NO_NODE_JS&&"object"==typeof process&&process.versions&&process.versions.node?i=global:o&&(i=self);var a=!i.JS_SHA3_NO_COMMON_JS&&"object"==typeof module&&module.exports,s="function"==typeof define&&define.amd,u=!i.JS_SHA3_NO_ARRAY_BUFFER&&"undefined"!=typeof ArrayBuffer,f="0123456789abcdef".split(""),c=[4,1024,262144,67108864],h=[0,8,16,24],p=[1,0,32898,0,32906,2147483648,2147516416,2147483648,32907,0,2147483649,0,2147516545,2147483648,32777,2147483648,138,0,136,0,2147516425,0,2147483658,0,2147516555,0,139,2147483648,32905,2147483648,32771,2147483648,32770,2147483648,128,2147483648,32778,0,2147483658,2147483648,2147516545,2147483648,32896,2147483648,2147483649,0,2147516424,2147483648],d=[224,256,384,512],l=[128,256],y=["hex","buffer","arrayBuffer","array","digest"],b={128:168,256:136};!i.JS_SHA3_NO_NODE_JS&&Array.isArray||(Array.isArray=function(t){return"[object Array]"===Object.prototype.toString.call(t)}),!u||!i.JS_SHA3_NO_ARRAY_BUFFER_IS_VIEW&&ArrayBuffer.isView||(ArrayBuffer.isView=function(t){return"object"==typeof t&&t.buffer&&t.buffer.constructor===ArrayBuffer});for(var A=function(e,r,n){return function(i){return new t(e,r,e).update(i)[n]()}},w=function(e,r,n){return function(i,o){return new t(e,r,o).update(i)[n]()}},v=function(t,e,r){return function(e,n,i,o){return S["cshake"+t].update(e,n,i,o)[r]()}},B=function(t,e,r){return function(e,n,i,o){return S["kmac"+t].update(e,n,i,o)[r]()}},g=function(t,e,r,n){for(var i=0;i<y.length;++i){var o=y[i];t[o]=e(r,n,o)}return t},_=function(e,r){var n=A(e,r,"hex");return n.create=function(){return new t(e,r,e)},n.update=function(t){return n.create().update(t)},g(n,A,e,r)},k=[{name:"keccak",padding:[1,256,65536,16777216],bits:d,createMethod:_},{name:"sha3",padding:[6,1536,393216,100663296],bits:d,createMethod:_},{name:"shake",padding:[31,7936,2031616,520093696],bits:l,createMethod:function(e,r){var n=w(e,r,"hex");return n.create=function(n){return new t(e,r,n)},n.update=function(t,e){return n.create(e).update(t)},g(n,w,e,r)}},{name:"cshake",padding:c,bits:l,createMethod:function(e,r){var n=b[e],i=v(e,0,"hex");return i.create=function(i,o,a){return o||a?new t(e,r,i).bytepad([o,a],n):S["shake"+e].create(i)},i.update=function(t,e,r,n){return i.create(e,r,n).update(t)},g(i,v,e,r)}},{name:"kmac",padding:c,bits:l,createMethod:function(t,r){var n=b[t],i=B(t,0,"hex");return i.create=function(i,o,a){return new e(t,r,o).bytepad(["KMAC",a],n).bytepad([i],n)},i.update=function(t,e,r,n){return i.create(t,r,n).update(e)},g(i,B,t,r)}}],S={},C=[],x=0;x<k.length;++x)for(var m=k[x],E=m.bits,O=0;O<E.length;++O){var z=m.name+"_"+E[O];if(C.push(z),S[z]=m.createMethod(E[O],m.padding),"sha3"!==m.name){var N=m.name+E[O];C.push(N),S[N]=S[z]}}t.prototype.update=function(t){if(this.finalized)throw new Error("finalize already called");var e,n=typeof t;if("string"!==n){if("object"!==n)throw new Error(r);if(null===t)throw new Error(r);if(u&&t.constructor===ArrayBuffer)t=new Uint8Array(t);else if(!(Array.isArray(t)||u&&ArrayBuffer.isView(t)))throw new Error(r);e=!0}for(var i,o,a=this.blocks,s=this.byteCount,f=t.length,c=this.blockCount,p=0,d=this.s;p<f;){if(this.reset)for(this.reset=!1,a[0]=this.block,i=1;i<c+1;++i)a[i]=0;if(e)for(i=this.start;p<f&&i<s;++p)a[i>>2]|=t[p]<<h[3&i++];else for(i=this.start;p<f&&i<s;++p)(o=t.charCodeAt(p))<128?a[i>>2]|=o<<h[3&i++]:o<2048?(a[i>>2]|=(192|o>>6)<<h[3&i++],a[i>>2]|=(128|63&o)<<h[3&i++]):o<55296||o>=57344?(a[i>>2]|=(224|o>>12)<<h[3&i++],a[i>>2]|=(128|o>>6&63)<<h[3&i++],a[i>>2]|=(128|63&o)<<h[3&i++]):(o=65536+((1023&o)<<10|1023&t.charCodeAt(++p)),a[i>>2]|=(240|o>>18)<<h[3&i++],a[i>>2]|=(128|o>>12&63)<<h[3&i++],a[i>>2]|=(128|o>>6&63)<<h[3&i++],a[i>>2]|=(128|63&o)<<h[3&i++]);if(this.lastByteIndex=i,i>=s){for(this.start=i-s,this.block=a[c],i=0;i<c;++i)d[i]^=a[i];j(d),this.reset=!0}else this.start=i}return this},t.prototype.encode=function(t,e){var r=255&t,n=1,i=[r];for(r=255&(t>>=8);r>0;)i.unshift(r),r=255&(t>>=8),++n;return e?i.push(n):i.unshift(n),this.update(i),i.length},t.prototype.encodeString=function(t){var e,n=typeof t;if("string"!==n){if("object"!==n)throw new Error(r);if(null===t)throw new Error(r);if(u&&t.constructor===ArrayBuffer)t=new Uint8Array(t);else if(!(Array.isArray(t)||u&&ArrayBuffer.isView(t)))throw new Error(r);e=!0}var i=0,o=t.length;if(e)i=o;else for(var a=0;a<t.length;++a){var s=t.charCodeAt(a);s<128?i+=1:s<2048?i+=2:s<55296||s>=57344?i+=3:(s=65536+((1023&s)<<10|1023&t.charCodeAt(++a)),i+=4)}return i+=this.encode(8*i),this.update(t),i},t.prototype.bytepad=function(t,e){for(var r=this.encode(e),n=0;n<t.length;++n)r+=this.encodeString(t[n]);var i=e-r%e,o=[];return o.length=i,this.update(o),this},t.prototype.finalize=function(){if(!this.finalized){this.finalized=!0;var t=this.blocks,e=this.lastByteIndex,r=this.blockCount,n=this.s;if(t[e>>2]|=this.padding[3&e],this.lastByteIndex===this.byteCount)for(t[0]=t[r],e=1;e<r+1;++e)t[e]=0;for(t[r-1]|=2147483648,e=0;e<r;++e)n[e]^=t[e];j(n)}},t.prototype.toString=t.prototype.hex=function(){this.finalize();for(var t,e=this.blockCount,r=this.s,n=this.outputBlocks,i=this.extraBytes,o=0,a=0,s="";a<n;){for(o=0;o<e&&a<n;++o,++a)t=r[o],s+=f[t>>4&15]+f[15&t]+f[t>>12&15]+f[t>>8&15]+f[t>>20&15]+f[t>>16&15]+f[t>>28&15]+f[t>>24&15];a%e==0&&(j(r),o=0)}return i&&(t=r[o],s+=f[t>>4&15]+f[15&t],i>1&&(s+=f[t>>12&15]+f[t>>8&15]),i>2&&(s+=f[t>>20&15]+f[t>>16&15])),s},t.prototype.arrayBuffer=function(){this.finalize();var t,e=this.blockCount,r=this.s,n=this.outputBlocks,i=this.extraBytes,o=0,a=0,s=this.outputBits>>3;t=i?new ArrayBuffer(n+1<<2):new ArrayBuffer(s);for(var u=new Uint32Array(t);a<n;){for(o=0;o<e&&a<n;++o,++a)u[a]=r[o];a%e==0&&j(r)}return i&&(u[o]=r[o],t=t.slice(0,s)),t},t.prototype.buffer=t.prototype.arrayBuffer,t.prototype.digest=t.prototype.array=function(){this.finalize();for(var t,e,r=this.blockCount,n=this.s,i=this.outputBlocks,o=this.extraBytes,a=0,s=0,u=[];s<i;){for(a=0;a<r&&s<i;++a,++s)t=s<<2,e=n[a],u[t]=255&e,u[t+1]=e>>8&255,u[t+2]=e>>16&255,u[t+3]=e>>24&255;s%r==0&&j(n)}return o&&(t=s<<2,e=n[a],u[t]=255&e,o>1&&(u[t+1]=e>>8&255),o>2&&(u[t+2]=e>>16&255)),u},(e.prototype=new t).finalize=function(){return this.encode(this.outputBits,!0),t.prototype.finalize.call(this)};var j=function(t){var e,r,n,i,o,a,s,u,f,c,h,d,l,y,b,A,w,v,B,g,_,k,S,C,x,m,E,O,z,N,j,J,M,H,I,R,U,V,F,D,W,Y,K,q,G,L,P,Q,T,X,Z,$,tt,et,rt,nt,it,ot,at,st,ut,ft,ct;for(n=0;n<48;n+=2)i=t[0]^t[10]^t[20]^t[30]^t[40],o=t[1]^t[11]^t[21]^t[31]^t[41],a=t[2]^t[12]^t[22]^t[32]^t[42],s=t[3]^t[13]^t[23]^t[33]^t[43],u=t[4]^t[14]^t[24]^t[34]^t[44],f=t[5]^t[15]^t[25]^t[35]^t[45],c=t[6]^t[16]^t[26]^t[36]^t[46],h=t[7]^t[17]^t[27]^t[37]^t[47],e=(d=t[8]^t[18]^t[28]^t[38]^t[48])^(a<<1|s>>>31),r=(l=t[9]^t[19]^t[29]^t[39]^t[49])^(s<<1|a>>>31),t[0]^=e,t[1]^=r,t[10]^=e,t[11]^=r,t[20]^=e,t[21]^=r,t[30]^=e,t[31]^=r,t[40]^=e,t[41]^=r,e=i^(u<<1|f>>>31),r=o^(f<<1|u>>>31),t[2]^=e,t[3]^=r,t[12]^=e,t[13]^=r,t[22]^=e,t[23]^=r,t[32]^=e,t[33]^=r,t[42]^=e,t[43]^=r,e=a^(c<<1|h>>>31),r=s^(h<<1|c>>>31),t[4]^=e,t[5]^=r,t[14]^=e,t[15]^=r,t[24]^=e,t[25]^=r,t[34]^=e,t[35]^=r,t[44]^=e,t[45]^=r,e=u^(d<<1|l>>>31),r=f^(l<<1|d>>>31),t[6]^=e,t[7]^=r,t[16]^=e,t[17]^=r,t[26]^=e,t[27]^=r,t[36]^=e,t[37]^=r,t[46]^=e,t[47]^=r,e=c^(i<<1|o>>>31),r=h^(o<<1|i>>>31),t[8]^=e,t[9]^=r,t[18]^=e,t[19]^=r,t[28]^=e,t[29]^=r,t[38]^=e,t[39]^=r,t[48]^=e,t[49]^=r,y=t[0],b=t[1],L=t[11]<<4|t[10]>>>28,P=t[10]<<4|t[11]>>>28,O=t[20]<<3|t[21]>>>29,z=t[21]<<3|t[20]>>>29,st=t[31]<<9|t[30]>>>23,ut=t[30]<<9|t[31]>>>23,Y=t[40]<<18|t[41]>>>14,K=t[41]<<18|t[40]>>>14,H=t[2]<<1|t[3]>>>31,I=t[3]<<1|t[2]>>>31,A=t[13]<<12|t[12]>>>20,w=t[12]<<12|t[13]>>>20,Q=t[22]<<10|t[23]>>>22,T=t[23]<<10|t[22]>>>22,N=t[33]<<13|t[32]>>>19,j=t[32]<<13|t[33]>>>19,ft=t[42]<<2|t[43]>>>30,ct=t[43]<<2|t[42]>>>30,et=t[5]<<30|t[4]>>>2,rt=t[4]<<30|t[5]>>>2,R=t[14]<<6|t[15]>>>26,U=t[15]<<6|t[14]>>>26,v=t[25]<<11|t[24]>>>21,B=t[24]<<11|t[25]>>>21,X=t[34]<<15|t[35]>>>17,Z=t[35]<<15|t[34]>>>17,J=t[45]<<29|t[44]>>>3,M=t[44]<<29|t[45]>>>3,C=t[6]<<28|t[7]>>>4,x=t[7]<<28|t[6]>>>4,nt=t[17]<<23|t[16]>>>9,it=t[16]<<23|t[17]>>>9,V=t[26]<<25|t[27]>>>7,F=t[27]<<25|t[26]>>>7,g=t[36]<<21|t[37]>>>11,_=t[37]<<21|t[36]>>>11,$=t[47]<<24|t[46]>>>8,tt=t[46]<<24|t[47]>>>8,q=t[8]<<27|t[9]>>>5,G=t[9]<<27|t[8]>>>5,m=t[18]<<20|t[19]>>>12,E=t[19]<<20|t[18]>>>12,ot=t[29]<<7|t[28]>>>25,at=t[28]<<7|t[29]>>>25,D=t[38]<<8|t[39]>>>24,W=t[39]<<8|t[38]>>>24,k=t[48]<<14|t[49]>>>18,S=t[49]<<14|t[48]>>>18,t[0]=y^~A&v,t[1]=b^~w&B,t[10]=C^~m&O,t[11]=x^~E&z,t[20]=H^~R&V,t[21]=I^~U&F,t[30]=q^~L&Q,t[31]=G^~P&T,t[40]=et^~nt&ot,t[41]=rt^~it&at,t[2]=A^~v&g,t[3]=w^~B&_,t[12]=m^~O&N,t[13]=E^~z&j,t[22]=R^~V&D,t[23]=U^~F&W,t[32]=L^~Q&X,t[33]=P^~T&Z,t[42]=nt^~ot&st,t[43]=it^~at&ut,t[4]=v^~g&k,t[5]=B^~_&S,t[14]=O^~N&J,t[15]=z^~j&M,t[24]=V^~D&Y,t[25]=F^~W&K,t[34]=Q^~X&$,t[35]=T^~Z&tt,t[44]=ot^~st&ft,t[45]=at^~ut&ct,t[6]=g^~k&y,t[7]=_^~S&b,t[16]=N^~J&C,t[17]=j^~M&x,t[26]=D^~Y&H,t[27]=W^~K&I,t[36]=X^~$&q,t[37]=Z^~tt&G,t[46]=st^~ft&et,t[47]=ut^~ct&rt,t[8]=k^~y&A,t[9]=S^~b&w,t[18]=J^~C&m,t[19]=M^~x&E,t[28]=Y^~H&R,t[29]=K^~I&U,t[38]=$^~q&L,t[39]=tt^~G&P,t[48]=ft^~et&nt,t[49]=ct^~rt&it,t[0]^=p[n],t[1]^=p[n+1]};if(a)module.exports=S;else{for(x=0;x<C.length;++x)i[C[x]]=S[C[x]];s&&define(function(){return S})}}();
+</script>
 <script>
 "use strict";
 /* ---------- mixer configurations (same options as LV1) ---------- */
@@ -845,7 +859,7 @@ const cfg=()=>CONFIGS.find(c=>c.id===state.configId)||CONFIGS[3];
    set LV1's own plugin menus show; native/DAW-only plugins (synths etc.)
    are excluded. Formats: M=mono, S=stereo, X=mono-to-stereo. The converter
    resolves each name to the right 4cc variant + factory preset. */
-const PLUGINS=[["Abbey Road EMI TG12345 Ch","MS","Dynamics"],["Abbey Road J37 Tape","MS","Delay"],["Abbey Road REDD.17","MS","Harmonic"],["Abbey Road REDD.37.51","MS","Harmonic"],["Abbey Road Reel ADT","MSX","Modulation"],["Abbey Road Reel ADT Live","MSX","Modulation"],["Abbey Road Reel ADT2V","SX","Modulation"],["Abbey Road Reel ADT2V Live","SX","Modulation"],["Abbey Road RS124","MS","Dynamics"],["Abbey Road RS56 Passive EQ","MS","EQ"],["Abbey Road Saturator","MS","Harmonic"],["Abbey Road Studio 3","S","Sound Field"],["Abbey Road TG Mastering","MS","Harmonic"],["Abbey Road TG Mastering Live","MS","Harmonic"],["Abbey Road TG Meter Bridge","MS","Dynamics"],["Abbey Road Vinyl","MS","Harmonic"],["Abbey Road Vinyl Light","MS","Harmonic"],["Aphex Vintage Exciter","MS","Harmonic"],["API-2500","MS","Dynamics"],["API-550A","MS","EQ"],["API-550B","MS","EQ"],["API-560","MS","EQ"],["APNNFeedback","MS","Noise Reduction"],["Atlas Reverb","SX","Reverb"],["AudioTrack","MS","Dynamics"],["Bass Rider","MS","Dynamics"],["Bass Rider Live","MS","Dynamics"],["BB Tubes","MS","Harmonic"],["Berzerk Distortion","MS","Harmonic"],["Brauer Motion","SX","Sound Field"],["Butch Vig Vocals","MS","Effect"],["C1 comp","MS","Dynamics"],["C1 comp-gate","MS","Dynamics"],["C1 comp-sc","MS","Dynamics"],["C1 gate","MS","Dynamics"],["C4","MS","Dynamics"],["C6","MS","Dynamics"],["C6-SideChain","MS","Dynamics"],["Center","S","Sound Field"],["CLA Bass","SX","Effect"],["CLA Drums","SX","Effect"],["CLA EchoSphere","SX","Delay"],["CLA Effects","SX","Effect"],["CLA Epic","SX","Delay"],["CLA Guitars","SX","Effect"],["CLA MixDown","MS","Dynamics"],["CLA MixHub","MS","Harmonic"],["CLA MixHub Lite","MS","Harmonic"],["CLA Nx","S","Sound Field"],["CLA Unplugged","SX","Effect"],["CLA Vocals","SX","Effect"],["CLA-2A","MS","Dynamics"],["CLA-3A","MS","Dynamics"],["CLA-76","MS","Dynamics"],["Clarity Vx","MS","Noise Reduction"],["Clarity Vx Pro","MS","Noise Reduction"],["Clarix LB","MS","Noise Reduction"],["Curves AQ","MS","Dynamics"],["Curves AQ Live","MS","Dynamics"],["Curves Equator","MS","Dynamics"],["Curves Equator Live","MS","Dynamics"],["Curves Match","MS","Dynamics"],["Curves Resolve","MS","Dynamics"],["Curves Resolve Live","MS","Dynamics"],["dbx-160","MS","Dynamics"],["DeBreath","M","Dynamics"],["DeEsser","MS","Dynamics"],["Doppler","SX","Other"],["Dorrough","MS","Sound Field"],["Doubler2","MSX","Pitch Shift"],["Doubler4","MSX","Pitch Shift"],["DPR-402","MS","Dynamics"],["DrumReplacer","S","Effect"],["DTS Neural UpMix","S","Sound Field"],["EKramer BA","MS","Effect"],["EKramer DR","MS","Effect"],["EKramer FX","SX","Effect"],["EKramer GT","SX","Effect"],["EKramer VC","SX","Effect"],["EMO D-5","MS","Dynamics"],["EMO-D5","MS","Dynamics"],["EMO-F2","MS","EQ"],["EMO-Generator","MS","Other"],["EMO-IEM","S","Sound Field"],["EMO-Q4","MS","EQ"],["Enigma","SX","Modulation"],["EXT Insert","MS","Other"],["F6","MS","Dynamics"],["F6-RTA","MS","Dynamics"],["Feedback Hunter","MS","Other"],["GEQ Classic","MS","EQ"],["GEQ Modern","MS","EQ"],["GTR Solo Tool Rack","SX","GTR"],["GTR Stomp 2","MSX","GTR"],["GTR Stomp 4","MSX","GTR"],["GTR Stomp 6","MSX","GTR"],["GTR Tool Rack","SX","GTR"],["GW MixCentric","MS","Dynamics"],["GW PianoCentric","MSX","Effect"],["GW ToneCentric","MS","Harmonic"],["GW VoiceCentric","MSX","Delay"],["H-Comp","MS","Dynamics"],["H-Delay","MSX","Delay"],["H-EQ","MS","EQ"],["H-EQ-Light","MS","EQ"],["IDX Intelligent Dynamics","MS","Dynamics"],["IDX LIVE Intelligent Dynamics","MS","Dynamics"],["IMPusher","MS","Dynamics"],["InPhase","MS","EQ"],["InPhase Live","MS","EQ"],["InPhase LT","MS","EQ"],["InPhase LT Live","MS","EQ"],["InTrigger","MSX","Effect"],["InTrigger Live","MSX","Effect"],["IR-L","MX","Reverb"],["IR-L efficient","S","Reverb"],["IR-L full","S","Reverb"],["IR1","MX","Reverb"],["IR1 efficient","S","Reverb"],["IR1 full","S","Reverb"],["IRLive","MSX","Reverb"],["JJP-Bass","MSX","Effect"],["JJP-Cymb-Perc","SX","Effect"],["JJP-Drums","MSX","Effect"],["JJP-Guitars","SX","Effect"],["JJP-Strings-Keys","SX","Effect"],["JJP-Vocals","SX","Effect"],["Kaleidoscopes","MSX","Modulation"],["KingsMic","MS","EQ"],["Kramer PIE","MS","Dynamics"],["Kramer Tape","MS","Delay"],["L1 limiter","MS","Dynamics"],["L2","MS","Dynamics"],["L2-SC","MS","Dynamics"],["L3 MultiMaximizer","MS","Dynamics"],["L3 UltraMaximizer","MS","Dynamics"],["L3-LL Multi","MS","Dynamics"],["L3-LL Ultra","MS","Dynamics"],["L316","MS","Dynamics"],["L4 Live","M","Dynamics"],["L4 Ultramaximizer","M","Dynamics"],["LFE360","M","EQ"],["Lil Tube","MS","Harmonic"],["LinEQ Broadband","MS","EQ"],["LinMB","MS","Dynamics"],["LoAir","MS","Harmonic"],["Lofi Space","MSX","Effect"],["Magma Channel Strip","MS","Harmonic"],["Magma Springs","MSX","Reverb"],["Magma StressBox","MS","Dynamics"],["MannyM Delay","SX","Delay"],["MannyM Distortion","MS","Harmonic"],["MannyM EQ","MS","EQ"],["MannyM Reverb","MSX","Reverb"],["MannyM Tone Shaper","MS","Dynamics"],["MannyM TripleD","MS","Dynamics"],["Maserati ACG","SX","Effect"],["Maserati B72","MSX","Effect"],["Maserati DRM","MS","Effect"],["Maserati GRP","MS","Effect"],["Maserati GTi","SX","Effect"],["Maserati HMX","SX","Effect"],["Maserati VX1","SX","Effect"],["MaxxBass","MS","Other"],["MaxxVolume","MS","Dynamics"],["MDMX Fuzz","MS","Harmonic"],["MDMX OverDrive","MS","Harmonic"],["MDMX Screamer","MS","Harmonic"],["MetaFlanger","MSX","Modulation"],["MixAssist","S","Instrument"],["MondoMod","MSX","Modulation"],["Morphoder","MSX","Modulation"],["MultiMod Rack","MSX","Modulation"],["MV2","MS","Dynamics"],["NLS Buss","MS","Harmonic"],["NLS Channel","MS","Harmonic"],["NS1","MS","Noise Reduction"],["NX","MS","Sound Field"],["Nx Germano Studios","S","Sound Field"],["Nx Ocean Way Nashville","S","Sound Field"],["OneKnob Brighter","MS","EQ"],["OneKnob Driver","MS","Harmonic"],["OneKnob Filter","MS","EQ"],["OneKnob Louder","MS","Dynamics"],["OneKnob Phatter","MS","EQ"],["OneKnob Pressure","MS","Dynamics"],["OneKnob Pumper","MS","Modulation"],["OneKnob Wetter","MSX","Reverb"],["OneKnobBrighter","MS","EQ"],["OneKnobLouder","MS","Dynamics"],["OVox","SX","Modulation"],["PAZ- Analyzer","S","Sound Field"],["PAZ- Frequency","MS","Sound Field"],["PAZ- Meters","MS","Sound Field"],["PAZ- Position","S","Sound Field"],["PlaylistRider","MS","Dynamics"],["Primary Source Expander","MS","Dynamics"],["PRS Archon","MX","Harmonic"],["PRS Dallas","MX","Harmonic"],["PRS V9","MX","Harmonic"],["PS22 Split","MS","Sound Field"],["PS22 Spread","MS","Sound Field"],["PS22 Spread(10)","MS","Sound Field"],["PS22 XSplit","MS","Sound Field"],["PSE","MS","Dynamics"],["PuigChild 660","M","Dynamics"],["PuigChild 670","S","Dynamics"],["PuigTec EQP1A","MS","EQ"],["PuigTec MEQ5","MS","EQ"],["Q-Clone","MS","EQ"],["Q1","MS","EQ"],["Q10","MS","EQ"],["Q2","MS","EQ"],["Q3","MS","EQ"],["Q4","MS","EQ"],["Q6","MS","EQ"],["Q8","MS","EQ"],["RBass","MS","Other"],["RChannel","MSX","Dynamics"],["RCompressor","MS","Dynamics"],["REQ 2","MS","EQ"],["REQ 4","MS","EQ"],["REQ 6","MS","EQ"],["Retro Fi","MSX","Effect"],["Rogue Brutewall","MS","Harmonic"],["Rogue Dimensions","MS","Reverb"],["Rogue Overdrive","MS","Harmonic"],["Rogue Pre Focus","MS","Harmonic"],["Rogue Rack","MSX","Effect"],["Rogue SampTone","MS","Harmonic"],["RVerb","SX","Reverb"],["RVox","MS","Dynamics"],["S1 Imager","S","Sound Field"],["S1 MS Matrix","S","Sound Field"],["S1 Shuffler","S","Sound Field"],["Saphira","MS","Modulation"],["Scheps 73","MS","EQ"],["Scheps Omni Channel 2","MS","Harmonic"],["Scheps Parallel Particles","MS","Harmonic"],["Sibilance","MS","Dynamics"],["Sibilance-Live","MS","Dynamics"],["Silk Vocal","MS","Dynamics"],["Silk Vocal Live","MS","Dynamics"],["Smack Attack","MS","Dynamics"],["SSL EV2 Channel","MS","Dynamics"],["SSLChannel","MS","Dynamics"],["SSLComp","MS","Dynamics"],["SSLEQ","MS","EQ"],["SSLGChannel","MS","Dynamics"],["StreamerRack","MS","Instrument"],["StudioVerse Audio Effects","MSX","Instrument"],["Sub Align","MS","Sound Field"],["Submarine","MS","Harmonic"],["SuperTap 2-Taps","MSX","Delay"],["SuperTap 6-Taps","MSX","Delay"],["Sync Vx","M","Other"],["Sync Vx Non ARA","M","Other"],["T1","MS","Dynamics"],["Torque","MS","Pitch Shift"],["Torque-Live","MS","Pitch Shift"],["TRACT","MS","EQ"],["TRACT LinPhase","MS","EQ"],["TRACT Measure","M","Other"],["TRACT SPL Meter","M","Dynamics"],["TransX","MS","Dynamics"],["TransX Multi","MS","Dynamics"],["TransX Wide","MS","Dynamics"],["TrueVerb","MSX","Reverb"],["UltraPitch 3 Voices","MX","Pitch Shift"],["UltraPitch 6 Voices","MX","Pitch Shift"],["UltraPitch Shift","MX","Pitch Shift"],["VComp","MS","Dynamics"],["VEQ3","MS","EQ"],["VEQ4","MS","EQ"],["Vitamin","MS","Harmonic"],["Vocal Bender","MS","Pitch Shift"],["Vocal Rider","MS","Dynamics"],["Vocal Rider Live","MS","Dynamics"],["Voltage Amps Bass","MSX","Harmonic"],["Voltage Amps Guitar","MSX","Harmonic"],["VU Meter","MS","Sound Field"],["W43","MS","Noise Reduction"],["Waves Gemstones","SX","Instrument"],["Waves Harmony","SX","Pitch Shift"],["WLM Meter","MS","Dynamics"],["WLM Plus","MS","Dynamics"],["WNS","MS","Noise Reduction"],["X-Click","MS","Noise Reduction"],["X-Crackle","MS","Noise Reduction"],["X-Hum","MS","Noise Reduction"],["X-Noise","MS","Noise Reduction"]];
+const PLUGINS=[["Abbey Road Chambers","MSX","Delay"],["Abbey Road EMI TG12345 Ch","MS","Dynamics"],["Abbey Road J37 Tape","MS","Delay"],["Abbey Road Plates","MSX","Reverb"],["Abbey Road REDD.17","MS","Harmonic"],["Abbey Road REDD.37.51","MS","Harmonic"],["Abbey Road Reel ADT","MSX","Modulation"],["Abbey Road Reel ADT Live","MSX","Modulation"],["Abbey Road Reel ADT2V","SX","Modulation"],["Abbey Road Reel ADT2V Live","SX","Modulation"],["Abbey Road RS124","MS","Dynamics"],["Abbey Road RS56 Passive EQ","MS","EQ"],["Abbey Road Saturator","MS","Harmonic"],["Abbey Road Studio 3","S","Sound Field"],["Abbey Road TG Mastering","MS","Harmonic"],["Abbey Road TG Mastering Live","MS","Harmonic"],["Abbey Road TG Meter Bridge","MS","Dynamics"],["Abbey Road The King's Microphones","MS","EQ"],["Abbey Road Vinyl","MS","Harmonic"],["Abbey Road Vinyl Light","MS","Harmonic"],["Aphex Vintage Exciter","MS","Harmonic"],["API-2500","MS","Dynamics"],["API-550A","MS","EQ"],["API-550B","MS","EQ"],["API-560","MS","EQ"],["APNNFeedback","MS","Noise Reduction"],["Atlas Reverb","SX","Reverb"],["AudioTrack","MS","Dynamics"],["Bass Rider","MS","Dynamics"],["Bass Rider Live","MS","Dynamics"],["BB Tubes","MS","Harmonic"],["Berzerk Distortion","MS","Harmonic"],["Brauer Motion","SX","Sound Field"],["Butch Vig Vocals","MS","Effect"],["C1 comp","MS","Dynamics"],["C1 comp-gate","MS","Dynamics"],["C1 comp-sc","MS","Dynamics"],["C1 gate","MS","Dynamics"],["C4","MS","Dynamics"],["C6","MS","Dynamics"],["C6-SideChain","MS","Dynamics"],["Center","S","Sound Field"],["CLA Bass","SX","Effect"],["CLA Drums","SX","Effect"],["CLA EchoSphere","SX","Delay"],["CLA Effects","SX","Effect"],["CLA Epic","SX","Delay"],["CLA Guitars","SX","Effect"],["CLA MixDown","MS","Dynamics"],["CLA MixHub","MS","Harmonic"],["CLA MixHub Lite","MS","Harmonic"],["CLA Nx","S","Sound Field"],["CLA Unplugged","SX","Effect"],["CLA Vocals","SX","Effect"],["CLA-2A","MS","Dynamics"],["CLA-3A","MS","Dynamics"],["CLA-76","MS","Dynamics"],["Clarity Vx","MS","Noise Reduction"],["Clarity Vx Pro","MS","Noise Reduction"],["Clarix LB","MS","Noise Reduction"],["Curves AQ","MS","Dynamics"],["Curves AQ Live","MS","Dynamics"],["Curves Equator","MS","Dynamics"],["Curves Equator Live","MS","Dynamics"],["Curves Match","MS","Dynamics"],["Curves Resolve","MS","Dynamics"],["Curves Resolve Live","MS","Dynamics"],["dbx-160","MS","Dynamics"],["DeBreath","M","Dynamics"],["DeEsser","MS","Dynamics"],["Doppler","SX","Other"],["Dorrough","MS","Sound Field"],["Doubler2","MSX","Pitch Shift"],["Doubler4","MSX","Pitch Shift"],["DPR-402","MS","Dynamics"],["DrumReplacer","S","Effect"],["DTS Neural UpMix","S","Sound Field"],["EKramer BA","MS","Effect"],["EKramer DR","MS","Effect"],["EKramer FX","SX","Effect"],["EKramer GT","SX","Effect"],["EKramer VC","SX","Effect"],["EMO D-5","MS","Dynamics"],["EMO-D5","MS","Dynamics"],["EMO-F2","MS","EQ"],["EMO-Generator","MS","Other"],["EMO-IEM","S","Sound Field"],["EMO-Q4","MS","EQ"],["Enigma","SX","Modulation"],["EXT Insert","MS","Other"],["F6","MS","Dynamics"],["F6-RTA","MS","Dynamics"],["Feedback Hunter","MS","Other"],["GEQ Classic","MS","EQ"],["GEQ Modern","MS","EQ"],["GTR Amp","MSX","GTR"],["GTR Amp 2Cab","M","GTR"],["GTR Solo Tool Rack","SX","GTR"],["GTR Stomp 2","MSX","GTR"],["GTR Stomp 4","MSX","GTR"],["GTR Stomp 6","MSX","GTR"],["GTR Tool Rack","SX","GTR"],["GTR Tuner","M","GTR"],["GW MixCentric","MS","Dynamics"],["GW PianoCentric","MSX","Effect"],["GW ToneCentric","MS","Harmonic"],["GW VoiceCentric","MSX","Delay"],["H-Comp","MS","Dynamics"],["H-Delay","MSX","Delay"],["H-EQ","MS","EQ"],["H-EQ-Light","MS","EQ"],["H-Reverb","MSX","Reverb"],["H-Reverb long","MSX","Reverb"],["IDX Intelligent Dynamics","MS","Dynamics"],["IDX LIVE Intelligent Dynamics","MS","Dynamics"],["IMPusher","MS","Dynamics"],["InPhase","MS","EQ"],["InPhase Live","MS","EQ"],["InPhase LT","MS","EQ"],["InPhase LT Live","MS","EQ"],["InTrigger","MSX","Effect"],["InTrigger Live","MSX","Effect"],["IR-L","MX","Reverb"],["IR-L efficient","S","Reverb"],["IR-L full","S","Reverb"],["IR1","MX","Reverb"],["IR1 efficient","S","Reverb"],["IR1 full","S","Reverb"],["IRLive","MSX","Reverb"],["JJP-Bass","MSX","Effect"],["JJP-Cymb-Perc","SX","Effect"],["JJP-Drums","MSX","Effect"],["JJP-Guitars","SX","Effect"],["JJP-Strings-Keys","SX","Effect"],["JJP-Vocals","SX","Effect"],["Kaleidoscopes","MSX","Modulation"],["Kramer HLS","MS","EQ"],["Kramer PIE","MS","Dynamics"],["Kramer Tape","MS","Delay"],["L1 limiter","MS","Dynamics"],["L2","MS","Dynamics"],["L2-SC","MS","Dynamics"],["L3 MultiMaximizer","MS","Dynamics"],["L3 UltraMaximizer","MS","Dynamics"],["L3-LL Multi","MS","Dynamics"],["L3-LL Ultra","MS","Dynamics"],["L316","MS","Dynamics"],["L4 Live","M","Dynamics"],["L4 Ultramaximizer","M","Dynamics"],["LFE360","M","EQ"],["LinEQ Broadband","MS","EQ"],["LinMB","MS","Dynamics"],["LoAir","MS","Harmonic"],["Lofi Space","MSX","Effect"],["Magma BB Tubes","MS","Harmonic"],["Magma Channel Strip","MS","Harmonic"],["Magma Lil Tube","MS","Harmonic"],["Magma Springs","MSX","Reverb"],["Magma StressBox","MS","Dynamics"],["MannyM Delay","SX","Delay"],["MannyM Distortion","MS","Harmonic"],["MannyM EQ","MS","EQ"],["MannyM Reverb","MSX","Reverb"],["MannyM Tone Shaper","MS","Dynamics"],["MannyM TripleD","MS","Dynamics"],["Maserati ACG","SX","Effect"],["Maserati B72","MSX","Effect"],["Maserati DRM","MS","Effect"],["Maserati GRP","MS","Effect"],["Maserati GTi","SX","Effect"],["Maserati HMX","SX","Effect"],["Maserati VX1","SX","Effect"],["MaxxBass","MS","Other"],["MaxxVolume","MS","Dynamics"],["MDMX Fuzz","MS","Harmonic"],["MDMX OverDrive","MS","Harmonic"],["MDMX Screamer","MS","Harmonic"],["MetaFlanger","MSX","Modulation"],["MixAssist","S","Instrument"],["MondoMod","MSX","Modulation"],["Morphoder","MSX","Modulation"],["MultiMod Rack","MSX","Modulation"],["MV2","MS","Dynamics"],["NLS Buss","MS","Harmonic"],["NLS Channel","MS","Harmonic"],["NS1","MS","Noise Reduction"],["NX","MS","Sound Field"],["Nx Germano Studios","S","Sound Field"],["Nx Ocean Way Nashville","S","Sound Field"],["OneKnob Brighter","MS","EQ"],["OneKnob Driver","MS","Harmonic"],["OneKnob Filter","MS","EQ"],["OneKnob Louder","MS","Dynamics"],["OneKnob Phatter","MS","EQ"],["OneKnob Pressure","MS","Dynamics"],["OneKnob Pumper","MS","Modulation"],["OneKnob Wetter","MSX","Reverb"],["OneKnobBrighter","MS","EQ"],["OneKnobLouder","MS","Dynamics"],["OVox","SX","Modulation"],["PAZ- Analyzer","S","Sound Field"],["PAZ- Frequency","MS","Sound Field"],["PAZ- Meters","MS","Sound Field"],["PAZ- Position","S","Sound Field"],["PlaylistRider","MS","Dynamics"],["Primary Source Expander","MS","Dynamics"],["PRS Archon","MX","Harmonic"],["PRS Dallas","MX","Harmonic"],["PRS V9","MX","Harmonic"],["PS22 Split","MS","Sound Field"],["PS22 Spread","MS","Sound Field"],["PS22 Spread(10)","MS","Sound Field"],["PS22 XSplit","MS","Sound Field"],["PSE","MS","Dynamics"],["PuigChild 660","M","Dynamics"],["PuigChild 670","S","Dynamics"],["PuigTec EQP1A","MS","EQ"],["PuigTec MEQ5","MS","EQ"],["Q-Capture","M","EQ"],["Q-Clone","MS","EQ"],["Q1","MS","EQ"],["Q10","MS","EQ"],["Q2","MS","EQ"],["Q3","MS","EQ"],["Q4","MS","EQ"],["Q6","MS","EQ"],["Q8","MS","EQ"],["RBass","MS","Other"],["RChannel","MSX","Dynamics"],["RCompressor","MS","Dynamics"],["Renaissance Axx","MS","Dynamics"],["REQ 2","MS","EQ"],["REQ 4","MS","EQ"],["REQ 6","MS","EQ"],["Retro Fi","MSX","Effect"],["Rogue Brutewall","MS","Harmonic"],["Rogue Dimensions","MS","Reverb"],["Rogue Overdrive","MS","Harmonic"],["Rogue Pre Focus","MS","Harmonic"],["Rogue Rack","MSX","Effect"],["Rogue SampTone","MS","Harmonic"],["RVerb","SX","Reverb"],["RVox","MS","Dynamics"],["S1 Imager","S","Sound Field"],["S1 MS Matrix","S","Sound Field"],["S1 Shuffler","S","Sound Field"],["Saphira","MS","Modulation"],["Scheps 73","MS","EQ"],["Scheps Omni Channel 2","MS","Harmonic"],["Scheps Parallel Particles","MS","Harmonic"],["Sibilance","MS","Dynamics"],["Sibilance-Live","MS","Dynamics"],["Silk Vocal","MS","Dynamics"],["Silk Vocal Live","MS","Dynamics"],["Smack Attack","MS","Dynamics"],["Space Rider","SX","Reverb"],["SSL EV2 Channel","MS","Dynamics"],["SSLChannel","MS","Dynamics"],["SSLComp","MS","Dynamics"],["SSLEQ","MS","EQ"],["SSLGChannel","MS","Dynamics"],["StreamerRack","MS","Instrument"],["StudioVerse Audio Effects","MSX","Instrument"],["Sub Align","MS","Sound Field"],["Submarine","MS","Harmonic"],["SuperTap 2-Taps","MSX","Delay"],["SuperTap 6-Taps","MSX","Delay"],["Sync Vx","M","Other"],["Sync Vx Non ARA","M","Other"],["T1","MS","Dynamics"],["Torque","MS","Pitch Shift"],["Torque-Live","MS","Pitch Shift"],["TRACT","MS","EQ"],["TRACT LinPhase","MS","EQ"],["TRACT Measure","M","Other"],["TRACT SPL Meter","M","Dynamics"],["TransX","MS","Dynamics"],["TransX Multi","MS","Dynamics"],["TransX Wide","MS","Dynamics"],["TrueVerb","MSX","Reverb"],["UltraPitch 3 Voices","MX","Pitch Shift"],["UltraPitch 6 Voices","MX","Pitch Shift"],["UltraPitch Shift","MX","Pitch Shift"],["VComp","MS","Dynamics"],["VEQ3","MS","EQ"],["VEQ4","MS","EQ"],["Vitamin","MS","Harmonic"],["Vocal Bender","MS","Pitch Shift"],["Vocal Rider","MS","Dynamics"],["Vocal Rider Live","MS","Dynamics"],["Voltage Amps Bass","MSX","Harmonic"],["Voltage Amps Guitar","MSX","Harmonic"],["VU Meter","MS","Sound Field"],["W43","MS","Noise Reduction"],["Waves Gemstones","SX","Instrument"],["Waves Harmony","SX","Pitch Shift"],["WLM Meter","MS","Dynamics"],["WLM Plus","MS","Dynamics"],["WNS","MS","Noise Reduction"],["X-Click","MS","Noise Reduction"],["X-Crackle","MS","Noise Reduction"],["X-FDBK","MS","Other"],["X-Hum","MS","Noise Reduction"],["X-Noise","MS","Noise Reduction"]];
 const PLUGIN_FMT=new Map(PLUGINS);
 
 /* LV1's 32-color strip palette (SurfaceDriver_App/Resources/Palettes/LV1.xml);
@@ -3105,6 +3119,415 @@ $("#btnPdf").onclick=async()=>{
   try{ await dl.save({filename:fileStem()+" input list.pdf",data:out}); setStatus("PDF exported."); }
   catch(err){ if(err&&err.code==="declined")return; setStatus("PDF export failed: "+(err.message||""),true); }
 };
+
+/* ---------- .emo import / export (in-browser SQLite via sql.js) ----------
+   A faithful port of make_lv1_session.build_lv1_session (export) and a
+   builder-model reader (import). The export path mirrors the Python
+   statement-for-statement so the two produce row-identical sessions;
+   verified by dumping every table of both outputs and diffing. */
+
+const EMO_ROOT=STAGELIB_BASE.replace(/stagelib\/$/,"");
+const EMO_LINK_FOLLOWS="=group";
+
+let _sqlP=null;
+function emoSql(){
+  if(_sqlP)return _sqlP;
+  _sqlP=(async()=>{
+    if(!window.initSqlJs){
+      await new Promise((res,rej)=>{const s=document.createElement("script");
+        s.src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.min.js";
+        s.onload=res;s.onerror=()=>rej(new Error("could not load the SQLite engine (offline?)"));
+        document.head.appendChild(s);});
+    }
+    const cfg=window.SQL_WASM_B64
+      ?{wasmBinary:Uint8Array.from(atob(window.SQL_WASM_B64),c=>c.charCodeAt(0)).buffer}
+      :{locateFile:f=>"https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/"+f};
+    return await window.initSqlJs(cfg);
+  })();
+  return _sqlP;
+}
+let _emoDataP=null;
+function emoDataPack(){
+  if(!_emoDataP)_emoDataP=fetch(EMO_ROOT+"emodata/presets.json")
+    .then(r=>{if(!r.ok)throw new Error("preset pack fetch failed ("+r.status+")");return r.json();});
+  return _emoDataP;
+}
+async function emoTemplateBytes(cfgId){
+  const r=await fetch(EMO_ROOT+"templates/"+encodeURIComponent(cfgId)+".emo");
+  if(!r.ok)throw new Error("factory template fetch failed: "+cfgId+" ("+r.status+")");
+  return new Uint8Array(await r.arrayBuffer());
+}
+
+/* tiny sql.js helpers */
+const eq=(db,sql,params)=>{const st=db.prepare(sql);if(params)st.bind(params);
+  const rows=[];while(st.step())rows.push(st.get());st.free();return rows;};
+const erun=(db,sql,params)=>db.run(sql,params||[]);
+const elast=db=>eq(db,"SELECT last_insert_rowid()")[0][0];
+
+/* ---- export: spec (buildSpec() JSON, v4) -> .emo bytes ---- */
+const EMO_RACK_VARIANTS=[[4,"CFLM","CFLS"],[1,"CDYM","CDYS"],[2,"MQ4M","MQ4S"]];
+const EMO_MGB_DEVICE=[1,0,1,0,0,"","",128,128,128,128,"",0,0,0,0];
+const EMO_MGB_IOBOX=[1,"",3,2,-1,0,0];
+
+function emoPresetFindOrInsert(db,text){
+  const digest=sha3_256(text);
+  const hit=eq(db,"SELECT id FROM plugin_preset WHERE hash = ?",[digest]);
+  if(hit.length)return hit[0][0];
+  erun(db,"INSERT INTO plugin_preset (hash, ref_count, preset) VALUES (?, 0, ?)",[digest,text]);
+  return elast(db);
+}
+function emoSetStripFormat(db,objId,stereo){
+  const cur=eq(db,"SELECT num_inputs FROM chainer WHERE obj_id = ?",[objId]);
+  if(cur.length===1&&cur[0][0]===(stereo?2:1))return;
+  erun(db,"UPDATE chainer SET num_inputs = ? WHERE obj_id = ?",[stereo?2:1,objId]);
+  for(const [role,m,s] of EMO_RACK_VARIANTS){
+    const cc=stereo?s:m;
+    const row=eq(db,
+      "SELECT sp.id, pp.preset FROM plug p "+
+      "JOIN snapshot_plugin sp ON sp.plug_id = p.id AND sp.snapshot_id = ? "+
+      "JOIN plugin_preset pp ON pp.id = sp.preset_id "+
+      "WHERE p.chainer_id = ? AND p.plug_role = ?",[-1,objId,role]);
+    erun(db,"UPDATE plug SET plugin_4cc = ? WHERE chainer_id = ? AND plug_role = ?",[cc,objId,role]);
+    if(!row.length)continue;
+    const swapped=row[0][1].replace(/<PluginSubComp>\w{4}<\/PluginSubComp>/,
+      "<PluginSubComp>"+cc+"</PluginSubComp>");
+    erun(db,"UPDATE snapshot_plugin SET preset_id = ? WHERE id = ?",
+      [emoPresetFindOrInsert(db,swapped),row[0][0]]);
+  }
+}
+const emoRename=(db,objId,name)=>erun(db,
+  "UPDATE snapshot_chainer SET name = ? WHERE chainer_id = ? AND snapshot_id = -1",[name,objId]);
+
+function emoResolvePresetText(db,cc,pack){
+  const src=pack.presets[cc];
+  if(src===undefined)throw new Error("no preset source for 4cc "+cc);
+  if(typeof src==="string")return src;
+  // template-resolved (the EMO fixed modules): any template preset row of
+  // that subcomp, with the subcomp swapped to the requested cc.
+  const row=eq(db,"SELECT preset FROM plugin_preset WHERE preset LIKE ? LIMIT 1",
+    ["%<PluginSubComp>"+src.template+"</PluginSubComp>%"]);
+  if(!row.length)throw new Error("template has no preset for "+cc);
+  return row[0][0].replace(/<PluginSubComp>\w{4}<\/PluginSubComp>/,
+    "<PluginSubComp>"+cc+"</PluginSubComp>");
+}
+
+async function emoExport(spec){
+  const [SQL,pack]=await Promise.all([emoSql(),emoDataPack()]);
+  const cfgId=(spec.config&&spec.config.id)||"80-16";
+  const db=new SQL.Database(await emoTemplateBytes(cfgId));
+  try{
+    // layout from the template itself
+    const first=Object.fromEntries(eq(db,"SELECT obj_type, MIN(id) FROM object GROUP BY obj_type"));
+    const alloc=Object.fromEntries(eq(db,
+      "SELECT o.obj_type, COUNT(*) FROM object o JOIN chainer c ON c.obj_id = o.id "+
+      "WHERE c.num_inputs != -1 GROUP BY o.obj_type"));
+    const LR=first[3],GRP0=first[1]??-1,FX0=first[2],MTX0=first[6],LNK0=first[12];
+    const nCh=alloc[0],nGrp=alloc[1]||0,nMtx=alloc[6]||0,nAux=alloc[2]-8;
+
+    const chans=(spec.channels||[]).map(c=>({...c,ports:(c.ports||[]).map(p=>p-1),
+      stereo:(c.ports||[]).length===2}));
+    const groups=spec.groups||[],fx=spec.fx||[],auxes=spec.auxes||[],mtxs=spec.matrixes||[];
+    if(chans.length>nCh)throw new Error("template has "+nCh+" input strips");
+    if(groups.length>nGrp)throw new Error("template has "+nGrp+" group strips");
+    if(fx.length>8)throw new Error("FX bank holds 8 strips");
+    if(auxes.length>nAux)throw new Error("aux (Mon) bank holds "+nAux+" strips");
+    if(mtxs.length>nMtx)throw new Error("template has "+nMtx+" matrix strips");
+    const grpId={},mtxId={};
+    groups.forEach((g,i)=>grpId[g.name]=GRP0+i);
+    mtxs.forEach((m,i)=>mtxId[m.name]=MTX0+i);
+
+    // 1. demo content out
+    const role0=eq(db,"SELECT id FROM plug WHERE plug_role = 0").map(r=>r[0]);
+    if(role0.length){
+      const ph=role0.map(()=>"?").join(",");
+      erun(db,"DELETE FROM snapshot_plugin WHERE plug_id IN ("+ph+")",role0);
+      erun(db,"DELETE FROM plug_sidechain WHERE plug_id IN ("+ph+")",role0);
+      erun(db,"DELETE FROM plug WHERE id IN ("+ph+")",role0);
+    }
+    erun(db,"DELETE FROM snapshot_chainer_params WHERE chainer_id IN "+
+      "(SELECT id FROM object WHERE obj_type IN (0, 1, 2, 6))");
+
+    // 2-4. strips
+    chans.forEach((c,i)=>{emoRename(db,1+i,c.name);emoSetStripFormat(db,1+i,c.stereo);});
+    for(let i=chans.length;i<nCh;i++){emoRename(db,1+i,"Channel "+(i+1));emoSetStripFormat(db,1+i,false);}
+    groups.forEach((g,i)=>{
+      emoRename(db,GRP0+i,g.name);emoSetStripFormat(db,GRP0+i,g.stereo!==false);
+      if(g.postFx)erun(db,"INSERT INTO snapshot_chainer_params (chainer_id, snapshot_id, param_id, param_value) VALUES (?, -1, 106, 1.0)",[GRP0+i]);
+    });
+    for(let i=groups.length;i<nGrp;i++)emoRename(db,GRP0+i,"Group "+(i+1));
+    fx.forEach((f,i)=>{emoRename(db,FX0+i,f.name);emoSetStripFormat(db,FX0+i,f.stereo!==false);});
+    for(let i=fx.length;i<8;i++)emoRename(db,FX0+i,"Fx "+(i+1));
+    auxes.forEach((a,i)=>{emoRename(db,FX0+8+i,a.name);emoSetStripFormat(db,FX0+8+i,!!a.stereo);});
+    for(let i=auxes.length;i<nAux;i++)emoRename(db,FX0+8+i,"Mon "+(i+1));
+    mtxs.forEach((m,i)=>{emoRename(db,MTX0+i,m.name);emoSetStripFormat(db,MTX0+i,m.stereo!==false);});
+    for(let i=mtxs.length;i<nMtx;i++)emoRename(db,MTX0+i,"Matrix "+(i+1));
+
+    // 4a. colors
+    const colorRows=[];
+    chans.forEach((c,i)=>{if(c.color!=null)colorRows.push([1+i,c.color]);});
+    groups.forEach((g,i)=>{if(g.color!=null)colorRows.push([GRP0+i,g.color]);});
+    fx.forEach((f,i)=>{if(f.color!=null)colorRows.push([FX0+i,f.color]);});
+    auxes.forEach((a,i)=>{if(a.color!=null)colorRows.push([FX0+8+i,a.color]);});
+    mtxs.forEach((m,i)=>{if(m.color!=null)colorRows.push([MTX0+i,m.color]);});
+    for(const [oid,col] of colorRows)
+      erun(db,"INSERT INTO snapshot_chainer_params (chainer_id, snapshot_id, param_id, param_value) VALUES (?, -1, 592, ?)",[oid,1.0*col]);
+
+    // 4b. racks (v4 slot lists; EMO modules are ordinary role-0 entries)
+    const plugsToAdd=[];
+    const resolveCc=(name,stereo)=>{
+      const e=pack.ccs[name];
+      if(!e)throw new Error("plugin not in the catalog pack: "+name);
+      const cc=stereo?(e.s||e.x||e.m):(e.m||e.x||e.s);
+      if(!cc)throw new Error(name+" has no usable variant");
+      return cc;
+    };
+    const racked=[];
+    chans.forEach((c,i)=>{if(c.rack)racked.push([1+i,c.rack,c.stereo]);});
+    groups.forEach((g,i)=>{if(g.rack)racked.push([GRP0+i,g.rack,g.stereo!==false]);});
+    fx.forEach((f,i)=>{if(f.rack)racked.push([FX0+i,f.rack,f.stereo!==false]);});
+    if(spec.master&&spec.master.rack)racked.push([LR,spec.master.rack,true]);
+    {
+      const missing=new Set();
+      for(const [,rack] of racked)for(const nm of (rack.slots||[]))if(!pack.ccs[nm])missing.add(nm);
+      if(missing.size)throw new Error("insert plugin(s) not in the catalog pack: "+
+        [...missing].join(", ")+" — remove them from the racks, or rebuild the pack after installing them");
+    }
+    for(const [cid,rack,st] of racked){
+      const slots=rack.slots;
+      if(!slots)throw new Error("legacy v3 racks are not supported by the in-app export");
+      if(slots.length>8)throw new Error("an LV1 rack has 8 slots (0-7)");
+      erun(db,"DELETE FROM snapshot_plugin WHERE plug_id IN "+
+        "(SELECT id FROM plug WHERE chainer_id = ? AND plug_role IN (1, 2, 4))",[cid]);
+      erun(db,"DELETE FROM plug WHERE chainer_id = ? AND plug_role IN (1, 2, 4)",[cid]);
+      slots.forEach((nm,idx)=>plugsToAdd.push([cid,nm,resolveCc(nm,st),idx]));
+    }
+    if(plugsToAdd.length){
+      const texts={};
+      for(const cc of [...new Set(plugsToAdd.map(p=>p[2]))].sort())
+        texts[cc]=emoResolvePresetText(db,cc,pack);
+      let nextId=eq(db,"SELECT MAX((SELECT MAX(id) FROM plug), (SELECT MAX(id) FROM snapshot_plugin))")[0][0]+1;
+      for(const [cid,nm,cc,slot] of plugsToAdd){
+        erun(db,"INSERT INTO plug VALUES (?, ?, ?, ?, ?, '', 0, 0, 0, -1, 'Waves', 0, 0)",
+          [nextId,cid,slot,nm,cc]);
+        erun(db,"INSERT INTO snapshot_plugin VALUES (?, ?, ?, -1, -1, 0, 0, 1, -9999, -9999, 125, 0)",
+          [nextId,nextId,emoPresetFindOrInsert(db,texts[cc])]);
+        nextId++;
+      }
+    }
+
+    // 5. routing
+    erun(db,"DELETE FROM snapshot_assignment");
+    const assignments=[];
+    chans.forEach((c,i)=>{
+      assignments.push([1+i,grpId[c.group]??LR]);
+      for(const m of (c.matrix||[]))if(m in mtxId)assignments.push([1+i,mtxId[m]]);
+    });
+    for(let i=chans.length;i<nCh;i++)assignments.push([1+i,LR]);
+    groups.forEach((g,i)=>{
+      assignments.push([GRP0+i,grpId[g.dest]??LR]);
+      for(const m of (g.matrix||[]))if(m in mtxId)assignments.push([GRP0+i,mtxId[m]]);
+    });
+    for(let i=groups.length;i<nGrp;i++)assignments.push([GRP0+i,LR]);
+    fx.forEach((f,i)=>assignments.push([FX0+i,grpId[f.dest]??LR]));
+    const rows=assignments.map(([s,d])=>[-1,s,7,-1,-1,2,1,d,0,-1,-1,-1,0,0]);
+
+    // links: by default they mirror the group memberships
+    let linkCount=0;
+    {
+      const resolved=chans.map((c,i)=>{
+        const lk=!("link" in c)?EMO_LINK_FOLLOWS:(c.link===c.group?EMO_LINK_FOLLOWS:c.link);
+        return [i,lk===EMO_LINK_FOLLOWS?c.group:lk];
+      });
+      const names=[];
+      for(const [,l] of resolved)if(l&&!names.includes(l))names.push(l);
+      if(names.length>16)throw new Error("template has 16 link strips");
+      const linkId={};names.forEach((n,i)=>linkId[n]=LNK0+i);
+      for(const n of names)emoRename(db,linkId[n],n);
+      for(const [i,l] of resolved)if(l in linkId){
+        rows.push([-1,1+i,-1,-1,-1,-1,-1,linkId[l],0,-1,-1,-1,2,0]);linkCount++;
+      }
+    }
+    rows.forEach((r,x)=>erun(db,
+      "INSERT INTO snapshot_assignment (id, snapshot_id, src_id, src_section_type, src_section_index, "+
+      "src_channel_index, src_control_id, src_asgn_type, dst_id, dst_section_type, dst_section_index, "+
+      "dst_channel_index, dst_control_id, dst_asgn_type, status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+      [x+1,...r]));
+
+    // 6. MGB inventory + input patch
+    erun(db,"DELETE FROM device");erun(db,"DELETE FROM device_iobox");erun(db,"DELETE FROM routes");
+    erun(db,"INSERT INTO device VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",EMO_MGB_DEVICE);
+    erun(db,"INSERT INTO device_iobox VALUES (?,?,?,?,?,?,?)",EMO_MGB_IOBOX);
+    let nRoutes=0;
+    chans.forEach((c,i)=>c.ports.forEach((port,leg)=>{
+      erun(db,"INSERT INTO routes VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        [++nRoutes,10,0,-1,-1,port,-1,-1,0,i,0,0,leg,-1,0,0]);
+    }));
+
+    // 7. preset ref_count bookkeeping
+    erun(db,"UPDATE plugin_preset SET ref_count = "+
+      "(SELECT COUNT(*) FROM snapshot_plugin sp WHERE sp.preset_id = plugin_preset.id)");
+    erun(db,"DELETE FROM plugin_preset WHERE ref_count = 0");
+    erun(db,"VACUUM");
+    return db.export();
+  }finally{db.close();}
+}
+
+/* ---- import: .emo bytes -> a spec object for loadSpec() ---- */
+async function emoImport(bytes,fileStemName){
+  const SQL=await emoSql();
+  // 4cc -> canonical catalog name: old shows store SHORT plug names
+  // ("CrvAQLv"); the rack must carry names the exporter can resolve back.
+  let cc2name={};
+  try{
+    const pack=await emoDataPack();
+    for(const [nm,v] of Object.entries(pack.ccs))
+      for(const cc of Object.values(v))cc2name[cc]=nm;
+  }catch(_){/* offline: keep the stored names */}
+  const db=new SQL.Database(bytes);
+  try{
+    const first=Object.fromEntries(eq(db,"SELECT obj_type, MIN(id) FROM object GROUP BY obj_type"));
+    const alloc=Object.fromEntries(eq(db,
+      "SELECT o.obj_type, COUNT(*) FROM object o JOIN chainer c ON c.obj_id = o.id "+
+      "WHERE c.num_inputs != -1 GROUP BY o.obj_type"));
+    const LR=first[3],GRP0=first[1]??-1,FX0=first[2],MTX0=first[6],LNK0=first[12];
+    const nCh=alloc[0],nGrp=alloc[1]||0,nMtx=alloc[6]||0,nAux=(alloc[2]||8)-8;
+    const cfg=CONFIGS.find(c=>c.ch===nCh&&c.grp===nGrp&&c.mon===nAux);
+    if(!cfg)throw new Error("unknown mixer configuration: "+nCh+" inputs / "+nGrp+" groups / "+nAux+" auxes");
+
+    const nameOf={};
+    for(const [cid,nm] of eq(db,"SELECT chainer_id, name FROM snapshot_chainer WHERE snapshot_id = -1"))
+      nameOf[cid]=nm||"";
+    const stereoOf={};
+    for(const [oid,ni] of eq(db,"SELECT obj_id, num_inputs FROM chainer"))stereoOf[oid]=ni===2;
+    const colorOf={},postFxOf={};
+    for(const [cid,pid,v] of eq(db,
+      "SELECT chainer_id, param_id, param_value FROM snapshot_chainer_params WHERE snapshot_id = -1 AND param_id IN (592, 106)")){
+      if(pid===592)colorOf[cid]=Math.round(v);else if(v)postFxOf[cid]=true;
+    }
+    const dests={},links={},mtxFeeds={};
+    for(const [src,dst,at] of eq(db,
+      "SELECT src_id, dst_id, dst_asgn_type FROM snapshot_assignment WHERE snapshot_id = -1 AND dst_asgn_type IN (0, 2)")){
+      if(at===2)links[src]=dst;
+      else if(dst>=MTX0&&dst<MTX0+nMtx)(mtxFeeds[src]=mtxFeeds[src]||[]).push(dst);
+      else dests[src]=dst;
+    }
+    // racks: untouched fixed modules -> null; otherwise role-0 slot list
+    const rackRows={};
+    for(const [cid,slot,nm,cc,role] of eq(db,
+      "SELECT chainer_id, slot, plugin_name, plugin_4cc, plug_role FROM plug ORDER BY chainer_id, slot"))
+      (rackRows[cid]=rackRows[cid]||[]).push([slot,cc2name[cc]||nm,role]);
+    const rackOf=cid=>{
+      const rws=rackRows[cid]||[];
+      const r0=rws.filter(r=>r[2]===0);
+      if(!r0.length)return null; // factory modules only = untouched
+      return {slots:r0.sort((a,b)=>a[0]-b[0]).map(r=>r[1])};
+    };
+    const isDef=(nm,re)=>re.test(nm);
+    const label=(cid,re,def)=>{const nm=(nameOf[cid]||"").trim();return nm&&!isDef(nm,re)?nm:def;};
+
+    // groups first (channels reference them by label)
+    const grpRe=/^Group \d+$/,mtxRe=/^Matrix \d+$|^MTX \d+$/;
+    const grpLabel={},mtxLabel={};
+    const referenced=new Set(Object.values(dests));
+    for(const f of Object.values(mtxFeeds))f.forEach(d=>referenced.add(d));
+    const groups=[],matrixes=[];
+    for(let i=0;i<nGrp;i++){
+      const cid=GRP0+i,nm=(nameOf[cid]||"").trim();
+      const used=referenced.has(cid)||!isDef(nm,grpRe)||rackOf(cid)||colorOf[cid]!=null;
+      grpLabel[cid]=nm&&!isDef(nm,grpRe)?nm:"Group "+(i+1);
+      if(used)groups.push({_cid:cid,name:grpLabel[cid],stereo:stereoOf[cid]!==false,
+        postFx:!!postFxOf[cid],matrix:[],rack:rackOf(cid),
+        ...(colorOf[cid]!=null?{color:colorOf[cid]}:{})});
+    }
+    for(let i=0;i<nMtx;i++){
+      const cid=MTX0+i,nm=(nameOf[cid]||"").trim();
+      const used=referenced.has(cid)||!isDef(nm,mtxRe)||colorOf[cid]!=null;
+      mtxLabel[cid]=nm&&!isDef(nm,mtxRe)?nm:"MTX "+(i+1);
+      if(used)matrixes.push({name:mtxLabel[cid],stereo:stereoOf[cid]!==false,
+        ...(colorOf[cid]!=null?{color:colorOf[cid]}:{})});
+    }
+    // group destinations + matrix feeds
+    for(const g of groups){
+      const d=dests[g._cid];
+      g.dest=(d!==undefined&&d!==LR&&grpLabel[d])?grpLabel[d]:null;
+      g.matrix=(mtxFeeds[g._cid]||[]).map(m=>mtxLabel[m]).filter(Boolean);
+      delete g._cid;
+    }
+
+    const chRe=/^Channel \d+$/;
+    const channels=[];let port=1;
+    for(let i=0;i<nCh;i++){
+      const cid=1+i,nm=(nameOf[cid]||"").trim();
+      // Default-named strips are imported only when they carry content
+      // (a touched rack or a color); they keep their default label.
+      if((!nm||isDef(nm,chRe))&&!rackOf(cid)&&colorOf[cid]==null)continue;
+      const st=!!stereoOf[cid];
+      const d=dests[cid],lk=links[cid];
+      const grp=(d!==undefined&&d!==LR&&grpLabel[d])?grpLabel[d]:null;
+      const linkName=lk!==undefined?((nameOf[lk]||"").trim()||null):null;
+      const c={name:nm&&!isDef(nm,chRe)?nm:"Channel "+(i+1),
+        stereo:st,ports:st?[port,port+1]:[port],
+        group:grp,link:lk===undefined?null:(linkName===grp?undefined:linkName),
+        matrix:(mtxFeeds[cid]||[]).map(m=>mtxLabel[m]).filter(Boolean),
+        mic:"",stand:"",position:"",notes:"",
+        ...(colorOf[cid]!=null?{color:colorOf[cid]}:{}),
+        ...(rackOf(cid)?{rack:rackOf(cid)}:{})};
+      if(c.link===undefined)delete c.link; // follows group
+      channels.push(c);port+=st?2:1;
+    }
+    const fxRe=/^Fx \d+$/,monRe=/^Mon \d+$/;
+    const fxs=[],auxes=[];
+    for(let i=0;i<8;i++){
+      const cid=FX0+i,nm=(nameOf[cid]||"").trim();
+      if((!nm||isDef(nm,fxRe))&&!rackOf(cid))continue;
+      const d=dests[cid];
+      fxs.push({name:nm&&!isDef(nm,fxRe)?nm:"Fx "+(i+1),stereo:stereoOf[cid]!==false,
+        dest:(d!==undefined&&d!==LR&&grpLabel[d])?grpLabel[d]:null,
+        ...(colorOf[cid]!=null?{color:colorOf[cid]}:{}),
+        ...(rackOf(cid)?{rack:rackOf(cid)}:{})});
+    }
+    for(let i=0;i<nAux;i++){
+      const cid=FX0+8+i,nm=(nameOf[cid]||"").trim();
+      // Default-named Mon strips always skip: LV1 writes a default color row
+      // on them, so color alone is no sign the operator touched the strip.
+      if(!nm||isDef(nm,monRe))continue;
+      auxes.push({name:nm,stereo:!!stereoOf[cid],
+        dest:"",position:"",notes:"",
+        ...(colorOf[cid]!=null?{color:colorOf[cid]}:{})});
+    }
+    const mRack=rackOf(LR);
+    return {
+      format:"lv1-input-list",version:4,
+      config:{id:cfg.id,inputs:cfg.ch,groups:cfg.grp,aux:cfg.mon,fx:FX_COUNT,matrix:MTX_COUNT,mains:cfg.mains},
+      show:{name:fileStemName||"Imported show",date:"",venue:""},
+      channels,groups,fx:fxs,auxes,matrixes,
+      ...(mRack?{master:{rack:mRack}}:{}),
+    };
+  }finally{db.close();}
+}
+
+$("#btnEmoExp").onclick=async()=>{
+  try{
+    setStatus("Building the .emo session (fetching the factory template)…");
+    const bytes=await emoExport(buildSpec());
+    const blob=new Blob([bytes],{type:"application/octet-stream"});
+    if(dl)await dl.save({filename:fileStem()+".emo",data:blob});
+    setStatus(".emo exported — open it in LV1 (File > Load Session).");
+  }catch(err){if(err&&err.code==="declined")return;setStatus(".emo export failed: "+(err.message||err),true);}
+};
+$("#btnEmoImp").onclick=()=>$("#fileEmo").click();
+$("#fileEmo").addEventListener("change",async e=>{
+  const f=e.target.files[0];if(!f)return;
+  if(await confirmDiscard("importing a .emo session")){
+    try{
+      setStatus("Reading the .emo session…");
+      const spec=await emoImport(new Uint8Array(await f.arrayBuffer()),f.name.replace(/\.emo$/i,""));
+      loadSpec(spec);markClean();
+      setStatus("Imported “"+f.name+"”. Patch numbers are regenerated top-down; mic / stand / position / notes are not stored in .emo and start empty.");
+    }catch(err){setStatus(".emo import failed: "+(err.message||err),true);}
+  }
+  e.target.value="";
+});
 
 /* ---- skin switch: Auto (system) -> Light -> Dark, persisted locally ---- */
 const THEMES=[["","◐ Auto skin"],["light","☀ Light skin"],["dark","☾ Dark skin"]];
