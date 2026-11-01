@@ -478,7 +478,8 @@ section{margin:26px 0;}
 .sechead h2{font-size:15px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin:0;padding-left:10px;border-left:4px solid var(--seccolor,var(--accent));}
 .sechead .count{font-family:var(--font-num);font-size:12px;color:var(--dim);}
 .sechead .hint{font-size:12px;color:var(--dim);}
-.selops{display:inline-flex;gap:4px;margin-left:auto;}
+.selops{display:flex;gap:4px;margin:0 0 6px;} /* sits left, above the row checkboxes */
+.headops{display:inline-flex;gap:4px;margin-left:auto;} /* right side of a section head */
 .tblwrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--panel);}
 table{border-collapse:collapse;width:100%;min-width:640px;}
 th{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);text-align:left;padding:8px 8px 6px;border-bottom:1px solid var(--line);white-space:nowrap;}
@@ -695,8 +696,8 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 
 <section style="--seccolor:var(--ch)" data-tab="in">
   <div class="sechead"><h2>Inputs</h2><span class="count" id="chCount"></span>
-    <span class="hint">MGB ports patch to named inputs top-down (stereo takes two). Mic / stand / position go to the vendor PDF only.</span>
-    <span class="selops"><button class="small" data-k="ch" data-f="selUp">▲ Selected</button><button class="small" data-k="ch" data-f="selDown">▼ Selected</button><button class="small" data-k="ch" data-f="selClr" title="Deselect all">✕ Deselect</button></span></div>
+    <span class="hint">MGB ports patch to named inputs top-down (stereo takes two). Mic / stand / position go to the vendor PDF only.</span></div>
+    <div class="selops"><button class="small" data-k="ch" data-f="selUp">▲ Selected</button><button class="small" data-k="ch" data-f="selDown">▼ Selected</button><button class="small" data-k="ch" data-f="selClr" title="Deselect all">✕ Deselect</button></div>
   <div class="tblwrap"><table id="chTable">
     <thead><tr><th></th><th>#</th><th>Patch</th><th>Name</th><th>M/ST</th><th>Color</th><th>Group</th><th>Link</th><th>Matrix</th><th>Mic</th><th>Stand</th><th>Stage position</th><th>Notes</th><th>Rack</th><th></th></tr></thead>
     <tbody></tbody>
@@ -705,8 +706,8 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 
 <section style="--seccolor:var(--grp)" data-tab="out">
   <div class="sechead"><h2>Groups</h2><span class="count" id="grpCount"></span>
-    <span class="hint">Pre/Post FX is the LV1 group processing point. Destination MASTER = LR.</span>
-    <span class="selops"><button class="small" data-k="grp" data-f="selUp">▲ Selected</button><button class="small" data-k="grp" data-f="selDown">▼ Selected</button><button class="small" data-k="grp" data-f="selClr" title="Deselect all">✕ Deselect</button></span></div>
+    <span class="hint">Pre/Post FX is the LV1 group processing point. Destination MASTER = LR.</span></div>
+    <div class="selops"><button class="small" data-k="grp" data-f="selUp">▲ Selected</button><button class="small" data-k="grp" data-f="selDown">▼ Selected</button><button class="small" data-k="grp" data-f="selClr" title="Deselect all">✕ Deselect</button></div>
   <div class="tblwrap"><table id="grpTable">
     <thead><tr><th></th><th>#</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>FX point</th><th>Matrix feeds</th><th>Rack</th><th></th></tr></thead>
     <tbody></tbody>
@@ -715,8 +716,8 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 
 <section style="--seccolor:var(--fx)" data-tab="out">
   <div class="sechead"><h2>FX returns</h2><span class="count" id="fxCount"></span>
-    <span class="hint">LV1 FX strips 1–8.</span>
-    <span class="selops"><button class="small" data-k="fx" data-f="selUp">▲ Selected</button><button class="small" data-k="fx" data-f="selDown">▼ Selected</button><button class="small" data-k="fx" data-f="selClr" title="Deselect all">✕ Deselect</button></span></div>
+    <span class="hint">LV1 FX strips 1–8.</span></div>
+    <div class="selops"><button class="small" data-k="fx" data-f="selUp">▲ Selected</button><button class="small" data-k="fx" data-f="selDown">▼ Selected</button><button class="small" data-k="fx" data-f="selClr" title="Deselect all">✕ Deselect</button></div>
   <div class="tblwrap"><table id="fxTable">
     <thead><tr><th></th><th>#</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>Rack</th><th></th></tr></thead>
     <tbody></tbody>
@@ -725,8 +726,8 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 
 <section style="--seccolor:var(--aux)" data-tab="out">
   <div class="sechead"><h2>Auxes / Monitors</h2><span class="count" id="auxCount"></span>
-    <span class="hint">LV1 aux strips ("Mon" bank). Output ports patch to named auxes top-down (stereo takes two). Destination / notes go to the Google Sheet.</span>
-    <span class="selops"><button class="small" data-k="aux" data-f="selUp">▲ Selected</button><button class="small" data-k="aux" data-f="selDown">▼ Selected</button><button class="small" data-k="aux" data-f="selClr" title="Deselect all">✕ Deselect</button></span></div>
+    <span class="hint">LV1 aux strips ("Mon" bank). Output ports patch to named auxes top-down (stereo takes two). Destination / notes go to the Google Sheet.</span></div>
+    <div class="selops"><button class="small" data-k="aux" data-f="selUp">▲ Selected</button><button class="small" data-k="aux" data-f="selDown">▼ Selected</button><button class="small" data-k="aux" data-f="selClr" title="Deselect all">✕ Deselect</button></div>
   <div class="tblwrap"><table id="auxTable">
     <thead><tr><th></th><th>#</th><th>Patch</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>Position</th><th>Notes</th><th></th></tr></thead>
     <tbody></tbody>
@@ -744,8 +745,8 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 
 <section style="--seccolor:var(--mtx)" data-tab="out">
   <div class="sechead"><h2>Matrixes</h2><span class="count" id="mtxCount"></span>
-    <span class="hint">LV1 matrix strips 1–8. Feed them from inputs or groups above.</span>
-    <span class="selops"><button class="small" data-k="mtx" data-f="selUp">▲ Selected</button><button class="small" data-k="mtx" data-f="selDown">▼ Selected</button><button class="small" data-k="mtx" data-f="selClr" title="Deselect all">✕ Deselect</button></span></div>
+    <span class="hint">LV1 matrix strips 1–8. Feed them from inputs or groups above.</span></div>
+    <div class="selops"><button class="small" data-k="mtx" data-f="selUp">▲ Selected</button><button class="small" data-k="mtx" data-f="selDown">▼ Selected</button><button class="small" data-k="mtx" data-f="selClr" title="Deselect all">✕ Deselect</button></div>
   <div class="tblwrap"><table id="mtxTable">
     <thead><tr><th></th><th>#</th><th>Name</th><th>M/ST</th><th>Color</th><th></th></tr></thead>
     <tbody></tbody>
@@ -756,7 +757,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
   <div class="sechead"><h2>Stage plot</h2><span class="count" id="stageCount"></span>
     <span class="hint">Click a library item to place it, drag to position, label it with the input it belongs to.
     Drawn from the audience; position zones use stage left/right (performer's view).</span>
-    <span class="selops">
+    <span class="headops">
       <button class="small" id="stageToInputs" title="Create/update inputs from labeled stage items (sets their stage-position zone)">Stage → inputs</button>
       <button class="small" id="inputsToStage" title="Add a stage item for every named input that has none">Inputs → stage</button>
       <button class="small" id="stagePng">Export PNG</button>
@@ -1882,7 +1883,8 @@ function renderInspector(){
   // risers keep Position + Name (drawn inside the box) and lose the ticks.
   $("#siCap").classList.toggle("riser",riser);
   $("#capRowN").hidden=multi;$("#siLabel").hidden=multi;
-  $("#capRowI").hidden=multi||riser;$("#siIoTag").hidden=multi||riser;
+  $("#capRowI").hidden=!multi&&riser;$("#siIoTag").hidden=!multi&&riser;
+  if(multi)$("#siIoTag").textContent=ioTagFor([...mSel])||"— not linked —";
   if(document.activeElement!==$("#siPos")){
     const ps=new Set([...mSel].map(j=>((stg().items[j]||{}).pos||"").trim()));
     $("#siPos").value=ps.size===1?[...ps][0]:"";
@@ -1908,8 +1910,8 @@ function renderInspector(){
    (the label), IO (the linked patch, computed live). it.disp holds the
    picked lines as a subset of "pni"; undefined = "n" (the classic label). */
 const itemDisp=it=>it.disp!==undefined?it.disp:"n";
-function itemIoTag(idx){
-  const {chs,axs}=linkedRowsFor([idx]);
+function ioTagFor(indices){ // combined patch range over the given stage items
+  const {chs,axs}=linkedRowsFor(indices);
   const pts=ports(),apts=auxPorts(),segs=[];
   const nums=[...chs.values()].flatMap(c=>pts[state.channels.indexOf(c)]||[]);
   if(nums.length){const a=Math.min(...nums),b=Math.max(...nums);segs.push("IN "+(a===b?a:a+"-"+b));}
@@ -1917,6 +1919,7 @@ function itemIoTag(idx){
   if(anums.length){const a=Math.min(...anums),b=Math.max(...anums);segs.push("OUT "+(a===b?a:a+"-"+b));}
   return segs.join(" · ");
 }
+const itemIoTag=idx=>ioTagFor([idx]);
 function singleIoName(idx){ // the linked row's name when there is exactly one
   const {chs,axs}=linkedRowsFor([idx]);
   const all=[...chs.values(),...axs.values()];
