@@ -601,7 +601,6 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
 .sinsp label{display:inline-flex;gap:6px;align-items:center;}
 .rotbtns{display:inline-flex;gap:4px;}
 .colsel{min-width:52px;font-family:var(--font-num);font-size:11px;}
-.posname{position:absolute;transform:translate(-50%,0);font:600 11px var(--font-ui);font-style:italic;color:#555;background:rgba(255,255,255,.65);padding:0 4px;border-radius:3px;pointer-events:none;white-space:nowrap;}
 @media (max-width:860px){ .sbwrap{flex-direction:column;} .sbpal{width:100%;} #palGrid{max-height:200px;} }
 #status{font-size:13px;color:var(--ok);min-height:18px;margin:6px 0;}
 #status.err{color:var(--mtx);}
@@ -1825,7 +1824,7 @@ const stageOrder=()=>stg().items.map((it,i)=>i)
   .sort((a,b)=>((stg().items[a].img==="riser"?0:1)-(stg().items[b].img==="riser"?0:1))||a-b);
 function renderStage(){
   const st=$("#stage");
-  st.querySelectorAll(".sitem,.posname").forEach(e=>e.remove());
+  st.querySelectorAll(".sitem").forEach(e=>e.remove());
   for(const i of stageOrder()){
     const it=stg().items[i];
     const d=document.createElement("div");
@@ -1847,21 +1846,8 @@ function renderStage(){
     }
     st.appendChild(d);
   }
-  // Position name badges UNDER each position's constellation — below the
-  // bottom-most item's EDGE (not center) plus its label row, so nothing clips.
-  for(const [name,members] of Object.entries(positionSets())){
-    // An item already showing its Position line covers the badge's job.
-    if(members.some(m=>itemDisp(m).includes("p")))continue;
-    const cx=members.reduce((s,m)=>s+m.x,0)/members.length;
-    const bot=Math.min(0.97,Math.max(...members.map(m=>m.y+itemHfrac(m)/2)));
-    const maxLines=Math.max(...members.map(m=>{
-      const c=itemCaption(stg().items.indexOf(m),m);return c?c.split("\n").length:0;}));
-    const g=document.createElement("div");
-    g.className="posname";
-    g.style.left=(cx*100)+"%";g.style.top=`calc(${(bot*100).toFixed(2)}% + ${maxLines?6+14*maxLines:3}px)`;
-    g.textContent=name;
-    st.appendChild(g);
-  }
+  // (No automatic position badges: the Position name shows only when an
+  // item's Caption has its Position line ticked.)
   $("#stageW").value=+stg().widthM||12;
   $("#stageD").textContent=(((+stg().widthM||12))*9/16).toFixed(1);
   $("#stageSizeLab").textContent=`${+stg().widthM||12} m × ${(((+stg().widthM||12))*9/16).toFixed(1)} m`;
@@ -2027,11 +2013,6 @@ document.addEventListener("change",e=>{
 const groupOf=i=>{const p=((stg().items[i]||{}).pos||"").trim().toUpperCase();
   if(!p)return new Set([i]);
   return new Set(stg().items.map((it,j)=>((it.pos||"").trim().toUpperCase())===p?j:-1).filter(j=>j>=0));};
-function positionSets(){ // {name: [items]} for badge drawing
-  const sets={};
-  stg().items.forEach(it=>{const p=(it.pos||"").trim();if(p)(sets[p]=sets[p]||[]).push(it);});
-  return sets;
-}
 const normRot=r=>((r+180)%360+360)%360-180;
 function rotateSelection(delta){
   const ms=[...mSel];if(!ms.length)return;
@@ -2504,17 +2485,7 @@ async function stageBitmap(){
       cap.split("\n").forEach((ln,k)=>cx.fillText(ln,it.x*W,it.y*H+h/2+24+k*25));
     }
   }
-  // Position name badges, under each position's constellation (below the
-  // bottom-most item's edge + its label line).
-  cx.textAlign="center";cx.font="italic 600 24px Arial";cx.fillStyle="#555";
-  for(const [name,members] of Object.entries(positionSets())){
-    if(members.some(m=>itemDisp(m).includes("p")))continue; // caption covers it
-    const bot=Math.max(...members.map(m=>{
-      const c=itemCaption(stg().items.indexOf(m),m);
-      return m.y+itemHfrac(m)/2+(c?c.split("\n").length*0.03:0);}));
-    const gx=members.reduce((s,m)=>s+m.x,0)/members.length;
-    cx.fillText(name,gx*W,Math.min(0.97,bot+0.035)*H);
-  }
+  // (No automatic position badges — captions carry the Position line.)
   return cv;
 }
 $("#stagePng").onclick=async()=>{
