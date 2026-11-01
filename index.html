@@ -489,6 +489,8 @@ td input,td select{width:100%;min-width:72px;box-sizing:border-box;background:tr
 td input:hover,td select:hover,td input:focus,td select:focus{background:var(--panel2);border-color:var(--line);}
 td.num{font-family:var(--font-num);font-size:12px;color:var(--seccolor,var(--accent));white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums;}
 td.rowops{white-space:nowrap;text-align:right;}
+.iocol{width:1%;padding-left:2px;padding-right:2px;} /* add/delete: shrink to the button */
+td input.nmin{min-width:150px;} /* names must not clip ("Key Bottom") */
 td.selc{width:22px;}
 td.selc input{width:14px;min-width:14px;accent-color:var(--seccolor,var(--accent));}
 tr.selon td{background:color-mix(in srgb,var(--seccolor,var(--accent)) 8%,transparent);}
@@ -703,7 +705,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
     <span class="hint">MGB ports patch to named inputs top-down (stereo takes two). Mic / stand / position go to the vendor PDF only.</span></div>
     <div class="selops"><button class="small" data-k="ch" data-f="selUp">▲ Selected</button><button class="small" data-k="ch" data-f="selDown">▼ Selected</button><button class="small" data-k="ch" data-f="selClr" title="Deselect all">✕ Deselect</button></div>
   <div class="tblwrap"><table id="chTable">
-    <thead><tr><th></th><th>#</th><th>Patch</th><th>Name</th><th>M/ST</th><th>Color</th><th>Group</th><th>Link</th><th>Matrix</th><th>Mic</th><th>Stand</th><th>Stage position</th><th>Notes</th><th>Rack</th><th></th><th>Add</th><th>Delete</th></tr></thead>
+    <thead><tr><th></th><th>#</th><th>Patch</th><th>Name</th><th>M/ST</th><th>Color</th><th>Group</th><th>Link</th><th>Matrix</th><th>Mic</th><th>Stand</th><th>Stage position</th><th>Notes</th><th>Rack</th><th></th><th class="iocol"></th><th class="iocol"></th></tr></thead>
     <tbody></tbody>
   </table></div>
 </section>
@@ -713,7 +715,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
     <span class="hint">Pre/Post FX is the LV1 group processing point. Destination MASTER = LR.</span></div>
     <div class="selops"><button class="small" data-k="grp" data-f="selUp">▲ Selected</button><button class="small" data-k="grp" data-f="selDown">▼ Selected</button><button class="small" data-k="grp" data-f="selClr" title="Deselect all">✕ Deselect</button></div>
   <div class="tblwrap"><table id="grpTable">
-    <thead><tr><th></th><th>#</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>FX point</th><th>Matrix feeds</th><th>Rack</th><th></th><th>Add</th><th>Delete</th></tr></thead>
+    <thead><tr><th></th><th>#</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>FX point</th><th>Matrix feeds</th><th>Rack</th><th></th><th class="iocol"></th><th class="iocol"></th></tr></thead>
     <tbody></tbody>
   </table></div>
 </section>
@@ -723,7 +725,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
     <span class="hint">LV1 FX strips 1–8.</span></div>
     <div class="selops"><button class="small" data-k="fx" data-f="selUp">▲ Selected</button><button class="small" data-k="fx" data-f="selDown">▼ Selected</button><button class="small" data-k="fx" data-f="selClr" title="Deselect all">✕ Deselect</button></div>
   <div class="tblwrap"><table id="fxTable">
-    <thead><tr><th></th><th>#</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>Rack</th><th></th><th>Add</th><th>Delete</th></tr></thead>
+    <thead><tr><th></th><th>#</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>Rack</th><th></th><th class="iocol"></th><th class="iocol"></th></tr></thead>
     <tbody></tbody>
   </table></div>
 </section>
@@ -733,7 +735,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
     <span class="hint">LV1 aux strips ("Mon" bank). Output ports patch to named auxes top-down (stereo takes two). Destination / notes go to the Google Sheet.</span></div>
     <div class="selops"><button class="small" data-k="aux" data-f="selUp">▲ Selected</button><button class="small" data-k="aux" data-f="selDown">▼ Selected</button><button class="small" data-k="aux" data-f="selClr" title="Deselect all">✕ Deselect</button></div>
   <div class="tblwrap"><table id="auxTable">
-    <thead><tr><th></th><th>#</th><th>Patch</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>Position</th><th>Notes</th><th></th><th>Add</th><th>Delete</th></tr></thead>
+    <thead><tr><th></th><th>#</th><th>Patch</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>Position</th><th>Notes</th><th></th><th class="iocol"></th><th class="iocol"></th></tr></thead>
     <tbody></tbody>
   </table></div>
 </section>
@@ -752,7 +754,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
     <span class="hint">LV1 matrix strips 1–8. Feed them from inputs or groups above.</span></div>
     <div class="selops"><button class="small" data-k="mtx" data-f="selUp">▲ Selected</button><button class="small" data-k="mtx" data-f="selDown">▼ Selected</button><button class="small" data-k="mtx" data-f="selClr" title="Deselect all">✕ Deselect</button></div>
   <div class="tblwrap"><table id="mtxTable">
-    <thead><tr><th></th><th>#</th><th>Name</th><th>M/ST</th><th>Color</th><th></th></tr></thead>
+    <thead><tr><th></th><th>#</th><th>Name</th><th>M/ST</th><th>Color</th><th></th><th class="iocol"></th><th class="iocol"></th></tr></thead>
     <tbody></tbody>
   </table></div>
 </section>
@@ -897,8 +899,9 @@ const AUX_DESTS=["Wedge","Wireless IEM","Wired IEM","Mixer"];
 const STANDS=["Clip","Baby","Tall","Magnet","Clamp"];
 const defMtx=()=>({name:"",stereo:false,color:null});
 const DEF={ch:defCh,grp:defGrp,fx:defFx,aux:defAux,mtx:defMtx};
-const STRIP_NOUN={ch:"input",aux:"aux",grp:"group",fx:"FX"};
-const STRIP_NEW={ch:"New Input",aux:"New Aux",grp:"New Group",fx:"New FX"};
+const STRIP_NOUN={ch:"input",aux:"aux",grp:"group",fx:"FX",mtx:"matrix"};
+const STRIP_PLURAL={ch:"inputs",aux:"auxes",grp:"groups",fx:"FX returns",mtx:"matrixes"};
+const STRIP_NEW={ch:"New Input",aux:"New Aux",grp:"New Group",fx:"New FX",mtx:"New MTX"};
 const DEFNAME={ch:i=>`Channel ${i+1}`,grp:i=>`Group ${i+1}`,fx:i=>`Fx ${i+1}`,aux:i=>`Mon ${i+1}`,mtx:i=>`MTX ${i+1}`}; // MTX: short enough for the matrix-feed chips
 
 let state=defaultShow();
@@ -1076,7 +1079,7 @@ function selCell(kind,i){
   return `<td class="selc"><input type="checkbox" data-k="${kind}" data-i="${i}" data-f="sel" ${sel[kind].has(i)?"checked":""} title="Select for multi-edit — Shift-click selects a range"></td>`;
 }
 function nameCell(kind,i,val,dupSet){
-  return `<td><input id="${kind}-${i}-name" value="${esc(val)}" placeholder="${DEFNAME[kind](i)}" class="${dupSet&&dupSet.has(val.trim().toUpperCase())&&val.trim()?"dup":""}" data-k="${kind}" data-i="${i}" data-f="name"></td>`;
+  return `<td><input id="${kind}-${i}-name" value="${esc(val)}" placeholder="${DEFNAME[kind](i)}" class="nmin${dupSet&&dupSet.has(val.trim().toUpperCase())&&val.trim()?" dup":""}" data-k="${kind}" data-i="${i}" data-f="name"></td>`;
 }
 function stCell(kind,i,stereo){
   return `<td><button class="stbtn small ${stereo?"st":""}" data-k="${kind}" data-i="${i}" data-f="stereo" id="${kind}-${i}-st">${stereo?"ST":"M"}</button></td>`;
@@ -1203,8 +1206,8 @@ function renderAux(){
 }
 function renderSimple(kind,list,tableSel){
   const tb=$(tableSel+" tbody"); const dups=dupNames(list);
-  tb.innerHTML=list.map((it,i)=>`<tr${rowCls(kind,i)}>${selCell(kind,i)}<td class="num">${i+1}</td>${nameCell(kind,i,it.name,dups)}${stCell(kind,i,it.stereo)}${colorCell(kind,i,it.color)}${opsCell(kind,i,list.length)}</tr>`).join("")
-    ||emptyRow(6,kind==="aux"?"This mixer configuration has no aux strips.":"No matrix strips in this configuration.");
+  tb.innerHTML=list.map((it,i)=>`<tr${rowCls(kind,i)}>${selCell(kind,i)}<td class="num">${i+1}</td>${nameCell(kind,i,it.name,dups)}${stCell(kind,i,it.stereo)}${colorCell(kind,i,it.color)}${opsCell(kind,i,list.length)}${ioOpsCell(kind,i)}</tr>`).join("")
+    ||emptyRow(8,kind==="aux"?"This mixer configuration has no aux strips.":"No matrix strips in this configuration.");
   const total=kind==="aux"?cfg().mon:MTX_COUNT;
   $(kind==="aux"?"#auxCount":"#mtxCount").textContent=total?`${named(list).length} named / ${total} strips`:"";
 }
@@ -1470,10 +1473,23 @@ async function resetStrip(k,i,mode){
         rerouted=refs.length;
       }
     }
+    if(k==="mtx"&&name){
+      // Inputs / groups feeding this matrix lose that feed.
+      const refs=[...state.channels.filter(c=>c.matrix===name),
+                  ...state.groups.filter(g=>(g.matrix||[]).includes(name))];
+      if(refs.length){
+        const ok=await askConfirm(`Deleting matrix “${name}” removes it as a feed from ${refs.length} strip${refs.length===1?"":"s"}.`,"OK — delete");
+        if(!ok)return;
+        for(const c of state.channels)if(c.matrix===name)c.matrix="";
+        for(const g of state.groups)g.matrix=(g.matrix||[]).filter(m=>m!==name);
+        rerouted=refs.length;
+      }
+    }
     list.splice(i,1);list.push(DEF[k]());
     clearSel(k);rackOpen=null;render();
-    if(name)setStatus(`Deleted “${name}” — the following ${STRIP_NOUN[k]}s moved up`
-      +(k==="ch"||k==="aux"?" and were re-patched.":".")+(rerouted?` ${rerouted} strip(s) now go to MASTER.`:""));
+    if(name)setStatus(`Deleted “${name}” — the following ${STRIP_PLURAL[k]} moved up`
+      +(k==="ch"||k==="aux"?" and were re-patched.":".")
+      +(rerouted?(k==="mtx"?` ${rerouted} strip(s) no longer feed it.`:` ${rerouted} strip(s) now go to MASTER.`):""));
     return;
   }
   list[i]=DEF[k]();clearSel(k);rackOpen=null;render();
@@ -1493,11 +1509,11 @@ function insertStrip(k,i){
   clearSel(k);rackOpen=null;render();
   focusBack(k,i+1,"name");
   const el=document.getElementById(`${k}-${i+1}-name`);if(el)el.select();
-  setStatus(`Added “${row.name}” below row ${i+1} — type its name`+(k==="ch"||k==="aux"?`; following ${STRIP_NOUN[k]}s were re-patched.`:"."));
+  setStatus(`Added “${row.name}” below row ${i+1} — type its name`+(k==="ch"||k==="aux"?`; following ${STRIP_PLURAL[k]} were re-patched.`:"."));
 }
 function ioOpsCell(kind,i){
-  return `<td class="rowops"><button class="small" data-k="${kind}" data-i="${i}" data-f="ins" title="Add a new ${STRIP_NOUN[kind]} below this row">＋</button></td>
-    <td class="rowops"><button class="small danger" data-k="${kind}" data-i="${i}" data-f="del" title="Delete this row (following rows move up)">✕</button></td>`;
+  return `<td class="rowops iocol"><button class="small" data-k="${kind}" data-i="${i}" data-f="ins" title="Add a new ${STRIP_NOUN[kind]} below this row">＋</button></td>
+    <td class="rowops iocol"><button class="small danger" data-k="${kind}" data-i="${i}" data-f="del" title="Delete this row (following rows move up)">✕</button></td>`;
 }
 /* Rack insert picker: mousedown (not click) so the search input's blur
    doesn't hide the list before the pick lands. */
