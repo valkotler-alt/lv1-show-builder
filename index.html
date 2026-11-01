@@ -1479,8 +1479,25 @@ document.addEventListener("drop",e=>{
 $("#showName").addEventListener("input",e=>state.show.name=e.target.value);
 $("#showDate").addEventListener("input",e=>state.show.date=e.target.value);
 $("#showVenue").addEventListener("input",e=>state.show.venue=e.target.value);
-$("#btnExample").onclick=()=>{state=exampleShow();clearSel();rackOpen=null;pendingCfg=null;applyConfig();render();setStatus("RIVKA example loaded — a full real show with routing, links and plugin racks.");};
-$("#btnNew").onclick=()=>{state=defaultShow();clearSel();rackOpen=null;pendingCfg=null;applyConfig();render();setStatus("New empty show.");};
+/* Unsaved-changes guard: anything that replaces the whole show (New,
+   example, import, loading a saved show) first asks when the current one
+   differs from its last explicit save/load. null = dirty-until-saved
+   (a session restored from autosave was never explicitly saved). */
+let savedSnap=null;
+const markClean=()=>{savedSnap=JSON.stringify(buildSpec());};
+const isDirty=()=>savedSnap===null||JSON.stringify(buildSpec())!==savedSnap;
+async function confirmDiscard(action){
+  if(!isDirty())return true;
+  return askConfirm(`This show has unsaved changes — ${action} will DISCARD them.\nTo keep it: Cancel, then Shows ▾ → 💾 Save current show.`,"OK — discard");
+}
+$("#btnExample").onclick=async()=>{
+  if(!(await confirmDiscard("loading the RIVKA example")))return;
+  state=exampleShow();clearSel();rackOpen=null;pendingCfg=null;applyConfig();render();markClean();
+  setStatus("RIVKA example loaded — a full real show with routing, links and plugin racks.");};
+$("#btnNew").onclick=async()=>{
+  if(!(await confirmDiscard("a new empty show")))return;
+  state=defaultShow();clearSel();rackOpen=null;pendingCfg=null;applyConfig();render();markClean();
+  setStatus("New empty show.");};
 
 /* ---------- spec export / import ---------- */
 function buildSpec(){
@@ -2254,8 +2271,9 @@ $("#siDup").onclick=()=>{const it=stg().items[stageSel];if(!it)return;
 /* ---- OK/Cancel confirm dialog (window.confirm is blocked in the artifact
    iframe). Resolves true on OK, false on Cancel / Escape. ---- */
 let cfmRes=null;
-function askConfirm(msg){
+function askConfirm(msg,okText){
   $("#cfmText").textContent=msg;
+  $("#cfmOk").textContent=okText||"OK — remove";
   $("#cfm").hidden=false;
   $("#cfmOk").focus();
   return new Promise(res=>{cfmRes=res;});
@@ -3029,10 +3047,11 @@ document.addEventListener("click",async e=>{
   const row=e.target.closest("[data-load]");
   if(!row)return;
   const load=row.dataset.load;
+  if(!(await confirmDiscard("loading another show")))return;
   if(db){const snap=await db.doc("shows/"+load).get();
-    if(snap.exists){try{loadSpec(snap.data().spec);setStatus("Loaded “"+(snap.data().show?.name||load)+"”.");}catch(err){setStatus(err.message,true);}}}
+    if(snap.exists){try{loadSpec(snap.data().spec);markClean();setStatus("Loaded “"+(snap.data().show?.name||load)+"”.");}catch(err){setStatus(err.message,true);}}}
   else if(!IS_ARTIFACT){const doc=lsShows()[load];
-    if(doc){try{loadSpec(doc.spec);setStatus("Loaded “"+(doc.show?.name||load)+"”.");}catch(err){setStatus(err.message,true);}}}
+    if(doc){try{loadSpec(doc.spec);markClean();setStatus("Loaded “"+(doc.show?.name||load)+"”.");}catch(err){setStatus(err.message,true);}}}
   $("#showsMenu").hidden=true;
 });
 $("#btnSave").onclick=async()=>{
@@ -3040,10 +3059,10 @@ $("#btnSave").onclick=async()=>{
   const id=slugShow(name);
   const doc={show:{...state.show},spec:buildSpec(),savedAt:new Date().toISOString()};
   if(db){
-    try{ await db.doc("shows/"+id).set(doc); setStatus("Saved to cloud as “"+name+"”."); }
+    try{ await db.doc("shows/"+id).set(doc); markClean(); setStatus("Saved to cloud as “"+name+"”."); }
     catch(err){ setStatus("Save failed: "+(err.message||err.code||"unknown"),true); }
   }else if(!IS_ARTIFACT){
-    const o=lsShows();o[id]=doc;lsSetShows(o);renderLocalShows();
+    const o=lsShows();o[id]=doc;lsSetShows(o);renderLocalShows();markClean();
     setStatus("Show saved on this computer as “"+name+"” (incl. its Google Sheet link).");
   }
 };
@@ -3057,8 +3076,10 @@ $("#btnSpec").onclick=async()=>{
 $("#btnImport").onclick=()=>$("#fileImport").click();
 $("#fileImport").addEventListener("change",async e=>{
   const f=e.target.files[0];if(!f)return;
-  try{ loadSpec(JSON.parse(await f.text())); setStatus("Imported “"+f.name+"”."); }
-  catch(err){ setStatus("Import failed: "+err.message,true); }
+  if(await confirmDiscard("importing a spec")){
+    try{ loadSpec(JSON.parse(await f.text())); markClean(); setStatus("Imported “"+f.name+"”."); }
+    catch(err){ setStatus("Import failed: "+err.message,true); }
+  }
   e.target.value="";
 });
 
@@ -3140,6 +3161,7 @@ if(!IS_ARTIFACT){
   }catch(_){}
 }
 if(!restored)render();
+if(!restored)markClean(); // a fresh default show is "clean"; a restored autosave stays dirty-until-saved
 </script>
 
 </body></html>
