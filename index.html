@@ -625,11 +625,9 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 
 <div class="wrap">
 <h1><span class="lv1">LV1</span> Show Builder</h1>
-<p class="sub">Build the input list, routing and strip layout for a new eMotion LV1 session — then export the LV1 spec for conversion, or a vendor-facing input list PDF (no routing shown).</p>
+<p class="sub">Build the input list, routing and strip layout for a new eMotion LV1 session — export it as a ready-to-load .emo, or a vendor-facing input list + stage plot PDF (no routing shown).</p>
 
 <div class="toolbar">
-  <button class="primary" id="btnSpec">Export LV1 spec (.json)</button>
-  <button id="btnPdf">Vendor input list (.pdf)</button>
   <div class="menuwrap" id="showsWrap">
     <button id="btnShows">Shows ▾</button>
     <div id="showsMenu" class="menu" hidden>
@@ -638,13 +636,11 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
       <div id="savedshows"></div>
     </div>
   </div>
-  <button id="btnImport">Import spec…</button>
-  <button id="btnEmoImp" title="Load an LV1 session (.emo) into the builder">Import .emo…</button>
-  <button id="btnEmoExp" title="Build a ready-to-load LV1 session file in the browser">Export .emo</button>
-  <input type="file" id="fileEmo" accept=".emo" hidden>
-  <button id="btnExample">Load RIVKA example</button>
   <button id="btnNew">New empty show</button>
-  <input type="file" id="fileImport" accept=".json,application/json" hidden>
+  <button class="primary" id="btnEmoExp" title="Build a ready-to-load LV1 session file in the browser">Export .emo</button>
+  <button id="btnEmoImp" title="Load an LV1 session (.emo) into the builder">Import .emo…</button>
+  <button id="btnPdf" title="Input list + stage plot for the venue / vendor">Vendor input list (.pdf)</button>
+  <input type="file" id="fileEmo" accept=".emo" hidden>
   <span id="status" role="status"></span>
   <button id="btnTheme" class="small" style="margin-left:auto" title="Switch between dark, light and the system skin"></button>
 </div>
@@ -811,10 +807,10 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 </section>
 
 <p class="foot">
-The exported <code>.json</code> is the LV1 conversion spec: feed it to <code>make_lv1_session.py --spec</code> to generate the <code>.emo</code>
-(the show name becomes the file name). Only named strips are built, packed top-down; the vendor PDF carries only #, name, format, mic,
-stand and stage position for named inputs — no routing or racks. The mixer configuration is recorded in the spec; the converter needs a
-factory template of the same configuration (the 80-input / 16-group one is built in).
+<b>Export .emo</b> builds the complete LV1 session right in the browser, on the factory template of the selected mixer configuration
+(the show name becomes the file name) — only named strips are built, packed top-down. <b>Import .emo…</b> loads any LV1 session back
+into the builder (patch, mic/stand/position and notes are not stored in .emo and start empty). The vendor PDF carries the input list
+(#, name, format, mic, stand, stage position for named inputs — no routing or racks) plus the stage plot as a landscape page.
 <b>Racks</b>: each strip's rack is 8 slots (0–7), exactly like LV1. The default EMO-F2 / EMO-D5 / EMO-Q4 are ordinary rack plugins —
 delete, reorder (drag or ↑↓) or re-add them like anything else. The searchable picker lists only <b>SoundGrid-compatible</b> plugins
 (those shipping SoundGrid-server process code) scanned off this machine's Plug-Ins V16/V17 bundles — the same set LV1's own menus
@@ -1508,10 +1504,6 @@ async function confirmDiscard(action){
   if(!isDirty())return true;
   return askConfirm(`This show has unsaved changes — ${action} will DISCARD them.\nTo keep it: Cancel, then Shows ▾ → 💾 Save current show.`,"OK — discard");
 }
-$("#btnExample").onclick=async()=>{
-  if(!(await confirmDiscard("loading the RIVKA example")))return;
-  state=exampleShow();clearSel();rackOpen=null;pendingCfg=null;applyConfig();render();markClean();
-  setStatus("RIVKA example loaded — a full real show with routing, links and plugin racks.");};
 $("#btnNew").onclick=async()=>{
   if(!(await confirmDiscard("a new empty show")))return;
   state=defaultShow();clearSel();rackOpen=null;pendingCfg=null;applyConfig();render();markClean();
@@ -2999,7 +2991,7 @@ function nativeSave({filename,data}){
 (async()=>{
   if(!IS_ARTIFACT){dl={save:async f=>nativeSave(f)};return;}
   dl=await (window.claude.use("downloads")??null);
-  if(!dl){$("#btnSpec").textContent="Copy LV1 spec (JSON)";$("#btnPdf").hidden=true;}
+  if(!dl){$("#btnPdf").hidden=true;$("#btnEmoExp").hidden=true;} // no save path on this surface
 })();
 /* ---------- show management ----------
    Save / recall whole shows (strips, routing, racks, config AND the linked
@@ -3067,22 +3059,6 @@ $("#btnSave").onclick=async()=>{
     setStatus("Show saved on this computer as “"+name+"” (incl. its Google Sheet link).");
   }
 };
-$("#btnSpec").onclick=async()=>{
-  const json=JSON.stringify(buildSpec(),null,2);
-  if(dl){ try{ await dl.save({filename:fileStem()+".lv1spec.json",data:json}); setStatus("Spec exported."); }
-    catch(err){ if(err&&err.code==="declined")return; setStatus("Export failed: "+(err.message||""),true);} }
-  else{ try{ await navigator.clipboard.writeText(json); setStatus("Spec JSON copied to clipboard."); }
-    catch(_){ const ta=document.createElement("textarea");ta.value=json;document.body.appendChild(ta);ta.select();setStatus("Copy the selected JSON manually.",true);} }
-};
-$("#btnImport").onclick=()=>$("#fileImport").click();
-$("#fileImport").addEventListener("change",async e=>{
-  const f=e.target.files[0];if(!f)return;
-  if(await confirmDiscard("importing a spec")){
-    try{ loadSpec(JSON.parse(await f.text())); markClean(); setStatus("Imported “"+f.name+"”."); }
-    catch(err){ setStatus("Import failed: "+err.message,true); }
-  }
-  e.target.value="";
-});
 
 /* ---------- vendor PDF ---------- */
 $("#btnPdf").onclick=async()=>{
@@ -3105,7 +3081,9 @@ $("#btnPdf").onclick=async()=>{
     alternateRowStyles:{fillColor:[245,245,243]},
     margin:{left:14,right:14},
   });
-  // Stage plot as a landscape page of the same rider.
+  // Stage plot as a landscape page of the same rider. A failure here must
+  // never pass silently — the vendor PDF is expected to carry the plot.
+  let stageNote="";
   if(stg().items.length){
     try{
       const cv=await stageBitmap();
@@ -3113,10 +3091,10 @@ $("#btnPdf").onclick=async()=>{
       doc.setFont("helvetica","bold");doc.setFontSize(14);
       doc.text((state.show.name.trim()||"STAGE PLOT").toUpperCase()+" — STAGE PLOT",14,14);
       doc.addImage(cv.toDataURL("image/jpeg",0.92),"JPEG",14,20,269,151);
-    }catch(_){/* cross-origin image without CORS: skip the page */}
+    }catch(err){stageNote=" ⚠ The stage plot page could not be rendered ("+((err&&err.message)||"images blocked")+") — exported without it.";}
   }
   const out=doc.output("blob");
-  try{ await dl.save({filename:fileStem()+" input list.pdf",data:out}); setStatus("PDF exported."); }
+  try{ await dl.save({filename:fileStem()+" input list.pdf",data:out}); setStatus("PDF exported."+stageNote,!!stageNote); }
   catch(err){ if(err&&err.code==="declined")return; setStatus("PDF export failed: "+(err.message||""),true); }
 };
 
