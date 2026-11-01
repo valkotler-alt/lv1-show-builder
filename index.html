@@ -776,7 +776,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
         <button class="small" id="tplSkip">Skip</button>
       </div>
       <div id="sinsp" class="sinsp" hidden>
-        <label id="siLabelWrap">Label <input id="siLabel" size="14" list="chanNames" placeholder="input / name" spellcheck="false"></label>
+        <label id="siLabelWrap">Label <input id="siLabel" size="26" list="chanNames" placeholder="input / name" spellcheck="false"></label>
         <label id="siCmWrap">Width <input type="number" id="siCm" min="5" max="1200" step="1" style="width:68px"> cm</label>
         <label id="siRsWrap" hidden>Riser size <select id="siRsize">
           <option value="" hidden>—</option>
@@ -1635,7 +1635,7 @@ const TPL={
   "keys-stands-grandpiano":_PIANO,
   "keys-stands-babygrand":_PIANO,
   "keys-stands-fantom":{ins:[["KEYS",1,"DI",""]]},
-  "keys-stands-doublekey":{ins:[["KEYS 1",1,"DI",""],["KEYS 2",1,"DI",""]]},
+  "keys-stands-doublekey":{ins:[["Key Bottom",1,"DI",""],["Key Top",1,"DI",""]]}, // two stereo keyboards on one stand
   "keys-stands-hammondb3back":{ins:[["HAMMOND",1,"DI",""]]},
   "keys-stands-lesliel":{ins:[["Leslie Top",1,"SM57","boom"],["Leslie Bottom",0,"D112","short"]]},
   "keys-stands-accordion":{ins:[["Accordion",0,"Clip","clip"]]},
