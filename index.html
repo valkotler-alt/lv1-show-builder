@@ -1816,6 +1816,7 @@ async function confirmDiscard(action){
 $("#btnNew").onclick=async()=>{
   if(!(await confirmDiscard("a new empty show")))return;
   state=defaultShow();clearSel();rackOpen=null;pendingCfg=null;applyConfig();render();markClean();
+  setTab("mixer"); // a new show starts by picking its mixer configuration
   setStatus("New empty show.");};
 
 /* ---------- spec export / import ---------- */
@@ -3950,7 +3951,7 @@ function setTab(t){
   try{localStorage.setItem("lv1.tab",t);}catch(_){}
 }
 $("#tabbar").addEventListener("click",e=>{const b=e.target.closest("button");if(b)setTab(b.dataset.tab);});
-setTab((()=>{try{return localStorage.getItem("lv1.tab")||"stage";}catch(_){return "stage";}})());
+setTab((()=>{try{return localStorage.getItem("lv1.tab")||"mixer";}catch(_){return "mixer";}})());
 
 applyConfig();
 let restored=false;
