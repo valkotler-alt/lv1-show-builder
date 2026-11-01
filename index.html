@@ -558,10 +558,13 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
 .sbwrap{display:flex;gap:12px;align-items:flex-start;}
 .sbpal{width:248px;flex:none;border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:8px;display:flex;flex-direction:column;gap:8px;}
 .sbpal input[type="text"],.sbpal input:not([type]){width:100%;box-sizing:border-box;}
-#palGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;max-height:430px;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;}
+/* The library grid is a fixed WHITE surface in every theme — the instrument
+   drawings are dark ink on transparency, like the stage itself. */
+#palGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;max-height:430px;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;background:#ffffff;border-radius:6px;padding:4px;}
+#palGrid .menuempty{color:#777;}
 .palcat{grid-column:1/-1;font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);font-weight:600;margin-top:6px;}
-.palit{display:flex;flex-direction:column;align-items:center;gap:2px;border:1px solid transparent;border-radius:6px;padding:4px 2px;cursor:pointer;font-size:9px;color:var(--dim);text-align:center;background:none;}
-.palit:hover{border-color:var(--accent);background:var(--panel2);}
+.palit{display:flex;flex-direction:column;align-items:center;gap:2px;border:1px solid transparent;border-radius:6px;padding:4px 2px;cursor:pointer;font-size:9px;color:#555;text-align:center;background:none;}
+.palit:hover{border-color:var(--accent);background:#eeeeee;}
 .palit img{width:100%;max-width:56px;height:42px;object-fit:contain;pointer-events:none;}
 .palit span{max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
 .sbmain{flex:1;min-width:0;}
