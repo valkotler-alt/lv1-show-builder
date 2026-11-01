@@ -490,14 +490,13 @@ td input:hover,td select:hover,td input:focus,td select:focus{background:var(--p
 td.num{font-family:var(--font-num);font-size:12px;color:var(--seccolor,var(--accent));white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums;}
 td.rowops{white-space:nowrap;text-align:right;}
 .iocol{width:1%;padding-left:2px;padding-right:2px;} /* add/delete: shrink to the button */
-tr[data-ri] > td:nth-child(2){cursor:grab;user-select:none;} /* the # cell is the drag grip */
-tr[data-ri] > td:nth-child(2):hover{color:var(--seccolor,var(--accent));}
+tr[data-ri] > td:first-child{cursor:grab;user-select:none;} /* the # cell: click selects, drag reorders */
+tr[data-ri] > td:first-child:hover{color:var(--seccolor,var(--accent));}
 tr.rowdragging{opacity:.4;}
 tr.dropbefore > td{box-shadow:inset 0 2px 0 var(--seccolor,var(--accent));}
 tr.dropafter > td{box-shadow:inset 0 -2px 0 var(--seccolor,var(--accent));}
 td input.nmin{min-width:150px;} /* names must not clip ("Key Bottom") */
-td.selc{width:22px;}
-td.selc input{width:14px;min-width:14px;accent-color:var(--seccolor,var(--accent));}
+tr.selon{outline:2px solid var(--seccolor,var(--accent));outline-offset:-2px;}
 tr.selon td{background:color-mix(in srgb,var(--seccolor,var(--accent)) 8%,transparent);}
 td .dup{outline:2px solid var(--mtx);}
 td input::placeholder{color:var(--dim);opacity:.55;font-style:italic;}
@@ -707,10 +706,9 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 
 <section style="--seccolor:var(--ch)" data-tab="in">
   <div class="sechead"><h2>Inputs</h2><span class="count" id="chCount"></span>
-    <span class="hint">MGB ports patch to named inputs top-down (stereo takes two). Mic / stand / position go to the vendor PDF only.</span></div>
-    <div class="selops"><button class="small" data-k="ch" data-f="selUp">▲ Selected</button><button class="small" data-k="ch" data-f="selDown">▼ Selected</button><button class="small" data-k="ch" data-f="selClr" title="Deselect all">✕ Deselect</button></div>
+    <span class="hint">MGB ports patch to named inputs top-down (stereo takes two). Click a row's # to select (Shift = range, Ctrl = add/remove, Esc = clear) · drag the # to move rows.</span></div>
   <div class="tblwrap"><table id="chTable">
-    <thead><tr><th></th><th>#</th><th>Patch</th><th>Name</th><th>M/ST</th><th>Color</th><th>Group</th><th>Link</th><th>Matrix</th><th>Mic</th><th>Stand</th><th>Stage position</th><th>Notes</th><th>Rack</th><th></th><th class="iocol"></th><th class="iocol"></th></tr></thead>
+    <thead><tr><th>#</th><th>Patch</th><th>Name</th><th>M/ST</th><th>Color</th><th>Group</th><th>Link</th><th>Matrix</th><th>Mic</th><th>Stand</th><th>Stage position</th><th>Notes</th><th>Rack</th><th></th><th class="iocol"></th><th class="iocol"></th></tr></thead>
     <tbody></tbody>
   </table></div>
 </section>
@@ -718,9 +716,8 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 <section style="--seccolor:var(--grp)" data-tab="out">
   <div class="sechead"><h2>Groups</h2><span class="count" id="grpCount"></span>
     <span class="hint">Pre/Post FX is the LV1 group processing point. Destination MASTER = LR.</span></div>
-    <div class="selops"><button class="small" data-k="grp" data-f="selUp">▲ Selected</button><button class="small" data-k="grp" data-f="selDown">▼ Selected</button><button class="small" data-k="grp" data-f="selClr" title="Deselect all">✕ Deselect</button></div>
   <div class="tblwrap"><table id="grpTable">
-    <thead><tr><th></th><th>#</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>FX point</th><th>Matrix feeds</th><th>Rack</th><th></th><th class="iocol"></th><th class="iocol"></th></tr></thead>
+    <thead><tr><th>#</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>FX point</th><th>Matrix feeds</th><th>Rack</th><th></th><th class="iocol"></th><th class="iocol"></th></tr></thead>
     <tbody></tbody>
   </table></div>
 </section>
@@ -728,9 +725,8 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 <section style="--seccolor:var(--fx)" data-tab="out">
   <div class="sechead"><h2>FX returns</h2><span class="count" id="fxCount"></span>
     <span class="hint">LV1 FX strips 1–8.</span></div>
-    <div class="selops"><button class="small" data-k="fx" data-f="selUp">▲ Selected</button><button class="small" data-k="fx" data-f="selDown">▼ Selected</button><button class="small" data-k="fx" data-f="selClr" title="Deselect all">✕ Deselect</button></div>
   <div class="tblwrap"><table id="fxTable">
-    <thead><tr><th></th><th>#</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>Rack</th><th></th><th class="iocol"></th><th class="iocol"></th></tr></thead>
+    <thead><tr><th>#</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>Rack</th><th></th><th class="iocol"></th><th class="iocol"></th></tr></thead>
     <tbody></tbody>
   </table></div>
 </section>
@@ -738,9 +734,8 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 <section style="--seccolor:var(--aux)" data-tab="out">
   <div class="sechead"><h2>Auxes / Monitors</h2><span class="count" id="auxCount"></span>
     <span class="hint">LV1 aux strips ("Mon" bank). Output ports patch to named auxes top-down (stereo takes two). Destination / notes go to the Google Sheet.</span></div>
-    <div class="selops"><button class="small" data-k="aux" data-f="selUp">▲ Selected</button><button class="small" data-k="aux" data-f="selDown">▼ Selected</button><button class="small" data-k="aux" data-f="selClr" title="Deselect all">✕ Deselect</button></div>
   <div class="tblwrap"><table id="auxTable">
-    <thead><tr><th></th><th>#</th><th>Patch</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>Position</th><th>Notes</th><th></th><th class="iocol"></th><th class="iocol"></th></tr></thead>
+    <thead><tr><th>#</th><th>Patch</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>Position</th><th>Notes</th><th></th><th class="iocol"></th><th class="iocol"></th></tr></thead>
     <tbody></tbody>
   </table></div>
 </section>
@@ -757,9 +752,8 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 <section style="--seccolor:var(--mtx)" data-tab="out">
   <div class="sechead"><h2>Matrixes</h2><span class="count" id="mtxCount"></span>
     <span class="hint">LV1 matrix strips 1–8. Feed them from inputs or groups above.</span></div>
-    <div class="selops"><button class="small" data-k="mtx" data-f="selUp">▲ Selected</button><button class="small" data-k="mtx" data-f="selDown">▼ Selected</button><button class="small" data-k="mtx" data-f="selClr" title="Deselect all">✕ Deselect</button></div>
   <div class="tblwrap"><table id="mtxTable">
-    <thead><tr><th></th><th>#</th><th>Name</th><th>M/ST</th><th>Color</th><th></th><th class="iocol"></th><th class="iocol"></th></tr></thead>
+    <thead><tr><th>#</th><th>Name</th><th>M/ST</th><th>Color</th><th></th><th class="iocol"></th><th class="iocol"></th></tr></thead>
     <tbody></tbody>
   </table></div>
 </section>
@@ -915,13 +909,15 @@ let pendingCfg=null; // two-click confirm when switching config would drop named
 const sel={ch:new Set(),grp:new Set(),fx:new Set(),aux:new Set(),mtx:new Set()};
 const lastSel={ch:-1,grp:-1,fx:-1,aux:-1,mtx:-1}; // anchor row for Shift-click range select
 const clearSel=k=>{if(k){sel[k].clear();lastSel[k]=-1;}else Object.keys(sel).forEach(x=>{sel[x].clear();lastSel[x]=-1;});};
-function refreshSel(k){ // sync checkboxes + row highlight to sel[k] without a re-render
-  document.querySelectorAll(`input[data-f="sel"][data-k="${k}"]`).forEach(cb=>{
-    const on=sel[k].has(+cb.dataset.i);
-    cb.checked=on;
-    const tr=cb.closest("tr");if(tr)tr.classList.toggle("selon",on);
-  });
+function refreshSel(k){ // sync the row highlight to sel[k] without a re-render
+  document.querySelectorAll(`tr[data-rk="${k}"]`).forEach(tr=>{tr.classList.toggle("selon",sel[k].has(+tr.dataset.ri));});
 }
+document.addEventListener("keydown",e=>{ // Esc clears every list selection
+  if(e.key!=="Escape"||!$("#cfm").hidden)return;
+  if(!Object.values(sel).some(s=>s.size))return;
+  for(const k of Object.keys(sel)){sel[k]=new Set();lastSel[k]=-1;refreshSel(k);}
+  if(typeof syncStageSelection==="function")syncStageSelection();
+});
 
 function defaultShow(){
   // Start empty: pick the mixer config, name strips, route, export.
@@ -1045,8 +1041,6 @@ function rackRow(kind,i,r,colspan,stereo){
   const cats=[...new Set(avail.map(p=>p[2]||"Other"))].sort();
   const plugRow=(x)=>`<div class="slotrow ins" draggable="true" data-k="${kind}" data-i="${i}" data-x="${x}" title="Drag to reorder">
       <span class="sno">${x}</span><span class="grip">⋮⋮</span><span class="sname">${esc(r.slots[x])}</span>
-      <button class="small nudge" data-k="${kind}" data-i="${i}" data-f="rkUp" data-n="${x}" title="Move up" ${x===0?"disabled":""}>↑</button>
-      <button class="small nudge" data-k="${kind}" data-i="${i}" data-f="rkDn" data-n="${x}" title="Move down" ${x===r.slots.length-1?"disabled":""}>↓</button>
       <button class="small nudge danger" data-k="${kind}" data-i="${i}" data-f="rkDel" data-n="${x}" title="Remove plugin">✕</button></div>`;
   const addRow=(slot)=>`<div class="slotrow add" data-k="${kind}" data-i="${i}">
       <span class="sno">${slot}</span>
@@ -1080,9 +1074,6 @@ function renderMaster(){
 }
 
 /* ---------- strip tables ---------- */
-function selCell(kind,i){
-  return `<td class="selc"><input type="checkbox" data-k="${kind}" data-i="${i}" data-f="sel" ${sel[kind].has(i)?"checked":""} title="Select for multi-edit — Shift-click selects a range"></td>`;
-}
 function nameCell(kind,i,val,dupSet){
   return `<td><input id="${kind}-${i}-name" value="${esc(val)}" placeholder="${DEFNAME[kind](i)}" class="nmin${dupSet&&dupSet.has(val.trim().toUpperCase())&&val.trim()?" dup":""}" data-k="${kind}" data-i="${i}" data-f="name"></td>`;
 }
@@ -1131,7 +1122,6 @@ function renderChannels(){
       return `<select id="ch-${i}-${f}" data-k="ch" data-i="${i}" data-f="${f}">
       <option value=""${cur===""?" selected":""}>${none}</option>${all.map(o=>`<option${o===cur?" selected":""}>${esc(o)}</option>`).join("")}</select>`;};
     return `<tr${rowCls("ch",i)}>
-      ${selCell("ch",i)}
       <td class="num">${i+1}</td>
       <td class="num">${pts[i]?pts[i].join("–"):"—"}</td>
       ${nameCell("ch",i,ch.name,dups)}
@@ -1145,7 +1135,7 @@ function renderChannels(){
       <td><input id="ch-${i}-pos" value="${esc(ch.pos)}" data-k="ch" data-i="${i}" data-f="pos" list="posList" placeholder="position"></td>
       <td><input id="ch-${i}-notes" value="${esc(ch.notes)}" data-k="ch" data-i="${i}" data-f="notes"></td>
       ${rackCell("ch",i,ch.rack)}
-      ${opsCell("ch",i,state.channels.length)}${ioOpsCell("ch",i)}</tr>`+rackRow("ch",i,ch.rack,17,ch.stereo);
+      ${opsCell("ch",i,state.channels.length)}${ioOpsCell("ch",i)}</tr>`+rackRow("ch",i,ch.rack,16,ch.stereo);
   }).join("");
   const lastPts=[...pts].reverse().find(Boolean);
   const used=lastPts?lastPts[lastPts.length-1]:0;
@@ -1159,7 +1149,6 @@ function renderGroups(){
     const destOpts=["MASTER",...stripOpts("grp",selfLabel)];
     if(g.dest&&!destOpts.includes(g.dest))destOpts.splice(1,0,g.dest);
     return `<tr${rowCls("grp",i)}>
-      ${selCell("grp",i)}
       <td class="num">${i+1}</td>
       ${nameCell("grp",i,g.name,dups)}
       ${stCell("grp",i,g.stereo)}
@@ -1168,8 +1157,8 @@ function renderGroups(){
       <td><button class="pfbtn small ${g.postFx?"post":""}" id="grp-${i}-pf" data-k="grp" data-i="${i}" data-f="postFx">${g.postFx?"POST":"PRE"}</button></td>
       <td><div class="chips">${mtxOpts.length?mtxOpts.map(m=>`<label class="${g.matrix.includes(m)?"on":""}"><input type="checkbox" id="grp-${i}-mx-${esc(m)}" data-k="grp" data-i="${i}" data-f="mx" data-m="${esc(m)}" ${g.matrix.includes(m)?"checked":""}>${esc(m)}</label>`).join(""):'<span style="color:var(--dim);font-size:11px">no matrix strips in this configuration</span>'}</div></td>
       ${rackCell("grp",i,g.rack)}
-      ${opsCell("grp",i,state.groups.length)}${ioOpsCell("grp",i)}</tr>`+rackRow("grp",i,g.rack,12,g.stereo);
-  }).join("")||emptyRow(12,"This mixer configuration has no group strips.");
+      ${opsCell("grp",i,state.groups.length)}${ioOpsCell("grp",i)}</tr>`+rackRow("grp",i,g.rack,11,g.stereo);
+  }).join("")||emptyRow(11,"This mixer configuration has no group strips.");
   $("#grpCount").textContent=state.groups.length?`${named(state.groups).length} named / ${cfg().grp} strips`:"";
 }
 function renderFx(){
@@ -1177,11 +1166,11 @@ function renderFx(){
   tb.innerHTML=state.fx.map((f,i)=>{
     const destOpts=["MASTER",...stripOpts("grp")];
     if(f.dest&&!destOpts.includes(f.dest))destOpts.splice(1,0,f.dest);
-    return `<tr${rowCls("fx",i)}>${selCell("fx",i)}<td class="num">${i+1}</td>${nameCell("fx",i,f.name,dups)}${stCell("fx",i,f.stereo)}
+    return `<tr${rowCls("fx",i)}><td class="num">${i+1}</td>${nameCell("fx",i,f.name,dups)}${stCell("fx",i,f.stereo)}
       ${colorCell("fx",i,f.color)}
       <td><select id="fx-${i}-dest" data-k="fx" data-i="${i}" data-f="dest">${destOpts.map(o=>`<option${o===f.dest?" selected":""}>${esc(o)}</option>`).join("")}</select></td>
       ${rackCell("fx",i,f.rack)}
-      ${opsCell("fx",i,state.fx.length)}${ioOpsCell("fx",i)}</tr>`+rackRow("fx",i,f.rack,10,f.stereo);
+      ${opsCell("fx",i,state.fx.length)}${ioOpsCell("fx",i)}</tr>`+rackRow("fx",i,f.rack,9,f.stereo);
   }).join("");
   $("#fxCount").textContent=`${named(state.fx).length} named / ${FX_COUNT} strips`;
 }
@@ -1193,7 +1182,6 @@ function auxPorts(){ // 1-based output port list per NAMED aux (unnamed -> null)
 function renderAux(){
   const tb=$("#auxTable tbody"); const dups=dupNames(state.auxes); const pts=auxPorts();
   tb.innerHTML=state.auxes.map((a,i)=>`<tr${rowCls("aux",i)}>
-      ${selCell("aux",i)}
       <td class="num">${i+1}</td>
       <td class="num">${pts[i]?pts[i].join("–"):"—"}</td>
       ${nameCell("aux",i,a.name,dups)}
@@ -1205,13 +1193,13 @@ function renderAux(){
       <td><input id="aux-${i}-pos" value="${esc(a.pos||"")}" data-k="aux" data-i="${i}" data-f="pos" list="posList" placeholder="position"></td>
       <td><input id="aux-${i}-notes" value="${esc(a.notes||"")}" data-k="aux" data-i="${i}" data-f="notes"></td>
       ${opsCell("aux",i,state.auxes.length)}${ioOpsCell("aux",i)}</tr>`).join("")
-    ||emptyRow(12,"This mixer configuration has no aux strips.");
+    ||emptyRow(11,"This mixer configuration has no aux strips.");
   $("#auxCount").textContent=cfg().mon?`${named(state.auxes).length} named / ${cfg().mon} strips`:"";
 }
 function renderSimple(kind,list,tableSel){
   const tb=$(tableSel+" tbody"); const dups=dupNames(list);
-  tb.innerHTML=list.map((it,i)=>`<tr${rowCls(kind,i)}>${selCell(kind,i)}<td class="num">${i+1}</td>${nameCell(kind,i,it.name,dups)}${stCell(kind,i,it.stereo)}${colorCell(kind,i,it.color)}${opsCell(kind,i,list.length)}${ioOpsCell(kind,i)}</tr>`).join("")
-    ||emptyRow(8,kind==="aux"?"This mixer configuration has no aux strips.":"No matrix strips in this configuration.");
+  tb.innerHTML=list.map((it,i)=>`<tr${rowCls(kind,i)}><td class="num">${i+1}</td>${nameCell(kind,i,it.name,dups)}${stCell(kind,i,it.stereo)}${colorCell(kind,i,it.color)}${opsCell(kind,i,list.length)}${ioOpsCell(kind,i)}</tr>`).join("")
+    ||emptyRow(7,kind==="aux"?"This mixer configuration has no aux strips.":"No matrix strips in this configuration.");
   const total=kind==="aux"?cfg().mon:MTX_COUNT;
   $(kind==="aux"?"#auxCount":"#mtxCount").textContent=total?`${named(list).length} named / ${total} strips`:"";
 }
@@ -1262,15 +1250,6 @@ function renderWarnings(){
 
 /* ---------- edits ---------- */
 const listFor={ch:()=>state.channels,grp:()=>state.groups,fx:()=>state.fx,aux:()=>state.auxes,mtx:()=>state.matrixes};
-function moveSel(list,selSet,dir){ // dir -1 up / +1 down; selected rows move as a (possibly gapped) block
-  const idx=[...selSet].sort((a,b)=>dir<0?a-b:b-a);
-  for(const i of idx){
-    const j=i+dir;
-    if(j<0||j>=list.length||selSet.has(j))continue;
-    [list[i],list[j]]=[list[j],list[i]];
-    selSet.delete(i);selSet.add(j);
-  }
-}
 document.addEventListener("input",e=>{
   const t=e.target,k=t.dataset.k;if(!k)return;
   const f=t.dataset.f;
@@ -1358,57 +1337,48 @@ function refreshNameHighlights(k){const list=listFor[k]();const d=dupNames(list)
 function refreshPorts(){ // live-update the MGB column + count without a full re-render
   const pts=ports();
   const rows=$("#chTable tbody").querySelectorAll("tr:not(.rackrow)");
-  rows.forEach((tr,i)=>{const td=tr.children[2];if(td)td.textContent=pts[i]?pts[i].join("–"):"—";});
+  rows.forEach((tr,i)=>{const td=tr.children[1];if(td)td.textContent=pts[i]?pts[i].join("–"):"—";});
   const lastPts=[...pts].reverse().find(Boolean);
   const used=lastPts?lastPts[lastPts.length-1]:0;
   $("#chCount").textContent=`${named(state.channels).length} named / ${cfg().ch} strips · ${used}/${MGB_PORTS} ports`;
 }
 function focusBack(k,i,f){const el=document.getElementById(`${k}-${i}-${f}`);if(el){el.focus();const v=el.value;el.value="";el.value=v;}}
 document.addEventListener("click",e=>{
-  // Strip select checkboxes: plain click toggles; Shift-click selects the
-  // whole range from the last-clicked row (handled here for e.shiftKey).
-  const cb=e.target;
-  if(cb.matches&&cb.matches('input[data-f="sel"]')){
-    const k=cb.dataset.k,i=+cb.dataset.i;
-    if(e.shiftKey&&lastSel[k]>=0&&lastSel[k]!==i){
+  // Row selection: click a row (its # cell or any non-field space) selects
+  // it; Shift-click extends a range from the anchor; Ctrl/Cmd-click toggles
+  // one row; clicking the only selected row again deselects. Esc clears.
+  const td=e.target.closest&&e.target.closest("tr[data-ri] > td");
+  if(td&&!e.target.closest("input,select,button,textarea,label,.chips")){
+    const tr=td.parentElement,k=tr.dataset.rk,i=+tr.dataset.ri;
+    if(e.shiftKey&&lastSel[k]>=0){
       const a=Math.min(lastSel[k],i),b=Math.max(lastSel[k],i);
+      if(!(e.ctrlKey||e.metaKey))sel[k]=new Set();
       for(let j=a;j<=b;j++)sel[k].add(j);
       const s=document.getSelection&&document.getSelection();if(s)s.removeAllRanges();
-      refreshSel(k);
+    }else if(e.ctrlKey||e.metaKey){
+      if(sel[k].has(i))sel[k].delete(i);else sel[k].add(i);
+      lastSel[k]=i;
     }else{
-      if(cb.checked)sel[k].add(i);else sel[k].delete(i);
-      const tr=cb.closest("tr");if(tr)tr.classList.toggle("selon",cb.checked);
+      if(sel[k].size===1&&sel[k].has(i)){sel[k]=new Set();lastSel[k]=-1;}
+      else{sel[k]=new Set([i]);lastSel[k]=i;}
     }
-    if(cb.checked)lastSel[k]=i;
+    refreshSel(k);
     if(k==="ch"||k==="aux")syncStageSelection();
     return;
   }
   const t=e.target.closest("button");if(!t||!t.dataset.k)return;
   const k=t.dataset.k,i=+t.dataset.i,f=t.dataset.f;
   if(f==="rack"){const key=k+"-"+i;rackOpen=rackOpen===key?null:key;render();return;}
-  if(["rkDel","rkReset","rkUp","rkDn"].includes(f)){
+  if(["rkDel","rkReset"].includes(f)){
     const h=rackHolder(k,i);if(!h)return;
     if(f==="rkReset"){h.rack=null;render();return;}
     if(!h.rack)h.rack=STOCK_RACK();
     const arr=h.rack.slots,n=+t.dataset.n;
-    if(f==="rkDel")arr.splice(n,1);
-    else if(f==="rkUp"&&n>0)[arr[n-1],arr[n]]=[arr[n],arr[n-1]];
-    else if(f==="rkDn"&&n<arr.length-1)[arr[n+1],arr[n]]=[arr[n],arr[n+1]];
+    arr.splice(n,1);
     render();return;
   }
   if(!listFor[k])return;
   const list=listFor[k]();
-  if(f==="selUp"||f==="selDown"){
-    if(!sel[k].size){setStatus("Nothing selected — tick the boxes on the left first.",true);return;}
-    moveSel(list,sel[k],f==="selUp"?-1:1);rackOpen=null;render();return;
-  }
-  if(f==="selClr"){
-    if(!sel[k].size)return;
-    const n=sel[k].size;
-    clearSel(k);refreshSel(k);
-    if(k==="ch"||k==="aux")syncStageSelection();
-    setStatus(`${n} strip(s) deselected.`);return;
-  }
   if(f==="stereo"){list[i].stereo=!list[i].stereo;render();return;}
   if(f==="postFx"){list[i].postFx=!list[i].postFx;render();return;}
   if(f==="reset"){resetStrip(k,i);return;}
@@ -1540,7 +1510,7 @@ const clearDropMarks=()=>document.querySelectorAll("tr.dropbefore,tr.dropafter,t
   .forEach(el=>el.classList.remove("dropbefore","dropafter","rowdragging"));
 document.addEventListener("mousedown",e=>{ // only the "#" cell starts a row drag
   const td=e.target.closest&&e.target.closest("tr[data-ri] > td");
-  if(td&&td.cellIndex===1)td.parentElement.draggable=true;
+  if(td&&td.cellIndex===0)td.parentElement.draggable=true;
 });
 document.addEventListener("mouseup",()=>{ // a click on # without dragging: rows stay text-selectable
   document.querySelectorAll('tr[data-ri][draggable="true"]').forEach(tr=>tr.draggable=false);
