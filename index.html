@@ -612,12 +612,16 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
 section[data-tab]{display:none;}
 body[data-tab="in"] section[data-tab="in"],
 body[data-tab="out"] section[data-tab="out"],
+body[data-tab="notes"] section[data-tab="notes"],
 body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 #cfm{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;}
 #cfm[hidden]{display:none;}
 .cfmbox{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:18px 20px;max-width:480px;box-shadow:0 12px 40px rgba(0,0,0,.45);}
 #cfmText{font-size:13px;line-height:1.55;margin-bottom:14px;white-space:pre-line;}
 .cfmbtns{display:flex;gap:8px;justify-content:flex-end;}
+.noteswrap{display:flex;flex-direction:column;gap:12px;max-width:680px;}
+.noteswrap label{display:flex;flex-direction:column;gap:5px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);font-weight:600;}
+.noteswrap textarea{font-family:var(--font-ui);font-size:13px;background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:8px;resize:vertical;}
 .foot{margin-top:34px;color:var(--dim);font-size:12px;border-top:1px solid var(--line);padding-top:12px;line-height:1.6;}
 .foot code{font-family:var(--font-num);font-size:11px;}
 @media (max-width:700px){ .showmeta{flex-direction:column;} .toolbar{gap:6px;} }
@@ -692,6 +696,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
   <button data-tab="stage" class="on">STAGE</button>
   <button data-tab="in">INPUTS</button>
   <button data-tab="out">OUTPUTS</button>
+  <button data-tab="notes">NOTES</button>
 </div>
 
 <section style="--seccolor:var(--ch)" data-tab="in">
@@ -751,6 +756,18 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
     <thead><tr><th></th><th>#</th><th>Name</th><th>M/ST</th><th>Color</th><th></th></tr></thead>
     <tbody></tbody>
   </table></div>
+</section>
+
+
+<section style="--seccolor:var(--accent)" data-tab="notes">
+  <div class="sechead"><h2>Show notes</h2>
+    <span class="hint">Travel with the show: printed on the vendor PDF and written to the Google Sheet, right under the show name / date / venue.</span></div>
+  <div class="noteswrap">
+    <label>FOH Desk &amp; Version <input id="shFoh" placeholder="e.g. eMotion LV1 64 / V17.1" spellcheck="false"></label>
+    <label>MON Desk &amp; Version <input id="shMon" placeholder="e.g. eMotion LV1 32 / V17.1" spellcheck="false"></label>
+    <label>PA <input id="shPa" placeholder="e.g. L-Acoustics K2 + KS28"></label>
+    <label>Notes and important details <textarea id="shNotes" rows="7" placeholder="Anything the venue / vendor must know."></textarea></label>
+  </div>
 </section>
 
 <section style="--seccolor:var(--grp)" id="stageSec" data-tab="stage">
@@ -899,7 +916,7 @@ function refreshSel(k){ // sync checkboxes + row highlight to sel[k] without a r
 
 function defaultShow(){
   // Start empty: pick the mixer config, name strips, route, export.
-  return {show:{name:"",date:"",venue:"",sheetUrl:""},configId:"80-16",
+  return {show:{name:"",date:"",venue:"",sheetUrl:"",fohDesk:"",monDesk:"",pa:"",notes:""},configId:"80-16",
           channels:[],groups:[],fx:[],auxes:[],matrixes:[],master:{rack:null},
           stage:{items:[],custom:{},widthM:12}};
 }
@@ -925,7 +942,7 @@ function exampleShow(){
   const c=(n,st,grp)=>({...defCh(),name:n,stereo:!!st,group:grp||"",rack:rk(["SSL EV2 Channel"])});
   const fx=n=>({...defFx(),name:n,stereo:true,dest:"MASTER",rack:rk(["Atlas Reverb"])});
   return {
-    show:{name:"RIVKA",date:"",venue:"",sheetUrl:""}, configId:"80-16",
+    show:{name:"RIVKA",date:"",venue:"",sheetUrl:"",fohDesk:"",monDesk:"",pa:"",notes:""}, configId:"80-16",
     channels:[
       c("KICK",0,"DRUMS"),c("SN T",0,"DRUMS"),c("SN B",0,"DRUMS"),c("HH",0,"DRUMS"),
       c("T 1",0,"DRUMS"),c("T 2",0,"DRUMS"),c("T 3",0,"DRUMS"),c("OH",1,"DRUMS"),
@@ -969,6 +986,7 @@ function setStatus(msg,err){const el=$("#status");el.textContent=msg||"";el.clas
 /* ---------- render ---------- */
 function render(){
   $("#showName").value=state.show.name; $("#showDate").value=state.show.date; $("#showVenue").value=state.show.venue;
+  $("#shFoh").value=state.show.fohDesk||"";$("#shMon").value=state.show.monDesk||"";$("#shPa").value=state.show.pa||"";$("#shNotes").value=state.show.notes||"";
   $("#sheetUrl").value=state.show.sheetUrl||"";
   renderConfig(); renderChannels(); renderGroups(); renderFx();
   renderAux(); renderSimple("mtx",state.matrixes,"#mtxTable");
@@ -1493,6 +1511,10 @@ document.addEventListener("drop",e=>{
 $("#showName").addEventListener("input",e=>state.show.name=e.target.value);
 $("#showDate").addEventListener("input",e=>state.show.date=e.target.value);
 $("#showVenue").addEventListener("input",e=>state.show.venue=e.target.value);
+$("#shFoh").addEventListener("input",e=>state.show.fohDesk=e.target.value);
+$("#shMon").addEventListener("input",e=>state.show.monDesk=e.target.value);
+$("#shPa").addEventListener("input",e=>state.show.pa=e.target.value);
+$("#shNotes").addEventListener("input",e=>state.show.notes=e.target.value);
 /* Unsaved-changes guard: anything that replaces the whole show (New,
    example, import, loading a saved show) first asks when the current one
    differs from its last explicit save/load. null = dirty-until-saved
@@ -1569,7 +1591,7 @@ function loadSpec(spec){
   };
   const id=spec.config&&CONFIGS.some(c=>c.id===spec.config.id)?spec.config.id:inferConfig(spec);
   state={
-    show:{name:spec.show?.name||"",date:spec.show?.date||"",venue:spec.show?.venue||"",sheetUrl:spec.show?.sheetUrl||""},
+    show:{name:spec.show?.name||"",date:spec.show?.date||"",venue:spec.show?.venue||"",sheetUrl:spec.show?.sheetUrl||"",fohDesk:spec.show?.fohDesk||"",monDesk:spec.show?.monDesk||"",pa:spec.show?.pa||"",notes:spec.show?.notes||""},
     configId:id,
     channels:(spec.channels||[]).map(c=>({...defCh(),name:c.name||"",stereo:!!c.stereo,group:grpName(c.group),
       link:c.link===null?"None":(c.link&&c.link!==c.group?c.link:""),
@@ -2535,7 +2557,8 @@ const GS_SCRIPT=`/**
  *
  * Sheet layout (created by the first push, or fill it by hand):
  *   B1 = show name, B2 = date, B3 = venue
- *   Row 5 = headers:  # | CH NAME | M/L/R | MIC | STAND | POSITION | NOTES
+ *   Rows 4-7 = FOH desk / MON desk / PA / show notes (also C column)
+ *   Row 9 = headers:  # | CH NAME | M/L/R | MIC | STAND | POSITION | NOTES
  *   Rows 6+ = one row per MGB input; a stereo channel is two rows (L then R).
  *   Column C has an M / L / R dropdown.
  */
@@ -2544,7 +2567,8 @@ var HEADERS = ["PATCH", "CH NAME", "M/L/R", "MIC", "STAND", "POSITION", "NOTES"]
 var AUX_HEADERS = ["PATCH", "AUX NAME", "M/L/R", "DESTINATION", "POSITION", "NOTES"];
 var AUX_COL = 9; // aux table starts at column I
 var AUX_DESTS = ["Wedge", "Wireless IEM", "Wired IEM", "Mixer"];
-var DATA_ROW = 6; // first data row
+var HEADER_ROW = 9; // table header row (meta block above: rows 1-7)
+var DATA_ROW = 10; // first data row
 var MAX_ROWS = 160; // dropdown/validation reach (2x80 strips)
 
 function doGet(e) {
@@ -2577,13 +2601,15 @@ function doGet(e) {
       name: _str(sh.getRange("C1").getValue()),
       date: _dateStr(sh.getRange("C2").getValue()),
       venue: _str(sh.getRange("C3").getValue()),
+      fohDesk: _str(sh.getRange("C4").getValue()),
+      monDesk: _str(sh.getRange("C5").getValue()),
+      pa: _str(sh.getRange("C6").getValue()),
+      notes: _str(sh.getRange("C7").getValue()),
     };
     if ((!show.name && !show.date && !show.venue) || show.name.indexOf("<-") === 0) {
-      show = {
-        name: _str(sh.getRange("B1").getValue()),
-        date: _dateStr(sh.getRange("B2").getValue()),
-        venue: _str(sh.getRange("B3").getValue()),
-      };
+      show.name = _str(sh.getRange("B1").getValue());
+      show.date = _dateStr(sh.getRange("B2").getValue());
+      show.venue = _str(sh.getRange("B3").getValue());
     }
     var last = sh.getLastRow();
     var rows = [];
@@ -2642,39 +2668,45 @@ function _write(d) {
     sh.clear();
 
     // Show meta -- labels merged across A:B (so they don't overflow onto the
-    // entry cells), yellow entry cells merged across C:D.
-    sh.getRange("A1:E3").breakApart();
-    sh.getRange("A1:B1").merge();
-    sh.getRange("A2:B2").merge();
-    sh.getRange("A3:B3").merge();
-    sh.getRange(1, 1, 3, 1)
-      .setValues([["SHOW NAME"], ["DATE"], ["VENUE"]])
+    // entry cells), yellow entry cells merged across C:D (NOTES row across
+    // C:J so long remarks stay readable).
+    sh.getRange("A1:J7").breakApart();
+    var labels = [["SHOW NAME"], ["DATE"], ["VENUE"],
+                  ["FOH DESK & VERSION"], ["MON DESK & VERSION"], ["PA"],
+                  ["NOTES / IMPORTANT DETAILS"]];
+    for (var mr = 1; mr <= 7; mr++) sh.getRange(mr, 1, 1, 2).merge();
+    sh.getRange(1, 1, 7, 1)
+      .setValues(labels)
       .setFontWeight("bold")
       .setHorizontalAlignment("right");
-    sh.getRange("C1:D1").merge();
-    sh.getRange("C2:D2").merge();
-    sh.getRange("C3:D3").merge();
-    sh.getRange(1, 3, 3, 1).setValues([
-      [(d.show && d.show.name) || ""],
-      [(d.show && d.show.date) || ""],
-      [(d.show && d.show.venue) || ""],
+    for (var vr = 1; vr <= 6; vr++) sh.getRange(vr, 3, 1, 2).merge();
+    sh.getRange("C7:J7").merge();
+    sh.getRange("C7").setWrap(true);
+    var s = d.show || {};
+    sh.getRange(1, 3, 7, 1).setValues([
+      [s.name || ""], [s.date || ""], [s.venue || ""],
+      [s.fohDesk || ""], [s.monDesk || ""], [s.pa || ""], [s.notes || ""],
     ]);
-    sh.getRange(1, 3, 3, 2).setBackground("#fff2cc").setBorder(true, true, true, true, false, true);
+    sh.getRange(1, 3, 6, 2).setBackground("#fff2cc").setBorder(true, true, true, true, false, true);
+    sh.getRange("C7:J7").setBackground("#fff2cc").setBorder(true, true, true, true, false, true);
     sh.getRange("C1").setNote("Enter the SHOW NAME here - it names the LV1 session file.");
     sh.getRange("C2").setNote("Show date, e.g. 2026-11-15.");
     sh.getRange("C3").setNote("Venue name.");
+    sh.getRange("C4").setNote("FOH console and software version.");
+    sh.getRange("C5").setNote("Monitor console and software version.");
+    sh.getRange("C6").setNote("PA system.");
     sh.getRange("E1")
       .setValue("<- fill in the yellow cells. Inputs below: one row per MGB input; a stereo channel is an L row + an R row.")
       .setFontStyle("italic")
       .setFontColor("#888888");
 
     // Header row.
-    sh.getRange(5, 1, 1, HEADERS.length)
+    sh.getRange(HEADER_ROW, 1, 1, HEADERS.length)
       .setValues([HEADERS])
       .setFontWeight("bold")
       .setBackground("#22262e")
       .setFontColor("#ffffff");
-    sh.setFrozenRows(5);
+    sh.setFrozenRows(HEADER_ROW);
 
     // Pre-numbered input column (each row is one MGB input, numbered from 1),
     // then the data rows beside it.
@@ -2693,7 +2725,7 @@ function _write(d) {
 
     // AUX / monitor-outputs table at columns I..N: OUT | AUX NAME | M/L/R |
     // DESTINATION | POSITION | NOTES, with a pre-numbered OUT column and dropdowns.
-    sh.getRange(5, AUX_COL, 1, AUX_HEADERS.length)
+    sh.getRange(HEADER_ROW, AUX_COL, 1, AUX_HEADERS.length)
       .setValues([AUX_HEADERS])
       .setFontWeight("bold")
       .setBackground("#22262e")
@@ -2911,6 +2943,8 @@ function applySheet(data){ // sheet rows -> builder channels (keeps routing/rack
   if(show.name)state.show.name=show.name;
   if(show.date)state.show.date=show.date;
   if(show.venue)state.show.venue=show.venue;
+  for(const k of ["fohDesk","monDesk","pa","notes"])
+    if(k in show)state.show[k]=show[k]||"";
   const old=new Map(state.channels.filter(c=>c.name.trim()).map(c=>[c.name.trim().toUpperCase(),c]));
   const warn=[];
   const chans=foldLR(data.rows||[],warn,(name,stereo,r)=>{
@@ -2952,7 +2986,7 @@ $("#btnPush").onclick=async()=>{
   const p=gsPrereqs();if(!p||gsBusy)return;
   gsBusy=true;$("#btnPush").disabled=true;setStatus("Writing the sheet…");
   try{
-    const body=JSON.stringify({id:p.id,show:{name:state.show.name,date:state.show.date,venue:state.show.venue},
+    const body=JSON.stringify({id:p.id,show:{name:state.show.name,date:state.show.date,venue:state.show.venue,fohDesk:state.show.fohDesk||"",monDesk:state.show.monDesk||"",pa:state.show.pa||"",notes:state.show.notes||""},
       rows:sheetRows(),prefill:cfg().ch,auxes:auxSheetRows(),auxPrefill:cfg().mon});
     let data=null;
     if(!window.GS_FORCE_CHUNKS){
@@ -3071,8 +3105,24 @@ $("#btnPdf").onclick=async()=>{
   const meta=[state.show.date&&("Date: "+state.show.date),state.show.venue&&("Venue: "+state.show.venue)].filter(Boolean).join("     ");
   if(meta)doc.text(meta,14,22);
   doc.setFontSize(9);doc.setTextColor(120);doc.text("INPUT LIST",196,16,{align:"right"});doc.setTextColor(0);
+  // Show notes block: FOH / MON desks, PA, free notes — above the input list.
+  let y=meta?27:23;
+  doc.setFontSize(9);
+  for(const [lab,val] of [["FOH Desk & Version",state.show.fohDesk],
+                          ["MON Desk & Version",state.show.monDesk],["PA",state.show.pa]]){
+    if(val&&val.trim()){
+      doc.setFont("helvetica","bold");doc.text(lab+":",14,y);
+      doc.setFont("helvetica","normal");doc.text(val.trim(),52,y);y+=4.6;
+    }
+  }
+  if(state.show.notes&&state.show.notes.trim()){
+    doc.setFont("helvetica","bold");doc.text("Notes:",14,y);
+    doc.setFont("helvetica","normal");
+    const lines=doc.splitTextToSize(state.show.notes.trim(),144);
+    doc.text(lines,52,y);y+=4.6*lines.length;
+  }
   doc.autoTable({
-    startY:meta?26:22,
+    startY:y+1,
     head:[["CH","NAME","M/ST","MIC / DI","STAND","STAGE POSITION","NOTES"]],
     body:state.channels.map((c,i)=>c.name.trim()?[pts[i].join("–"),c.name.trim(),c.stereo?"ST":"M",c.mic,c.stand,c.pos,c.notes||""]:null).filter(Boolean),
     styles:{font:"helvetica",fontSize:8.5,cellPadding:1.6},
