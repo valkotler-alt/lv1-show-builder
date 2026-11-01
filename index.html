@@ -780,6 +780,9 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
   <div class="sechead"><h2>Show notes</h2>
     <span class="hint">Travel with the show: printed on the vendor PDF and written to the Google Sheet, right under the show name / date / venue.</span></div>
   <div class="noteswrap">
+    <label>FOH Name &amp; Contact <input id="shFohC" placeholder="e.g. Dana Levi · +972 50 000 0000 · dana@example.com"></label>
+    <label>MON Name &amp; Contact <input id="shMonC" placeholder="Name · phone · email"></label>
+    <label>Production Manager Name &amp; Contact <input id="shPmC" placeholder="Name · phone · email"></label>
     <label>FOH Desk &amp; Version <input id="shFoh" placeholder="e.g. eMotion LV1 64 / V17.1" spellcheck="false"></label>
     <label>MON Desk &amp; Version <input id="shMon" placeholder="e.g. eMotion LV1 32 / V17.1" spellcheck="false"></label>
     <label>PA <input id="shPa" placeholder="e.g. L-Acoustics K2 + KS28"></label>
@@ -792,7 +795,6 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
     <span class="hint">Click a library item to place it, drag to position, label it with the input it belongs to.
     Drawn from the audience; position zones use stage left/right (performer's view).</span>
     <span class="headops">
-      <button class="small" id="stageToInputs" title="Create/update inputs from labeled stage items (sets their stage-position zone)">Stage → inputs</button>
       <button class="small" id="inputsToStage" title="Add a stage item for every named input that has none">Inputs → stage</button>
       <button class="small" id="stagePng">Export PNG</button>
       <button class="small danger" id="stageClear">Clear stage</button></span></div>
@@ -942,7 +944,7 @@ document.addEventListener("keydown",e=>{ // Esc clears every list selection
 
 function defaultShow(){
   // Start empty: pick the mixer config, name strips, route, export.
-  return {show:{name:"",date:"",venue:"",sheetUrl:"",fohDesk:"",monDesk:"",pa:"",notes:""},configId:"80-16",
+  return {show:{name:"",date:"",venue:"",sheetUrl:"",fohContact:"",monContact:"",pmContact:"",fohDesk:"",monDesk:"",pa:"",notes:""},configId:"80-16",
           channels:[],groups:[],fx:[],auxes:[],matrixes:[],master:{rack:null},
           stage:{items:[],custom:{},widthM:12}};
 }
@@ -971,7 +973,7 @@ function exampleShow(){
   const c=(n,st,grp)=>({...defCh(),name:n,stereo:!!st,group:grp||"",rack:rk(["SSL EV2 Channel"])});
   const fx=n=>({...defFx(),name:n,stereo:true,dest:"MASTER",rack:rk(["Atlas Reverb"])});
   return {
-    show:{name:"RIVKA",date:"",venue:"",sheetUrl:"",fohDesk:"",monDesk:"",pa:"",notes:""}, configId:"80-16",
+    show:{name:"RIVKA",date:"",venue:"",sheetUrl:"",fohContact:"",monContact:"",pmContact:"",fohDesk:"",monDesk:"",pa:"",notes:""}, configId:"80-16",
     channels:[
       c("KICK",0,"DRUMS"),c("SN T",0,"DRUMS"),c("SN B",0,"DRUMS"),c("HH",0,"DRUMS"),
       c("T 1",0,"DRUMS"),c("T 2",0,"DRUMS"),c("T 3",0,"DRUMS"),c("OH",1,"DRUMS"),
@@ -1038,6 +1040,7 @@ function healDefaultRefs(){
 function render(){
   healDefaultRefs();
   $("#showName").value=state.show.name; $("#showDate").value=state.show.date; $("#showVenue").value=state.show.venue;
+  $("#shFohC").value=state.show.fohContact||"";$("#shMonC").value=state.show.monContact||"";$("#shPmC").value=state.show.pmContact||"";
   $("#shFoh").value=state.show.fohDesk||"";$("#shMon").value=state.show.monDesk||"";$("#shPa").value=state.show.pa||"";$("#shNotes").value=state.show.notes||"";
   $("#sheetUrl").value=state.show.sheetUrl||"";
   renderConfig(); renderChannels(); renderGroups(); renderFx();
@@ -1790,6 +1793,9 @@ document.addEventListener("drop",e=>{
 $("#showName").addEventListener("input",e=>state.show.name=e.target.value);
 $("#showDate").addEventListener("input",e=>state.show.date=e.target.value);
 $("#showVenue").addEventListener("input",e=>state.show.venue=e.target.value);
+$("#shFohC").addEventListener("input",e=>state.show.fohContact=e.target.value);
+$("#shMonC").addEventListener("input",e=>state.show.monContact=e.target.value);
+$("#shPmC").addEventListener("input",e=>state.show.pmContact=e.target.value);
 $("#shFoh").addEventListener("input",e=>state.show.fohDesk=e.target.value);
 $("#shMon").addEventListener("input",e=>state.show.monDesk=e.target.value);
 $("#shPa").addEventListener("input",e=>state.show.pa=e.target.value);
@@ -1879,7 +1885,7 @@ function loadSpec(spec){
   const muteIn=o=>{const v=o.mute;return (typeof v==="number"&&v>=1&&v<=8)?String(Math.round(v)):"";};
   const linkIn=o=>typeof o.link==="string"?o.link:"";
   state={
-    show:{name:spec.show?.name||"",date:spec.show?.date||"",venue:spec.show?.venue||"",sheetUrl:spec.show?.sheetUrl||"",fohDesk:spec.show?.fohDesk||"",monDesk:spec.show?.monDesk||"",pa:spec.show?.pa||"",notes:spec.show?.notes||""},
+    show:{name:spec.show?.name||"",date:spec.show?.date||"",venue:spec.show?.venue||"",sheetUrl:spec.show?.sheetUrl||"",fohContact:spec.show?.fohContact||"",monContact:spec.show?.monContact||"",pmContact:spec.show?.pmContact||"",fohDesk:spec.show?.fohDesk||"",monDesk:spec.show?.monDesk||"",pa:spec.show?.pa||"",notes:spec.show?.notes||""},
     configId:id,
     channels:(spec.channels||[]).map(c=>({...defCh(),name:c.name||"",stereo:!!c.stereo,group:grpName(c.group),
       link:(spec.version||0)<6&&c.link===c.group?"":linkIn(c),
@@ -2738,37 +2744,6 @@ function zoneCoords(text){
   if(/\bUS|UP ?STAGE/.test(t))y=1/6;else if(/\bDS|DOWN ?STAGE/.test(t))y=5/6;else if(/\bMS|MID/.test(t))y=0.5;
   return {x,y};
 }
-$("#stageToInputs").onclick=()=>{
-  const byName=new Map(state.channels.map(c=>[c.name.trim().toUpperCase(),c]));
-  let created=0,updated=0,full=false,any=false;
-  for(const it of stg().items){
-    if(it.img==="riser")continue;
-    const pos=(it.pos||"").trim();
-    // Inputs this item spawned from its template: refresh their Position
-    // (names that were renamed in the list are dropped from the link).
-    if(Array.isArray(it.ins)&&it.ins.length){
-      any=true;
-      it.ins=it.ins.filter(n=>{
-        const ch=byName.get(n.trim().toUpperCase());
-        if(ch){if(pos&&ch.pos!==pos){ch.pos=pos;updated++;}return true;}
-        return false;
-      });
-      if(!it.ins.length)delete it.ins;
-    }
-    if(!it.label.trim()||it.auxl)continue; // aux-linked labels are not inputs
-    any=true;
-    const key=it.label.trim().toUpperCase();
-    const ch=byName.get(key);
-    if(ch){if((!it.ins||!it.ins.includes(ch.name))&&pos&&ch.pos!==pos){ch.pos=pos;updated++;}continue;}
-    const free=state.channels.find(c=>!c.name.trim());
-    if(!free){full=true;continue;}
-    free.name=it.label.trim();free.pos=pos;
-    byName.set(key,free);created++;
-  }
-  if(!any){setStatus("Nothing to sync — place instruments with templates, or label items with input names.",true);return;}
-  render();
-  setStatus(`Stage → inputs: ${created} input${created===1?"":"s"} created, ${updated} position${updated===1?"":"s"} updated.`+(full?" Input bank is full — some items were skipped.":""),full);
-};
 $("#inputsToStage").onclick=()=>{
   const have=new Set(stg().items.flatMap(it=>[it.label.trim(),...(it.ins||[])])
     .map(s=>s.trim().toUpperCase()).filter(Boolean));
@@ -2889,10 +2864,12 @@ const GS_SCRIPT=`/**
  *           app's browser instead; pieces are held in CacheService).
  *
  * Sheet layout (created by the first push, or fill it by hand):
- *   B1 = show name, B2 = date, B3 = venue
- *   Rows 4-7 = FOH desk / MON desk / PA / show notes (also C column)
- *   Row 9 = headers:  # | CH NAME | M/L/R | MIC | STAND | POSITION | NOTES
- *   Rows 6+ = one row per MGB input; a stereo channel is two rows (L then R).
+ *   Rows 1-10 = show meta, label in A, value in C: show name / date / venue /
+ *     FOH, MON and production-manager name & contact / FOH desk / MON desk /
+ *     PA / show notes
+ *   Row 12 = headers:  # | CH NAME | M/L/R | MIC | STAND | POSITION | NOTES
+ *     (sheets from older bridge versions have it on row 9 -- still read)
+ *   Rows 13+ = one row per MGB input; a stereo channel is two rows (L then R).
  *   Column C has an M / L / R dropdown.
  */
 
@@ -2900,8 +2877,27 @@ var HEADERS = ["PATCH", "CH NAME", "M/L/R", "MIC", "STAND", "POSITION", "NOTES"]
 var AUX_HEADERS = ["PATCH", "AUX NAME", "M/L/R", "DESTINATION", "POSITION", "NOTES"];
 var AUX_COL = 9; // aux table starts at column I
 var AUX_DESTS = ["Wedge", "Wireless IEM", "Wired IEM", "Mixer"];
-var HEADER_ROW = 9; // table header row (meta block above: rows 1-7)
-var DATA_ROW = 10; // first data row
+var META_ROWS = 10; // show meta block: rows 1-10
+var HEADER_ROW = 12; // table header row
+var DATA_ROW = 13; // first data row
+// meta label (column A) -> show field; rows 4+ are read by label
+var META_LABELS = [
+  ["SHOW NAME", "name"], ["DATE", "date"], ["VENUE", "venue"],
+  ["FOH NAME & CONTACT", "fohContact"], ["MON NAME & CONTACT", "monContact"],
+  ["PRODUCTION MANAGER NAME & CONTACT", "pmContact"],
+  ["FOH DESK & VERSION", "fohDesk"], ["MON DESK & VERSION", "monDesk"], ["PA", "pa"],
+  ["NOTES / IMPORTANT DETAILS", "notes"],
+];
+var META_KEYS = {};
+for (var _m = 3; _m < META_LABELS.length; _m++) META_KEYS[META_LABELS[_m][0]] = META_LABELS[_m][1];
+
+// The table header row: found by its "PATCH" title (row 9 on sheets written
+// by older bridge versions, row 12 now).
+function _headerRow(sh) {
+  var col = sh.getRange(1, 1, 20, 1).getValues();
+  for (var r = 0; r < col.length; r++) if (_str(col[r][0]).toUpperCase() === "PATCH") return r + 1;
+  return HEADER_ROW;
+}
 var MAX_ROWS = 160; // dropdown/validation reach (2x80 strips)
 
 function doGet(e) {
@@ -2934,11 +2930,15 @@ function doGet(e) {
       name: _str(sh.getRange("C1").getValue()),
       date: _dateStr(sh.getRange("C2").getValue()),
       venue: _str(sh.getRange("C3").getValue()),
-      fohDesk: _str(sh.getRange("C4").getValue()),
-      monDesk: _str(sh.getRange("C5").getValue()),
-      pa: _str(sh.getRange("C6").getValue()),
-      notes: _str(sh.getRange("C7").getValue()),
     };
+    // The rest of the meta block is read by its labels, so sheets written by
+    // older bridge versions (fewer meta rows) still read correctly.
+    var meta = sh.getRange(1, 1, META_ROWS + 2, 3).getValues();
+    for (var mi = 0; mi < meta.length; mi++) {
+      var key = META_KEYS[_str(meta[mi][0]).toUpperCase()];
+      if (key) show[key] = _str(meta[mi][2]);
+    }
+    var hdr = _headerRow(sh);
     if ((!show.name && !show.date && !show.venue) || show.name.indexOf("<-") === 0) {
       show.name = _str(sh.getRange("B1").getValue());
       show.date = _dateStr(sh.getRange("B2").getValue());
@@ -2947,8 +2947,9 @@ function doGet(e) {
     var last = sh.getLastRow();
     var rows = [];
     var auxes = [];
-    if (last >= DATA_ROW) {
-      var vals = sh.getRange(DATA_ROW, 1, last - DATA_ROW + 1, 7).getValues();
+    var first = hdr + 1;
+    if (last >= first) {
+      var vals = sh.getRange(first, 1, last - first + 1, 7).getValues();
       for (var i = 0; i < vals.length; i++) {
         var v = vals[i];
         var name = _str(v[1]);
@@ -2964,7 +2965,7 @@ function doGet(e) {
           notes: _str(v[6]),
         });
       }
-      var avals = sh.getRange(DATA_ROW, AUX_COL, last - DATA_ROW + 1, 6).getValues();
+      var avals = sh.getRange(first, AUX_COL, last - first + 1, 6).getValues();
       for (var a = 0; a < avals.length; a++) {
         var w = avals[a];
         var aname = _str(w[1]);
@@ -3003,31 +3004,31 @@ function _write(d) {
     // Show meta -- labels merged across A:B (so they don't overflow onto the
     // entry cells), yellow entry cells merged across C:D (NOTES row across
     // C:J so long remarks stay readable).
-    sh.getRange("A1:J7").breakApart();
-    var labels = [["SHOW NAME"], ["DATE"], ["VENUE"],
-                  ["FOH DESK & VERSION"], ["MON DESK & VERSION"], ["PA"],
-                  ["NOTES / IMPORTANT DETAILS"]];
-    for (var mr = 1; mr <= 7; mr++) sh.getRange(mr, 1, 1, 2).merge();
-    sh.getRange(1, 1, 7, 1)
-      .setValues(labels)
+    // Older layouts had the table (and its dropdowns) higher up.
+    sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).clearDataValidations();
+    sh.getRange(1, 1, HEADER_ROW, 10).breakApart();
+    var M = META_ROWS; // the last meta row is the wide NOTES row
+    for (var mr = 1; mr <= M; mr++) sh.getRange(mr, 1, 1, 2).merge();
+    sh.getRange(1, 1, M, 1)
+      .setValues(META_LABELS.map(function (l) { return [l[0]]; }))
       .setFontWeight("bold")
       .setHorizontalAlignment("right");
-    for (var vr = 1; vr <= 6; vr++) sh.getRange(vr, 3, 1, 2).merge();
-    sh.getRange("C7:J7").merge();
-    sh.getRange("C7").setWrap(true);
+    for (var vr = 1; vr < M; vr++) sh.getRange(vr, 3, 1, 2).merge();
+    sh.getRange(M, 3, 1, 8).merge();
+    sh.getRange(M, 3).setWrap(true);
     var s = d.show || {};
-    sh.getRange(1, 3, 7, 1).setValues([
-      [s.name || ""], [s.date || ""], [s.venue || ""],
-      [s.fohDesk || ""], [s.monDesk || ""], [s.pa || ""], [s.notes || ""],
-    ]);
-    sh.getRange(1, 3, 6, 2).setBackground("#fff2cc").setBorder(true, true, true, true, false, true);
-    sh.getRange("C7:J7").setBackground("#fff2cc").setBorder(true, true, true, true, false, true);
+    sh.getRange(1, 3, M, 1).setValues(META_LABELS.map(function (l) { return [s[l[1]] || ""]; }));
+    sh.getRange(1, 3, M - 1, 2).setBackground("#fff2cc").setBorder(true, true, true, true, false, true);
+    sh.getRange(M, 3, 1, 8).setBackground("#fff2cc").setBorder(true, true, true, true, false, true);
     sh.getRange("C1").setNote("Enter the SHOW NAME here - it names the LV1 session file.");
     sh.getRange("C2").setNote("Show date, e.g. 2026-11-15.");
     sh.getRange("C3").setNote("Venue name.");
-    sh.getRange("C4").setNote("FOH console and software version.");
-    sh.getRange("C5").setNote("Monitor console and software version.");
-    sh.getRange("C6").setNote("PA system.");
+    sh.getRange("C4").setNote("FOH engineer: name, phone, email.");
+    sh.getRange("C5").setNote("Monitor engineer: name, phone, email.");
+    sh.getRange("C6").setNote("Production manager: name, phone, email.");
+    sh.getRange("C7").setNote("FOH console and software version.");
+    sh.getRange("C8").setNote("Monitor console and software version.");
+    sh.getRange("C9").setNote("PA system.");
     sh.getRange("E1")
       .setValue("<- fill in the yellow cells. Inputs below: one row per MGB input; a stereo channel is an L row + an R row.")
       .setFontStyle("italic")
@@ -3276,7 +3277,7 @@ function applySheet(data){ // sheet rows -> builder channels (keeps routing/rack
   if(show.name)state.show.name=show.name;
   if(show.date)state.show.date=show.date;
   if(show.venue)state.show.venue=show.venue;
-  for(const k of ["fohDesk","monDesk","pa","notes"])
+  for(const k of ["fohContact","monContact","pmContact","fohDesk","monDesk","pa","notes"])
     if(k in show)state.show[k]=show[k]||"";
   const old=new Map(state.channels.filter(c=>c.name.trim()).map(c=>[c.name.trim().toUpperCase(),c]));
   const warn=[];
@@ -3319,7 +3320,7 @@ $("#btnPush").onclick=async()=>{
   const p=gsPrereqs();if(!p||gsBusy)return;
   gsBusy=true;$("#btnPush").disabled=true;setStatus("Writing the sheet…");
   try{
-    const body=JSON.stringify({id:p.id,show:{name:state.show.name,date:state.show.date,venue:state.show.venue,fohDesk:state.show.fohDesk||"",monDesk:state.show.monDesk||"",pa:state.show.pa||"",notes:state.show.notes||""},
+    const body=JSON.stringify({id:p.id,show:{name:state.show.name,date:state.show.date,venue:state.show.venue,fohContact:state.show.fohContact||"",monContact:state.show.monContact||"",pmContact:state.show.pmContact||"",fohDesk:state.show.fohDesk||"",monDesk:state.show.monDesk||"",pa:state.show.pa||"",notes:state.show.notes||""},
       rows:sheetRows(),prefill:cfg().ch,auxes:auxSheetRows(),auxPrefill:cfg().mon});
     let data=null;
     if(!window.GS_FORCE_CHUNKS){
@@ -3441,7 +3442,9 @@ $("#btnPdf").onclick=async()=>{
   // Show notes block: FOH / MON desks, PA, free notes — above the input list.
   let y=meta?27:23;
   doc.setFontSize(9);
-  for(const [lab,val] of [["FOH Desk & Version",state.show.fohDesk],
+  for(const [lab,val] of [["FOH Contact",state.show.fohContact],["MON Contact",state.show.monContact],
+                          ["Production Manager",state.show.pmContact],
+                          ["FOH Desk & Version",state.show.fohDesk],
                           ["MON Desk & Version",state.show.monDesk],["PA",state.show.pa]]){
     if(val&&val.trim()){
       doc.setFont("helvetica","bold");doc.text(lab+":",14,y);
