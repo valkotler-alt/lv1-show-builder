@@ -713,7 +713,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
     <span class="hint">Pre/Post FX is the LV1 group processing point. Destination MASTER = LR.</span></div>
     <div class="selops"><button class="small" data-k="grp" data-f="selUp">▲ Selected</button><button class="small" data-k="grp" data-f="selDown">▼ Selected</button><button class="small" data-k="grp" data-f="selClr" title="Deselect all">✕ Deselect</button></div>
   <div class="tblwrap"><table id="grpTable">
-    <thead><tr><th></th><th>#</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>FX point</th><th>Matrix feeds</th><th>Rack</th><th></th></tr></thead>
+    <thead><tr><th></th><th>#</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>FX point</th><th>Matrix feeds</th><th>Rack</th><th></th><th>Add</th><th>Delete</th></tr></thead>
     <tbody></tbody>
   </table></div>
 </section>
@@ -723,7 +723,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
     <span class="hint">LV1 FX strips 1–8.</span></div>
     <div class="selops"><button class="small" data-k="fx" data-f="selUp">▲ Selected</button><button class="small" data-k="fx" data-f="selDown">▼ Selected</button><button class="small" data-k="fx" data-f="selClr" title="Deselect all">✕ Deselect</button></div>
   <div class="tblwrap"><table id="fxTable">
-    <thead><tr><th></th><th>#</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>Rack</th><th></th></tr></thead>
+    <thead><tr><th></th><th>#</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>Rack</th><th></th><th>Add</th><th>Delete</th></tr></thead>
     <tbody></tbody>
   </table></div>
 </section>
@@ -897,6 +897,8 @@ const AUX_DESTS=["Wedge","Wireless IEM","Wired IEM","Mixer"];
 const STANDS=["Clip","Baby","Tall","Magnet","Clamp"];
 const defMtx=()=>({name:"",stereo:false,color:null});
 const DEF={ch:defCh,grp:defGrp,fx:defFx,aux:defAux,mtx:defMtx};
+const STRIP_NOUN={ch:"input",aux:"aux",grp:"group",fx:"FX"};
+const STRIP_NEW={ch:"New Input",aux:"New Aux",grp:"New Group",fx:"New FX"};
 const DEFNAME={ch:i=>`Channel ${i+1}`,grp:i=>`Group ${i+1}`,fx:i=>`Fx ${i+1}`,aux:i=>`Mon ${i+1}`,mtx:i=>`MTX ${i+1}`}; // MTX: short enough for the matrix-feed chips
 
 let state=defaultShow();
@@ -1159,8 +1161,8 @@ function renderGroups(){
       <td><button class="pfbtn small ${g.postFx?"post":""}" id="grp-${i}-pf" data-k="grp" data-i="${i}" data-f="postFx">${g.postFx?"POST":"PRE"}</button></td>
       <td><div class="chips">${mtxOpts.length?mtxOpts.map(m=>`<label class="${g.matrix.includes(m)?"on":""}"><input type="checkbox" id="grp-${i}-mx-${esc(m)}" data-k="grp" data-i="${i}" data-f="mx" data-m="${esc(m)}" ${g.matrix.includes(m)?"checked":""}>${esc(m)}</label>`).join(""):'<span style="color:var(--dim);font-size:11px">no matrix strips in this configuration</span>'}</div></td>
       ${rackCell("grp",i,g.rack)}
-      ${opsCell("grp",i,state.groups.length)}</tr>`+rackRow("grp",i,g.rack,10,g.stereo);
-  }).join("")||emptyRow(10,"This mixer configuration has no group strips.");
+      ${opsCell("grp",i,state.groups.length)}${ioOpsCell("grp",i)}</tr>`+rackRow("grp",i,g.rack,12,g.stereo);
+  }).join("")||emptyRow(12,"This mixer configuration has no group strips.");
   $("#grpCount").textContent=state.groups.length?`${named(state.groups).length} named / ${cfg().grp} strips`:"";
 }
 function renderFx(){
@@ -1172,7 +1174,7 @@ function renderFx(){
       ${colorCell("fx",i,f.color)}
       <td><select id="fx-${i}-dest" data-k="fx" data-i="${i}" data-f="dest">${destOpts.map(o=>`<option${o===f.dest?" selected":""}>${esc(o)}</option>`).join("")}</select></td>
       ${rackCell("fx",i,f.rack)}
-      ${opsCell("fx",i,state.fx.length)}</tr>`+rackRow("fx",i,f.rack,8,f.stereo);
+      ${opsCell("fx",i,state.fx.length)}${ioOpsCell("fx",i)}</tr>`+rackRow("fx",i,f.rack,10,f.stereo);
   }).join("");
   $("#fxCount").textContent=`${named(state.fx).length} named / ${FX_COUNT} strips`;
 }
@@ -1453,9 +1455,25 @@ async function resetStrip(k,i,mode){
   }
   if(del){ // remove the row: following strips move up (patch re-flows), bank keeps its size
     const name=list[i].name.trim();
+    let rerouted=0;
+    if(k==="grp"&&name){
+      // Everything routed / linked to this group by name falls back to MASTER.
+      const refs=[...state.channels.filter(c=>c.group===name||c.link===name),
+                  ...state.groups.filter((g,j)=>j!==i&&g.dest===name),
+                  ...state.fx.filter(f=>f.dest===name)];
+      if(refs.length){
+        const ok=await askConfirm(`Deleting group “${name}” re-routes ${refs.length} strip${refs.length===1?"":"s"} that feed or link to it to MASTER.`,"OK — delete");
+        if(!ok)return;
+        for(const c of state.channels){if(c.group===name)c.group="";if(c.link===name)c.link="";}
+        for(const g of state.groups)if(g.dest===name)g.dest="MASTER";
+        for(const f of state.fx)if(f.dest===name)f.dest="MASTER";
+        rerouted=refs.length;
+      }
+    }
     list.splice(i,1);list.push(DEF[k]());
     clearSel(k);rackOpen=null;render();
-    if(name)setStatus(`Deleted “${name}” — the following ${k==="ch"?"inputs":"auxes"} moved up and were re-patched.`);
+    if(name)setStatus(`Deleted “${name}” — the following ${STRIP_NOUN[k]}s moved up`
+      +(k==="ch"||k==="aux"?" and were re-patched.":".")+(rerouted?` ${rerouted} strip(s) now go to MASTER.`:""));
     return;
   }
   list[i]=DEF[k]();clearSel(k);rackOpen=null;render();
@@ -1467,19 +1485,19 @@ function insertStrip(k,i){
   const list=listFor[k]();
   let drop=-1;
   for(let j=list.length-1;j>i;j--)if(!list[j].name.trim()){drop=j;break;}
-  if(drop<0){setStatus(`The ${k==="ch"?"input":"aux"} bank is full (${list.length} strips) — delete a row first.`,true);return;}
+  if(drop<0){setStatus(`The ${STRIP_NOUN[k]} bank is full (${list.length} strips) — delete a row first.`,true);return;}
   list.splice(drop,1);
   const taken=new Set(list.filter(x=>x.name.trim()).map(x=>x.name.trim().toUpperCase()));
-  const row=DEF[k]();row.name=dedupeName(k==="ch"?"New Input":"New Aux",taken);
+  const row=DEF[k]();row.name=dedupeName(STRIP_NEW[k],taken);
   list.splice(i+1,0,row);
   clearSel(k);rackOpen=null;render();
   focusBack(k,i+1,"name");
   const el=document.getElementById(`${k}-${i+1}-name`);if(el)el.select();
-  setStatus(`Added “${row.name}” below row ${i+1} — type its name; following ${k==="ch"?"inputs":"auxes"} were re-patched.`);
+  setStatus(`Added “${row.name}” below row ${i+1} — type its name`+(k==="ch"||k==="aux"?`; following ${STRIP_NOUN[k]}s were re-patched.`:"."));
 }
 function ioOpsCell(kind,i){
-  return `<td class="rowops"><button class="small" data-k="${kind}" data-i="${i}" data-f="ins" title="Add a new ${kind==="ch"?"input":"aux"} below this row (patch shifts down)">＋</button></td>
-    <td class="rowops"><button class="small danger" data-k="${kind}" data-i="${i}" data-f="del" title="Delete this row (following rows move up and are re-patched)">✕</button></td>`;
+  return `<td class="rowops"><button class="small" data-k="${kind}" data-i="${i}" data-f="ins" title="Add a new ${STRIP_NOUN[kind]} below this row">＋</button></td>
+    <td class="rowops"><button class="small danger" data-k="${kind}" data-i="${i}" data-f="del" title="Delete this row (following rows move up)">✕</button></td>`;
 }
 /* Rack insert picker: mousedown (not click) so the search input's blur
    doesn't hide the list before the pick lands. */
@@ -2299,7 +2317,7 @@ let cfmRes=null;
 function askConfirm(msg,okText,cancelText){
   $("#cfmText").textContent=msg;
   $("#cfmOk").textContent=okText||"OK — remove";
-  $("#cfmOk").classList.toggle("danger",!okText||/remove|discard/i.test(okText));
+  $("#cfmOk").classList.toggle("danger",!okText||/remove|discard|delete/i.test(okText));
   $("#cfmNo").textContent=cancelText||"Cancel";
   $("#cfm").hidden=false;
   $("#cfmOk").focus();
