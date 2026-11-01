@@ -445,7 +445,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
 body{background:var(--bg);color:var(--fg);font-family:var(--font-ui);font-size:14px;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 48px;}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg);}
-.wrap{max-width:1220px;margin:0 auto;}
+.wrap{max-width:1480px;margin:0 auto;} /* wide enough for the full Inputs table on 1600px screens */
 h1{font-size:22px;font-weight:700;letter-spacing:.3px;margin:18px 0 2px;}
 h1 .lv1{color:var(--accent);}
 .sub{color:var(--dim);margin:0 0 14px;font-size:13px;}
@@ -486,6 +486,8 @@ th{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--di
 td{padding:4px 6px;border-bottom:1px solid var(--line);vertical-align:middle;}
 tr:last-child td{border-bottom:none;}
 td input,td select{width:100%;min-width:72px;box-sizing:border-box;background:transparent;border-color:transparent;}
+td select.asg{min-width:104px;} /* group / link / matrix: room for the name */
+td select.missing{color:var(--mtx);}
 td input:hover,td select:hover,td input:focus,td select:focus{background:var(--panel2);border-color:var(--line);}
 td.num{font-family:var(--font-num);font-size:12px;color:var(--seccolor,var(--accent));white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums;}
 td.rowops{white-space:nowrap;text-align:right;}
@@ -993,7 +995,26 @@ function setStatus(msg,err){const el=$("#status");el.textContent=msg||"";el.clas
   if(msg){clearTimeout(setStatus._t);setStatus._t=setTimeout(()=>{el.textContent="";},6000);}}
 
 /* ---------- render ---------- */
+/* References to a DEFAULT label ("Group 3", "MTX 2", legacy "Matrix 2")
+   that no strip carries any more come from auto-naming followed by a
+   rename made before renames propagated: point them at that row's
+   current name. */
+function healDefaultRefs(){
+  const fix=(list,re,ref)=>{
+    if(!ref)return ref;
+    if(list.some(x=>x.name.trim()===ref))return ref;
+    const m=re.exec(ref);if(!m)return ref;
+    const row=list[+m[1]-1];
+    return row&&row.name.trim()?row.name.trim():ref;
+  };
+  const G=/^Group (\d+)$/,M=/^(?:MTX|Matrix) (\d+)$/;
+  for(const c of state.channels){c.group=fix(state.groups,G,c.group);c.link=fix(state.groups,G,c.link);
+    c.matrix=fix(state.matrixes,M,c.matrix);}
+  for(const g of state.groups){g.dest=fix(state.groups,G,g.dest);g.matrix=(g.matrix||[]).map(x=>fix(state.matrixes,M,x));}
+  for(const f of state.fx)f.dest=fix(state.groups,G,f.dest);
+}
 function render(){
+  healDefaultRefs();
   $("#showName").value=state.show.name; $("#showDate").value=state.show.date; $("#showVenue").value=state.show.venue;
   $("#shFoh").value=state.show.fohDesk||"";$("#shMon").value=state.show.monDesk||"";$("#shPa").value=state.show.pa||"";$("#shNotes").value=state.show.notes||"";
   $("#sheetUrl").value=state.show.sheetUrl||"";
@@ -1122,9 +1143,12 @@ function renderChannels(){
   const mtxOpts=stripOpts("mtx");
   tb.innerHTML=state.channels.map((ch,i)=>{
     const s=(f,cur,opts,none)=>{
-      const all=cur&&!opts.includes(cur)?[cur,...opts]:opts; // keep a legacy/custom value visible
-      return `<select id="ch-${i}-${f}" data-k="ch" data-i="${i}" data-f="${f}">
-      <option value=""${cur===""?" selected":""}>${none}</option>${all.map(o=>`<option${o===cur?" selected":""}>${esc(o)}</option>`).join("")}</select>`;};
+      // A value that is not in the bank (deleted / misspelt strip) stays
+      // visible, flagged — exporting it would route to MASTER.
+      const miss=cur&&!opts.includes(cur)&&f!=="stand"&&!(f==="link"&&cur==="None");
+      const all=cur&&!opts.includes(cur)?[cur,...opts]:opts;
+      return `<select id="ch-${i}-${f}" class="asg${miss?" missing":""}" data-k="ch" data-i="${i}" data-f="${f}">
+      <option value=""${cur===""?" selected":""}>${none}</option>${all.map(o=>`<option value="${esc(o)}"${o===cur?" selected":""}>${miss&&o===cur?"⚠ ":""}${esc(o)}</option>`).join("")}</select>`;};
     return `<tr${rowCls("ch",i)}>
       <td class="num"><span class="rgrip">⋮⋮</span>${i+1}</td>
       <td class="num">${pts[i]?pts[i].join("–"):"—"}</td>
@@ -1215,6 +1239,16 @@ function renderWarnings(){
   const lastPts=[...pts].reverse().find(Boolean);
   const used=lastPts?lastPts[lastPts.length-1]:0;
   if(used>MGB_PORTS)w.push(`MGB has ${MGB_PORTS} inputs — the patch needs ${used}.`);
+  {
+    const gN=new Set(state.groups.map(g=>g.name.trim()).filter(Boolean));
+    const mN=new Set(state.matrixes.map(m=>m.name.trim()).filter(Boolean));
+    const bad=new Set();
+    for(const c of state.channels){if(!c.name.trim())continue;
+      if(c.group&&!gN.has(c.group))bad.add(c.group);
+      if(c.link&&c.link!=="None"&&!/^Link \d+$/.test(c.link)&&!gN.has(c.link))bad.add(c.link);
+      if(c.matrix&&!mN.has(c.matrix))bad.add(c.matrix);}
+    if(bad.size)w.push(`Inputs point to strips that don't exist: ${[...bad].join(", ")} — re-pick them (⚠ in the Group / Link / Matrix menus).`);
+  }
   for(const [label,list] of [["inputs",state.channels],["groups",state.groups],["FX",state.fx],["auxes",state.auxes],["matrixes",state.matrixes]]){
     const d=dupNames(list); if(d.size)w.push(`Duplicate ${label} names: ${[...d].join(", ")} — LV1 strips should be unique.`);
   }
@@ -1327,6 +1361,14 @@ document.addEventListener("input",e=>{
     if(t.checked&&autoName("mtx",m)){render();setStatus(`Matrix strip “${m}” named automatically so the feed is built.`);}
     else renderGroups();
     return;}
+  if(f==="name"){
+    const i=+t.dataset.i;
+    const cur=nameEdit&&nameEdit.k===k&&nameEdit.i===i?nameEdit.cur:it.name;
+    // Empty mid-typing: refs keep the last real name and re-link on the next key.
+    if(t.value.trim()){renameRefs(k,cur,t.value);nameEdit={k,i,cur:t.value};}
+    else nameEdit={k,i,cur};
+    if(k==="ch"||k==="aux")setTimeout(()=>renderStage(),0); // captions follow
+  }
   if(["name","group","link","matrix","mic","stand","notes","dest"].includes(f)){it[f]=t.value;
     if(f==="name"&&(k==="grp"||k==="mtx")){render();t&&focusBack(k,t.dataset.i,"name");return;}
     // Assigning to an unnamed strip (shown by its default label) names it,
@@ -2126,20 +2168,34 @@ function renderItemIO(it){
   if(rows.length<2){box.innerHTML="";return;}
   box.innerHTML=`<span class="iohead">Linked IO — rename here to keep the stage link</span>`+rows.join("");
 }
-function renameLinkedRow(kind,idx,newName){
-  const row=kind==="ch"?state.channels[idx]:state.auxes[idx];
-  if(!row)return;
-  const oldUC=row.name.trim().toUpperCase();
-  row.name=newName;
-  const v=newName.trim();
-  if(oldUC&&v){ // every stage reference follows the rename, so links survive
+/* Strips are referenced BY NAME (routing, links, matrix feeds, stage
+   items), so a rename must carry every reference along. */
+function renameRefs(kind,oldName,newName){
+  const o=(oldName||"").trim(),v=(newName||"").trim();
+  if(!o||!v||o===v)return;
+  if(kind==="grp"){
+    for(const c of state.channels){if(c.group===o)c.group=v;if(c.link===o)c.link=v;}
+    for(const g of state.groups)if(g.dest===o)g.dest=v;
+    for(const f of state.fx)if(f.dest===o)f.dest=v;
+  }else if(kind==="mtx"){
+    for(const c of state.channels)if(c.matrix===o)c.matrix=v;
+    for(const g of state.groups)g.matrix=(g.matrix||[]).map(m=>m===o?v:m);
+  }else if(kind==="ch"||kind==="aux"){
+    const oldUC=o.toUpperCase();
     stg().items.forEach(it=>{
-      if(Array.isArray(it.ins))it.ins=it.ins.map(n=>n.trim().toUpperCase()===oldUC?v:n);
+      if(kind==="ch"&&Array.isArray(it.ins))it.ins=it.ins.map(n=>n.trim().toUpperCase()===oldUC?v:n);
       const wasAuxLink=!!(it.auxl&&it.auxl.trim().toUpperCase()===oldUC);
       if(kind==="aux"&&wasAuxLink)it.auxl=v;
       if(it.label&&it.label.trim().toUpperCase()===oldUC&&(kind==="aux")===wasAuxLink)it.label=v;
     });
   }
+}
+let nameEdit=null; // {k,i,cur}: the name the references point to during a rename
+function renameLinkedRow(kind,idx,newName){
+  const row=kind==="ch"?state.channels[idx]:state.auxes[idx];
+  if(!row)return;
+  renameRefs(kind,row.name,newName);
+  row.name=newName;
   const cell=document.getElementById(`${kind}-${idx}-name`);
   if(cell&&cell!==document.activeElement)cell.value=newName;
   refreshNameHighlights(kind);
