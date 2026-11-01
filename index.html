@@ -807,8 +807,8 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
         <button class="small" id="siFlip">Flip</button>
         <button class="small" id="siDup">Duplicate</button>
         <button class="small danger" id="siDel">Delete</button>
-        <span class="hint">click selects the whole position (Alt-click one item, click again to deselect) · Ctrl/Shift-click adds · Esc clears · drag moves · Delete key removes</span>
-        <div id="siCap" title="The caption under the instrument: tick the lines to show. Position groups items (moves/rotates together) and syncs to the lists; Name is free text (empty = the linked channel's name); IO is the live patch.">
+        <span class="hint">click selects one item (Alt-click: its whole position; click again to deselect) · Ctrl/Shift-click adds · Esc clears · drag moves · Delete key removes</span>
+        <div id="siCap" title="The caption under the instrument: tick the lines to show. Position groups items (Alt-click selects the whole position to move/rotate it together) and syncs to the lists; Name is free text (empty = the linked channel's name); IO is the live patch.">
           <span class="caphead">Caption · tick what the stage shows</span>
           <label class="caprow" id="capRowP"><input type="checkbox" id="dispP"><span>Position</span></label>
           <input id="siPos" list="posList" placeholder="e.g. DRUMS" spellcheck="false">
@@ -2218,7 +2218,8 @@ $("#stage").addEventListener("pointerdown",e=>{
     return;
   }
   const i=+el.dataset.si;
-  const unit=e.altKey?new Set([i]):groupOf(i);
+  // Plain click = this item only; Alt-click = every item of its Position.
+  const unit=e.altKey?groupOf(i):new Set([i]);
   // Same model as the lists: Ctrl/Cmd (or Shift) click adds / removes.
   if(e.shiftKey||e.ctrlKey||e.metaKey){
     const on=[...unit].every(j=>mSel.has(j));
@@ -2227,8 +2228,9 @@ $("#stage").addEventListener("pointerdown",e=>{
     renderStage();
     return; // additive click adjusts the selection; no drag
   }
-  // Alt-click always narrows to the clicked item — even inside an already
-  // selected position (click the position, then Alt-click one member).
+  // Alt-click always (re)selects the whole position. A plain press on an
+  // item that is already selected keeps the selection so it can be dragged
+  // together; released without movement it narrows to the item (pointerup).
   const wasSelected=mSel.has(i)&&!e.altKey;
   if(e.altKey)mSel=unit;
   else if(!mSel.has(i))mSel=unit;
