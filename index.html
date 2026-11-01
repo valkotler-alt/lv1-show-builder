@@ -867,6 +867,7 @@ const defGrp=()=>({name:"",stereo:true,dest:"MASTER",postFx:false,matrix:[],rack
 const defFx=()=>({name:"",stereo:true,dest:"MASTER",rack:null,color:null}); // fresh LV1 FX strips are stereo
 const defAux=()=>({name:"",stereo:false,dest:"",pos:"",notes:"",color:null});
 const AUX_DESTS=["Wedge","Wireless IEM","Wired IEM","Mixer"];
+const STANDS=["Clip","Baby","Tall","Magnet","Clamp"];
 const defMtx=()=>({name:"",stereo:false,color:null});
 const DEF={ch:defCh,grp:defGrp,fx:defFx,aux:defAux,mtx:defMtx};
 const DEFNAME={ch:i=>`Channel ${i+1}`,grp:i=>`Group ${i+1}`,fx:i=>`Fx ${i+1}`,aux:i=>`Mon ${i+1}`,mtx:i=>`MTX ${i+1}`}; // MTX: short enough for the matrix-feed chips
@@ -1100,7 +1101,7 @@ function renderChannels(){
       <td>${s("link",ch.link,linkOpts(),"= Group")}</td>
       <td>${s("matrix",ch.matrix,mtxOpts,"None")}</td>
       <td><input id="ch-${i}-mic" value="${esc(ch.mic)}" data-k="ch" data-i="${i}" data-f="mic" placeholder="e.g. B91A"></td>
-      <td><input id="ch-${i}-stand" value="${esc(ch.stand)}" data-k="ch" data-i="${i}" data-f="stand" placeholder="short / tall / clip"></td>
+      <td>${s("stand",ch.stand,STANDS,"—")}</td>
       <td><input id="ch-${i}-pos" value="${esc(ch.pos)}" data-k="ch" data-i="${i}" data-f="pos" list="posList" placeholder="position"></td>
       <td><input id="ch-${i}-notes" value="${esc(ch.notes)}" data-k="ch" data-i="${i}" data-f="notes"></td>
       ${rackCell("ch",i,ch.rack)}
@@ -1622,47 +1623,47 @@ function imgSrc(ref){
    Kits: base Kick/Snr Top/Snr Bottom/HH/OH + toms per image
    (1 rack + floor = 8 inputs, 2 racks = 9, 3 racks = 10).
    Piano is always PNO (stereo) + PNO Pickup. */
-const _KIT_BASE=[["Kick",0,"B52","short"],["Snr Top",0,"SM57","clip"],["Snr Bottom",0,"SM57","clip"],["HH",0,"SM81","short"]];
-const _KIT_END=[["FLR",0,"e604","clip"],["OH",1,"KM184","tall"]];
-const _PIANO={ins:[["PNO",1,"C414","boom"],["PNO Pickup",0,"DI",""]]};
+const _KIT_BASE=[["Kick",0,"B52","Baby"],["Snr Top",0,"SM57","Clip"],["Snr Bottom",0,"SM57","Clip"],["HH",0,"SM81","Baby"]];
+const _KIT_END=[["FLR",0,"e604","Clip"],["OH",1,"KM184","Tall"]];
+const _PIANO={ins:[["PNO",1,"C414","Tall"],["PNO Pickup",0,"DI",""]]};
 const TPL={
-  "drums-percussion-twotoms":{ins:[..._KIT_BASE,["Tom 1",0,"e604","clip"],..._KIT_END]},
-  "drums-percussion-threetoms":{ins:[..._KIT_BASE,["Tom 1",0,"e604","clip"],["Tom 2",0,"e604","clip"],..._KIT_END]},
-  "drums-percussion-fourtoms":{ins:[..._KIT_BASE,["Tom 1",0,"e604","clip"],["Tom 2",0,"e604","clip"],["Tom 3",0,"e604","clip"],..._KIT_END]},
-  "drums-percussion-bassdrum":{ins:[["Kick",0,"B52","short"]]},
-  "drums-percussion-snare":{ins:[["Snr Top",0,"SM57","clip"],["Snr Bottom",0,"SM57","clip"]]},
-  "drums-percussion-hihat":{ins:[["HH",0,"SM81","short"]]},
-  "drums-percussion-floortom":{ins:[["FLR",0,"e604","clip"]]},
-  "drums-percussion-bongos":{ins:[["Bongos",0,"e604","clip"]]},
-  "drums-percussion-conga-double":{ins:[["Congas",1,"e604","clip"]]},
-  "drums-percussion-conga-drum-percussion-1":{ins:[["Conga",0,"e604","clip"]]},
-  "drums-percussion-djembe":{ins:[["Djembe",0,"e604","clip"]]},
+  "drums-percussion-twotoms":{ins:[..._KIT_BASE,["Tom 1",0,"e604","Clip"],..._KIT_END]},
+  "drums-percussion-threetoms":{ins:[..._KIT_BASE,["Tom 1",0,"e604","Clip"],["Tom 2",0,"e604","Clip"],..._KIT_END]},
+  "drums-percussion-fourtoms":{ins:[..._KIT_BASE,["Tom 1",0,"e604","Clip"],["Tom 2",0,"e604","Clip"],["Tom 3",0,"e604","Clip"],..._KIT_END]},
+  "drums-percussion-bassdrum":{ins:[["Kick",0,"B52","Baby"]]},
+  "drums-percussion-snare":{ins:[["Snr Top",0,"SM57","Clip"],["Snr Bottom",0,"SM57","Clip"]]},
+  "drums-percussion-hihat":{ins:[["HH",0,"SM81","Baby"]]},
+  "drums-percussion-floortom":{ins:[["FLR",0,"e604","Clip"]]},
+  "drums-percussion-bongos":{ins:[["Bongos",0,"e604","Clip"]]},
+  "drums-percussion-conga-double":{ins:[["Congas",1,"e604","Clip"]]},
+  "drums-percussion-conga-drum-percussion-1":{ins:[["Conga",0,"e604","Clip"]]},
+  "drums-percussion-djembe":{ins:[["Djembe",0,"e604","Clip"]]},
   "drums-percussion-cajonla":{ins:[["Cajon",0,"B91A",""]]},
-  "drums-percussion-surdo":{ins:[["Surdo",0,"e604","clip"]]},
-  "drums-percussion-tarabuka":{ins:[["Darbuka",0,"e604","clip"]]},
-  "drums-percussion-timbale":{ins:[["Timbales",0,"SM57","short"]]},
-  "drums-percussion-timpani2":{ins:[["Timpani",0,"SM81","tall"]]},
-  "drums-percussion-marimba":{ins:[["Marimba",1,"KM184","tall"]]},
-  "drums-percussion-glock":{ins:[["Glock",0,"SM81","tall"]]},
-  "drums-percussion-chimes":{ins:[["Chimes",0,"SM81","tall"]]},
-  "drums-percussion-gong":{ins:[["Gong",0,"SM57","tall"]]},
-  "drums-percussion-cowbell":{ins:[["Cowbell",0,"SM57","short"]]},
+  "drums-percussion-surdo":{ins:[["Surdo",0,"e604","Clip"]]},
+  "drums-percussion-tarabuka":{ins:[["Darbuka",0,"e604","Clip"]]},
+  "drums-percussion-timbale":{ins:[["Timbales",0,"SM57","Baby"]]},
+  "drums-percussion-timpani2":{ins:[["Timpani",0,"SM81","Tall"]]},
+  "drums-percussion-marimba":{ins:[["Marimba",1,"KM184","Tall"]]},
+  "drums-percussion-glock":{ins:[["Glock",0,"SM81","Tall"]]},
+  "drums-percussion-chimes":{ins:[["Chimes",0,"SM81","Tall"]]},
+  "drums-percussion-gong":{ins:[["Gong",0,"SM57","Tall"]]},
+  "drums-percussion-cowbell":{ins:[["Cowbell",0,"SM57","Baby"]]},
   "drums-percussion-percussionpad":{ins:[["Perc Pad",1,"DI",""]]},
   "drums-percussion-drummachine":{ins:[["Drum Machine",1,"DI",""]]},
-  "amps-fenderamp":{ins:[["GT Amp",0,"SM57","short"]]},
-  "amps-fourtens":{ins:[["Bass Amp",0,"D112","short"]]},
-  "amps-eighttens":{ins:[["Bass Amp",0,"D112","short"]]},
+  "amps-fenderamp":{ins:[["GT Amp",0,"SM57","Baby"]]},
+  "amps-fourtens":{ins:[["Bass Amp",0,"D112","Baby"]]},
+  "amps-eighttens":{ins:[["Bass Amp",0,"D112","Baby"]]},
   "amps-guitarsynth":{ins:[["GT Synth",1,"DI",""]]},
   "keys-stands-grandpiano":_PIANO,
   "keys-stands-babygrand":_PIANO,
   "keys-stands-fantom":{ins:[["KEYS",1,"DI",""]]},
   "keys-stands-doublekey":{ins:[["Key Bottom",1,"DI",""],["Key Top",1,"DI",""]]}, // two stereo keyboards on one stand
   "keys-stands-hammondb3back":{ins:[["HAMMOND",1,"DI",""]]},
-  "keys-stands-lesliel":{ins:[["Leslie Top",1,"SM57","boom"],["Leslie Bottom",0,"D112","short"]]},
-  "keys-stands-accordion":{ins:[["Accordion",0,"Clip","clip"]]},
+  "keys-stands-lesliel":{ins:[["Leslie Top",1,"SM57","Tall"],["Leslie Bottom",0,"D112","Baby"]]},
+  "keys-stands-accordion":{ins:[["Accordion",0,"Clip","Clip"]]},
   "mic-di-power-di":{ins:[["DI",0,"DI",""]]},
   "mic-di-power-stereodi":{ins:[["ST DI",1,"DI",""]]},
-  "mic-di-power-clipon":{ins:[["Clip Mic",0,"e604","clip"]]},
+  "mic-di-power-clipon":{ins:[["Clip Mic",0,"e604","Clip"]]},
   "mic-di-power-headsetmic":{ins:[["Headset",0,"DPA headset",""]]},
   "mic-di-power-wireless-mic":{ins:[["VOX WL",0,"Wireless SM58",""]]},
   "mic-di-power-mackie402":{ins:[["Submix",1,"DI",""]]},
@@ -1672,13 +1673,13 @@ const TPL={
   "monitors-mxr-pa-dj-laptoplb":{ins:[["Playback",1,"DI",""]]},
   "monitors-mxr-pa-dj-in-ear":{aux:["IEM",1,"Wireless IEM"]},
   "strings-p-bass":{ins:[["BASS",0,"DI",""]]},
-  "strings-stringbass":{ins:[["C BASS",0,"Clip","clip"]]},
+  "strings-stringbass":{ins:[["C BASS",0,"Clip","Clip"]]},
   "strings-electricguitar":{ins:[["GT EL",0,"DI",""]]},
   "strings-acousticguitar":{ins:[["GT AC",0,"DI",""]]},
   "strings-twelvestring":{ins:[["GT 12str",0,"DI",""]]},
-  "strings-violin":{ins:[["VIOLIN",0,"Clip","clip"]]},
-  "strings-viola":{ins:[["VIOLA",0,"Clip","clip"]]},
-  "strings-cello":{ins:[["CELLO",0,"Clip","clip"]]},
+  "strings-violin":{ins:[["VIOLIN",0,"Clip","Clip"]]},
+  "strings-viola":{ins:[["VIOLA",0,"Clip","Clip"]]},
+  "strings-cello":{ins:[["CELLO",0,"Clip","Clip"]]},
   "strings-mandolin":{ins:[["MANDOLIN",0,"DI",""]]},
   "strings-banjo":{ins:[["BANJO",0,"DI",""]]},
   "strings-ukulele":{ins:[["UKULELE",0,"DI",""]]},
@@ -1686,29 +1687,29 @@ const TPL={
   "strings-bouzouki":{ins:[["BOUZOUKI",0,"DI",""]]},
   "strings-charangora":{ins:[["CHARANGO",0,"DI",""]]},
   "strings-harpla":{ins:[["HARP",0,"DI",""]]},
-  "vocal-stands-boom57":{ins:[["MIC",0,"SM57","boom"]]},
-  "vocal-stands-boomlshortl":{ins:[["MIC",0,"SM57","short"]]},
-  "vocal-stands-center-vocal":{ins:[["VOX",0,"SM58","straight"]]},
-  "vocal-stands-left-vocal":{ins:[["VOX",0,"SM58","straight"]]},
-  "vocal-stands-right-vocal":{ins:[["VOX",0,"SM58","straight"]]},
-  "winds-trumpetla":{ins:[["TRUMPET",0,"Clip","clip"]]},
-  "winds-cornetla":{ins:[["CORNET",0,"Clip","clip"]]},
-  "winds-trombone":{ins:[["TBONE",0,"Clip","clip"]]},
-  "winds-trombonela":{ins:[["TBONE",0,"Clip","clip"]]},
-  "winds-saxla":{ins:[["SAX",0,"Clip","clip"]]},
-  "winds-altosaxla":{ins:[["ALTO SAX",0,"Clip","clip"]]},
-  "winds-sopranosax":{ins:[["SOP SAX",0,"Clip","clip"]]},
-  "winds-baritonesaxr":{ins:[["BARI SAX",0,"Clip","clip"]]},
-  "winds-clarinetla":{ins:[["CLARINET",0,"Clip","clip"]]},
-  "winds-bassclarinetla":{ins:[["BASS CLAR",0,"Clip","clip"]]},
-  "winds-contraclarinetr":{ins:[["CONTRA CLAR",0,"Clip","clip"]]},
-  "winds-flutela":{ins:[["FLUTE",0,"Clip","clip"]]},
-  "winds-piccolol":{ins:[["PICCOLO",0,"Clip","clip"]]},
-  "winds-oboela":{ins:[["OBOE",0,"Clip","clip"]]},
-  "winds-bassoonla":{ins:[["BASSOON",0,"Clip","clip"]]},
-  "winds-frenchhornla":{ins:[["FR HORN",0,"Clip","clip"]]},
-  "winds-euphonium":{ins:[["EUPHONIUM",0,"Clip","clip"]]},
-  "winds-tubala":{ins:[["TUBA",0,"Clip","clip"]]},
+  "vocal-stands-boom57":{ins:[["MIC",0,"SM57","Tall"]]},
+  "vocal-stands-boomlshortl":{ins:[["MIC",0,"SM57","Baby"]]},
+  "vocal-stands-center-vocal":{ins:[["VOX",0,"SM58","Tall"]]},
+  "vocal-stands-left-vocal":{ins:[["VOX",0,"SM58","Tall"]]},
+  "vocal-stands-right-vocal":{ins:[["VOX",0,"SM58","Tall"]]},
+  "winds-trumpetla":{ins:[["TRUMPET",0,"Clip","Clip"]]},
+  "winds-cornetla":{ins:[["CORNET",0,"Clip","Clip"]]},
+  "winds-trombone":{ins:[["TBONE",0,"Clip","Clip"]]},
+  "winds-trombonela":{ins:[["TBONE",0,"Clip","Clip"]]},
+  "winds-saxla":{ins:[["SAX",0,"Clip","Clip"]]},
+  "winds-altosaxla":{ins:[["ALTO SAX",0,"Clip","Clip"]]},
+  "winds-sopranosax":{ins:[["SOP SAX",0,"Clip","Clip"]]},
+  "winds-baritonesaxr":{ins:[["BARI SAX",0,"Clip","Clip"]]},
+  "winds-clarinetla":{ins:[["CLARINET",0,"Clip","Clip"]]},
+  "winds-bassclarinetla":{ins:[["BASS CLAR",0,"Clip","Clip"]]},
+  "winds-contraclarinetr":{ins:[["CONTRA CLAR",0,"Clip","Clip"]]},
+  "winds-flutela":{ins:[["FLUTE",0,"Clip","Clip"]]},
+  "winds-piccolol":{ins:[["PICCOLO",0,"Clip","Clip"]]},
+  "winds-oboela":{ins:[["OBOE",0,"Clip","Clip"]]},
+  "winds-bassoonla":{ins:[["BASSOON",0,"Clip","Clip"]]},
+  "winds-frenchhornla":{ins:[["FR HORN",0,"Clip","Clip"]]},
+  "winds-euphonium":{ins:[["EUPHONIUM",0,"Clip","Clip"]]},
+  "winds-tubala":{ins:[["TUBA",0,"Clip","Clip"]]},
   "winds-harmonica":{ins:[["HARMONICA",0,"SM58",""]]},
 };
 // Every wedge image maps to a mono Wedge aux.
