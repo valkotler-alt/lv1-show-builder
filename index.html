@@ -1733,6 +1733,14 @@ const itemWfrac=it=>it.img==="riser"
   ?(it.rw?it.rw/stageWcm():(it.w||0.2))
   :(it.cm?it.cm/stageWcm():(it.w||0.12));
 const riserHfrac=it=>it.rd?it.rd/stageDcm():(it.h||0.3);
+function itemHfrac(it){ // rendered height as a fraction of the stage height
+  if(it.img==="riser")return riserHfrac(it);
+  const e=it.img.startsWith("custom:")
+    ?(stg().custom[it.img.slice(7)]||lsCustoms()[it.img.slice(7)])
+    :STAGELIB.find(x=>x.id===it.img);
+  const ar=e&&e.w?e.h/e.w:0.75; // image aspect; 16/9 converts width- to height-fractions
+  return itemWfrac(it)*ar*(16/9);
+}
 /* Risers always render UNDER the instruments. */
 const stageOrder=()=>stg().items.map((it,i)=>i)
   .sort((a,b)=>((stg().items[a].img==="riser"?0:1)-(stg().items[b].img==="riser"?0:1))||a-b);
@@ -1759,13 +1767,15 @@ function renderStage(){
     }
     st.appendChild(d);
   }
-  // Position name badges UNDER each position's constellation.
+  // Position name badges UNDER each position's constellation — below the
+  // bottom-most item's EDGE (not center) plus its label row, so nothing clips.
   for(const [name,members] of Object.entries(positionSets())){
     const cx=members.reduce((s,m)=>s+m.x,0)/members.length;
-    const bot=Math.max(...members.map(m=>m.y));
+    const bot=Math.min(0.97,Math.max(...members.map(m=>m.y+itemHfrac(m)/2)));
+    const labeled=members.some(m=>m.label); // item labels are fixed-px overlays
     const g=document.createElement("div");
     g.className="posname";
-    g.style.left=(cx*100)+"%";g.style.top=(Math.min(0.97,bot+0.08)*100)+"%";
+    g.style.left=(cx*100)+"%";g.style.top=`calc(${(bot*100).toFixed(2)}% + ${labeled?18:3}px)`;
     g.textContent=name;
     st.appendChild(g);
   }
@@ -2291,12 +2301,13 @@ async function stageBitmap(){
       cx.fillText(it.label,it.x*W,it.y*H+h/2+24);
     }
   }
-  // Position name badges, under each position's constellation.
+  // Position name badges, under each position's constellation (below the
+  // bottom-most item's edge + its label line).
   cx.textAlign="center";cx.font="italic 600 24px Arial";cx.fillStyle="#555";
   for(const [name,members] of Object.entries(positionSets())){
     const gx=members.reduce((s,m)=>s+m.x,0)/members.length;
-    const bot=Math.max(...members.map(m=>m.y));
-    cx.fillText(name,gx*W,Math.min(0.96,bot+0.1)*H);
+    const bot=Math.max(...members.map(m=>m.y+itemHfrac(m)/2+(m.label?0.04:0)));
+    cx.fillText(name,gx*W,Math.min(0.97,bot+0.035)*H);
   }
   return cv;
 }
