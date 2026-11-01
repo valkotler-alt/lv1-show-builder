@@ -558,6 +558,10 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
 .sbwrap{display:flex;gap:12px;align-items:flex-start;}
 .sbpal{width:248px;flex:none;border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:8px;display:flex;flex-direction:column;gap:8px;}
 .sbpal input[type="text"],.sbpal input:not([type]){width:100%;box-sizing:border-box;}
+.palsearchwrap{position:relative;display:block;}
+.palsearchwrap input{padding-right:26px;}
+#palClear{position:absolute;right:3px;top:50%;transform:translateY(-50%);border:none;background:none;color:var(--dim);font-size:12px;padding:2px 5px;cursor:pointer;}
+#palClear:hover{color:var(--fg);}
 /* The library grid is a fixed WHITE surface in every theme — the instrument
    drawings are dark ink on transparency, like the stage itself. */
 #palGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;max-height:430px;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;background:#ffffff;border-radius:6px;padding:4px;}
@@ -751,7 +755,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
   <div class="sbwrap">
     <div class="sbpal">
       <select id="palCat"><option value="">All categories</option></select>
-      <input id="palSearch" placeholder="search the library…" spellcheck="false">
+      <span class="palsearchwrap"><input id="palSearch" placeholder="search the library…" spellcheck="false"><button id="palClear" title="Clear search" hidden>✕</button></span>
       <div id="palGrid"><div class="menuempty">loading library…</div></div>
       <div class="gsrow" style="margin:0"><button class="small" id="palImport">＋ Import image…</button>
         <select id="palImpCat" title="Category tag for the imported image"></select></div>
@@ -1724,7 +1728,14 @@ function renderPalette(q){
   }
   $("#palGrid").innerHTML=html||'<div class="menuempty">no matches</div>';
 }
-$("#palSearch").addEventListener("input",e=>renderPalette(e.target.value));
+$("#palSearch").addEventListener("input",e=>{
+  $("#palClear").hidden=!e.target.value;
+  renderPalette(e.target.value);
+});
+$("#palClear").onclick=()=>{
+  $("#palSearch").value="";$("#palClear").hidden=true;
+  renderPalette("");$("#palSearch").focus();
+};
 $("#palCat").addEventListener("change",()=>renderPalette($("#palSearch").value));
 /* Real-world scale: stage width (meters) sets the scale; depth is width*9/16
    (same ratio as the canvas, so the scale is isotropic and rotations stay
