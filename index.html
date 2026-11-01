@@ -586,6 +586,11 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
 @media (max-width:860px){ .sbwrap{flex-direction:column;} .sbpal{width:100%;} #palGrid{max-height:200px;} }
 #status{font-size:13px;color:var(--ok);min-height:18px;margin:6px 0;}
 #status.err{color:var(--mtx);}
+#cfm{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;}
+#cfm[hidden]{display:none;}
+.cfmbox{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:18px 20px;max-width:480px;box-shadow:0 12px 40px rgba(0,0,0,.45);}
+#cfmText{font-size:13px;line-height:1.55;margin-bottom:14px;white-space:pre-line;}
+.cfmbtns{display:flex;gap:8px;justify-content:flex-end;}
 .foot{margin-top:34px;color:var(--dim);font-size:12px;border-top:1px solid var(--line);padding-top:12px;line-height:1.6;}
 .foot code{font-family:var(--font-num);font-size:11px;}
 @media (max-width:700px){ .showmeta{flex-direction:column;} .toolbar{gap:6px;} }
@@ -778,6 +783,13 @@ delete, reorder (drag or ↑↓) or re-add them like anything else. The searchab
 (those shipping SoundGrid-server process code) scanned off this machine's Plug-Ins V16/V17 bundles — the same set LV1's own menus
 show. Plugins load with their factory default preset. “Stock” racks (F2 → D5 → Q4) export no rack field.
 </p>
+</div>
+
+<div id="cfm" hidden role="alertdialog" aria-labelledby="cfmText">
+  <div class="cfmbox">
+    <div id="cfmText"></div>
+    <div class="cfmbtns"><button id="cfmNo" class="small">Cancel</button><button id="cfmOk" class="danger">OK — remove</button></div>
+  </div>
 </div>
 
 <script>
@@ -1261,10 +1273,54 @@ document.addEventListener("click",e=>{
   }
   if(f==="stereo"){list[i].stereo=!list[i].stereo;render();return;}
   if(f==="postFx"){list[i].postFx=!list[i].postFx;render();return;}
-  if(f==="reset"){list[i]=DEF[k]();clearSel(k);rackOpen=null;render();return;}
+  if(f==="reset"){resetStrip(k,i);return;}
   if(f==="up"&&i>0){[list[i-1],list[i]]=[list[i],list[i-1]];clearSel(k);rackOpen=null;render();return;}
   if(f==="down"&&i<list.length-1){[list[i+1],list[i]]=[list[i],list[i+1]];clearSel(k);rackOpen=null;render();return;}
 });
+/* Resetting a strip that a stage instrument is linked to keeps the stage
+   and the list in sync: the instrument is removed from the stage (or, when
+   it has other linked inputs — a drum kit — just unlinked), after an
+   OK/Cancel prompt naming exactly what goes. */
+async function resetStrip(k,i){
+  const list=listFor[k]();if(!list[i])return;
+  if((k==="ch"||k==="aux")&&typeof stg==="function"){
+    const nm=(list[i].name||"").trim().toUpperCase();
+    if(nm){
+      const removals=[],unlinks=[];
+      stg().items.forEach((it,x)=>{
+        const isAuxLink=!!(it.auxl&&it.auxl.trim().toUpperCase()===nm);
+        const names=new Set([...(it.ins||[]),(it.label||"").trim()].filter(Boolean).map(s=>s.toUpperCase()));
+        const hit=k==="aux"?isAuxLink:(names.has(nm)&&!isAuxLink);
+        if(!hit)return;
+        // Does the item keep other live links (e.g. the rest of a drum kit)?
+        const others=[...names].filter(n=>n!==nm);
+        const alive=k==="ch"&&others.some(n=>
+          state.channels.some(c=>c.name.trim().toUpperCase()===n)||
+          (it.auxl&&it.auxl.trim().toUpperCase()===n));
+        (alive?unlinks:removals).push({x,it});
+      });
+      if(removals.length||unlinks.length){
+        const dn=it=>`“${(it.label||"").trim()||libName(it.img)}”`;
+        const lines=[];
+        if(removals.length)lines.push(`remove ${removals.map(h=>dn(h.it)).join(", ")} from the stage`);
+        if(unlinks.length)lines.push(`unlink it from ${unlinks.map(h=>dn(h.it)).join(", ")} (the instrument stays on stage)`);
+        const ok=await askConfirm(`Resetting ${k==="ch"?"input":"aux"} “${list[i].name.trim()}” will also ${lines.join(", and ")}.`);
+        if(!ok)return;
+        if(removals.length){
+          for(const h of removals.sort((a,b)=>b.x-a.x))stg().items.splice(h.x,1);
+          stageSel=-1;mSel=new Set();
+        }
+        for(const h of unlinks){
+          if(Array.isArray(h.it.ins)){
+            h.it.ins=h.it.ins.filter(n=>n.trim().toUpperCase()!==nm);
+            if(!h.it.ins.length)delete h.it.ins;
+          }
+        }
+      }
+    }
+  }
+  list[i]=DEF[k]();clearSel(k);rackOpen=null;render();
+}
 /* Rack insert picker: mousedown (not click) so the search input's blur
    doesn't hide the list before the pick lands. */
 function rackAdd(k,i,name){
@@ -1915,11 +1971,56 @@ $("#siDup").onclick=()=>{const it=stg().items[stageSel];if(!it)return;
   const copy={...it};delete copy.grp;delete copy.ins;
   stg().items.push({...copy,x:Math.min(1,it.x+0.05),y:Math.min(1,it.y+0.05)});
   stageSel=stg().items.length-1;mSel=new Set([stageSel]);render();};
-function deleteSelection(){
+/* ---- OK/Cancel confirm dialog (window.confirm is blocked in the artifact
+   iframe). Resolves true on OK, false on Cancel / Escape. ---- */
+let cfmRes=null;
+function askConfirm(msg){
+  $("#cfmText").textContent=msg;
+  $("#cfm").hidden=false;
+  $("#cfmOk").focus();
+  return new Promise(res=>{cfmRes=res;});
+}
+function cfmEnd(v){$("#cfm").hidden=true;const r=cfmRes;cfmRes=null;if(r)r(v);}
+$("#cfmOk").onclick=()=>cfmEnd(true);
+$("#cfmNo").onclick=()=>cfmEnd(false);
+document.addEventListener("keydown",e=>{if(!$("#cfm").hidden&&e.key==="Escape"){cfmEnd(false);e.preventDefault();}});
+
+/* Stage item -> linked list rows (same resolution rule as the color share:
+   a name matching it.auxl is an aux link, everything else is an input). */
+function linkedRowsFor(indices){
+  const chBy=new Map(state.channels.map(c=>[c.name.trim().toUpperCase(),c]));
+  const axBy=new Map(state.auxes.map(a=>[a.name.trim().toUpperCase(),a]));
+  const chs=new Map(),axs=new Map(); // nameUC -> row
+  for(const i of indices){
+    const it=stg().items[i];if(!it)continue;
+    const names=[...(it.ins||[])];
+    if(it.label&&it.label.trim())names.push(it.label.trim());
+    for(const nm of new Set(names.map(s=>s.toUpperCase()))){
+      if(it.auxl&&nm===it.auxl.trim().toUpperCase()){const a=axBy.get(nm);if(a)axs.set(nm,a);}
+      else{const c=chBy.get(nm);if(c)chs.set(nm,c);}
+    }
+  }
+  return {chs,axs};
+}
+async function deleteSelection(){
   if(!mSel.size)return;
-  const idx=[...mSel].sort((a,b)=>b-a);
+  const picked=[...mSel];
+  const {chs,axs}=linkedRowsFor(picked);
+  if(chs.size||axs.size){
+    const parts=[];
+    if(chs.size)parts.push(`input${chs.size===1?"":"s"}: ${[...chs.values()].map(c=>c.name.trim()).join(", ")}`);
+    if(axs.size)parts.push(`aux${axs.size===1?"":"es"}: ${[...axs.values()].map(a=>a.name.trim()).join(", ")}`);
+    const it0=stg().items[picked[0]];
+    const what=picked.length===1?`“${(it0.label||"").trim()||libName(it0.img)}”`:`${picked.length} items`;
+    const ok=await askConfirm(`Removing ${what} from the stage will ALSO remove from the list —\n${parts.join("\n")}.\nThe freed strips reset to defaults.`);
+    if(!ok)return;
+    for(const c of chs.values()){const i=state.channels.indexOf(c);if(i>=0)state.channels[i]=DEF.ch();}
+    for(const a of axs.values()){const i=state.auxes.indexOf(a);if(i>=0)state.auxes[i]=DEF.aux();}
+  }
+  const idx=picked.sort((a,b)=>b-a);
   for(const i of idx)stg().items.splice(i,1);
   stageSel=-1;mSel=new Set();render();
+  if(chs.size||axs.size)setStatus(`Removed from the stage and freed ${chs.size+axs.size} linked strip${chs.size+axs.size===1?"":"s"}.`);
 }
 $("#siDel").onclick=deleteSelection;
 document.addEventListener("keydown",e=>{
