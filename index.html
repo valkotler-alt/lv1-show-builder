@@ -675,9 +675,9 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 <div id="warnings"></div>
 
 <div class="tabbar" id="tabbar">
-  <button data-tab="in" class="on">INPUTS</button>
+  <button data-tab="stage" class="on">STAGE</button>
+  <button data-tab="in">INPUTS</button>
   <button data-tab="out">OUTPUTS</button>
-  <button data-tab="stage">STAGE</button>
 </div>
 
 <section style="--seccolor:var(--ch)" data-tab="in">
@@ -2951,7 +2951,7 @@ function setTab(t){
   try{localStorage.setItem("lv1.tab",t);}catch(_){}
 }
 $("#tabbar").addEventListener("click",e=>{const b=e.target.closest("button");if(b)setTab(b.dataset.tab);});
-setTab((()=>{try{return localStorage.getItem("lv1.tab")||"in";}catch(_){return "in";}})());
+setTab((()=>{try{return localStorage.getItem("lv1.tab")||"stage";}catch(_){return "stage";}})());
 
 applyConfig();
 let restored=false;
