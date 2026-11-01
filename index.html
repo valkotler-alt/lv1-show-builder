@@ -490,6 +490,11 @@ td input:hover,td select:hover,td input:focus,td select:focus{background:var(--p
 td.num{font-family:var(--font-num);font-size:12px;color:var(--seccolor,var(--accent));white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums;}
 td.rowops{white-space:nowrap;text-align:right;}
 .iocol{width:1%;padding-left:2px;padding-right:2px;} /* add/delete: shrink to the button */
+tr[data-ri] > td:nth-child(2){cursor:grab;user-select:none;} /* the # cell is the drag grip */
+tr[data-ri] > td:nth-child(2):hover{color:var(--seccolor,var(--accent));}
+tr.rowdragging{opacity:.4;}
+tr.dropbefore > td{box-shadow:inset 0 2px 0 var(--seccolor,var(--accent));}
+tr.dropafter > td{box-shadow:inset 0 -2px 0 var(--seccolor,var(--accent));}
 td input.nmin{min-width:150px;} /* names must not clip ("Key Bottom") */
 td.selc{width:22px;}
 td.selc input{width:14px;min-width:14px;accent-color:var(--seccolor,var(--accent));}
@@ -1084,15 +1089,14 @@ function nameCell(kind,i,val,dupSet){
 function stCell(kind,i,stereo){
   return `<td><button class="stbtn small ${stereo?"st":""}" data-k="${kind}" data-i="${i}" data-f="stereo" id="${kind}-${i}-st">${stereo?"ST":"M"}</button></td>`;
 }
-function opsCell(kind,i,len){
-  return `<td class="rowops">
-    <button class="small" data-k="${kind}" data-i="${i}" data-f="up" title="Move up" ${i===0?"disabled":""}>↑</button>
-    <button class="small" data-k="${kind}" data-i="${i}" data-f="down" title="Move down" ${i===len-1?"disabled":""}>↓</button>
+function opsCell(kind,i){ // reorder lives in drag (the # cell) and the ▲/▼ Selected bar
+  return `<td class="rowops iocol">
     <button class="small danger" data-k="${kind}" data-i="${i}" data-f="reset" title="Reset strip to defaults (incl. name)">⟲</button></td>`;
 }
 function dupNames(list){const seen=new Set(),dup=new Set();
   for(const it of list){const n=it.name.trim().toUpperCase();if(!n)continue;if(seen.has(n))dup.add(n);seen.add(n);}return dup;}
-const rowCls=(kind,i)=>sel[kind].has(i)?' class="selon"':'';
+// Every strip row carries its bank + index for drag-to-reorder.
+const rowCls=(kind,i)=>` data-rk="${kind}" data-ri="${i}"`+(sel[kind].has(i)?' class="selon"':'');
 
 /* Assignment menus list EVERY strip of the selected mixer configuration:
    the strip's name when set, else its default label ("Group 3"). Picking an
@@ -1410,8 +1414,6 @@ document.addEventListener("click",e=>{
   if(f==="reset"){resetStrip(k,i);return;}
   if(f==="del"){resetStrip(k,i,"delete");return;}
   if(f==="ins"){insertStrip(k,i);return;}
-  if(f==="up"&&i>0){[list[i-1],list[i]]=[list[i],list[i-1]];clearSel(k);rackOpen=null;render();return;}
-  if(f==="down"&&i<list.length-1){[list[i+1],list[i]]=[list[i],list[i+1]];clearSel(k);rackOpen=null;render();return;}
 });
 /* Resetting a strip that a stage instrument is linked to keeps the stage
    and the list in sync: the instrument is removed from the stage (or, when
@@ -1511,6 +1513,64 @@ function insertStrip(k,i){
   const el=document.getElementById(`${k}-${i+1}-name`);if(el)el.select();
   setStatus(`Added “${row.name}” below row ${i+1} — type its name`+(k==="ch"||k==="aux"?`; following ${STRIP_PLURAL[k]} were re-patched.`:"."));
 }
+/* Drag-to-reorder strip rows: grab a row by its "#" cell and drop it above
+   or below another row of the same bank. Dragging a selected row moves the
+   whole selection (kept in order). Patches / captions re-flow on render;
+   stage links are by name, so they survive any reorder. */
+let rowDrag=null;
+function moveRows(k,from,target,after){
+  const list=listFor[k]();
+  const idxs=(sel[k].has(from)&&sel[k].size>1)?[...sel[k]].sort((a,b)=>a-b):[from];
+  if(idxs.includes(target))return;
+  let at=target+(after?1:0);
+  const moving=idxs.map(x=>list[x]);
+  at-=idxs.filter(x=>x<at).length;
+  for(const x of [...idxs].reverse())list.splice(x,1);
+  list.splice(at,0,...moving);
+  const multi=idxs.length>1;
+  clearSel(k);
+  if(multi)sel[k]=new Set(moving.map((_,n)=>at+n));
+  rackOpen=null;render();
+  setStatus(`Moved ${multi?moving.length+" "+STRIP_PLURAL[k]:"“"+(moving[0].name.trim()||DEFNAME[k](at))+"”"} to row ${at+1}`
+    +(k==="ch"||k==="aux"?" — patches re-flowed.":"."));
+}
+const rowTarget=e=>{const tr=e.target.closest&&e.target.closest("tr[data-ri]");
+  return tr&&rowDrag&&tr.dataset.rk===rowDrag.k?tr:null;};
+const clearDropMarks=()=>document.querySelectorAll("tr.dropbefore,tr.dropafter,tr.rowdragging")
+  .forEach(el=>el.classList.remove("dropbefore","dropafter","rowdragging"));
+document.addEventListener("mousedown",e=>{ // only the "#" cell starts a row drag
+  const td=e.target.closest&&e.target.closest("tr[data-ri] > td");
+  if(td&&td.cellIndex===1)td.parentElement.draggable=true;
+});
+document.addEventListener("mouseup",()=>{ // a click on # without dragging: rows stay text-selectable
+  document.querySelectorAll('tr[data-ri][draggable="true"]').forEach(tr=>tr.draggable=false);
+});
+document.addEventListener("dragstart",e=>{
+  const tr=e.target.closest&&e.target.closest("tr[data-ri]");
+  if(!tr||!tr.draggable)return;
+  rowDrag={k:tr.dataset.rk,i:+tr.dataset.ri};
+  e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain","strip-row");
+  tr.classList.add("rowdragging");
+});
+document.addEventListener("dragover",e=>{
+  const tr=rowTarget(e);if(!tr)return;
+  e.preventDefault();e.dataTransfer.dropEffect="move";
+  const r=tr.getBoundingClientRect(),after=e.clientY>r.top+r.height/2;
+  document.querySelectorAll("tr.dropbefore,tr.dropafter").forEach(el=>{if(el!==tr)el.classList.remove("dropbefore","dropafter");});
+  tr.classList.toggle("dropafter",after);tr.classList.toggle("dropbefore",!after);
+});
+document.addEventListener("drop",e=>{
+  const tr=rowTarget(e);if(!tr)return;
+  e.preventDefault();
+  const r=tr.getBoundingClientRect();
+  const d=rowDrag;rowDrag=null;clearDropMarks();
+  moveRows(d.k,d.i,+tr.dataset.ri,e.clientY>r.top+r.height/2);
+});
+document.addEventListener("dragend",e=>{
+  const tr=e.target.closest&&e.target.closest("tr[data-ri]");
+  if(tr)tr.draggable=false;
+  rowDrag=null;clearDropMarks();
+});
 function ioOpsCell(kind,i){
   return `<td class="rowops iocol"><button class="small" data-k="${kind}" data-i="${i}" data-f="ins" title="Add a new ${STRIP_NOUN[kind]} below this row">＋</button></td>
     <td class="rowops iocol"><button class="small danger" data-k="${kind}" data-i="${i}" data-f="del" title="Delete this row (following rows move up)">✕</button></td>`;
