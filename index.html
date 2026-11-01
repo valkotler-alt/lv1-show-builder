@@ -1254,8 +1254,29 @@ function renderWarnings(){
 
 /* ---------- edits ---------- */
 const listFor={ch:()=>state.channels,grp:()=>state.groups,fx:()=>state.fx,aux:()=>state.auxes,mtx:()=>state.matrixes};
+/* Picking a menu's CURRENT value fires no input event, so on a multi-
+   selection "make the others match this row" would silently do nothing.
+   While such a menu is focused it sits on a hidden placeholder showing the
+   same text, so every pick is a change; closing without a pick restores. */
+const MULTI_MENUS=new Set(["color","group","link","matrix","stand","dest"]);
+document.addEventListener("focusin",e=>{
+  const s=e.target;
+  if(s.tagName!=="SELECT"||!MULTI_MENUS.has(s.dataset.f))return;
+  const k=s.dataset.k,i=+s.dataset.i;
+  if(!(sel[k]&&sel[k].has(i)&&sel[k].size>1)||s.querySelector('option[value="__multi"]'))return;
+  const o=document.createElement("option");
+  o.value="__multi";o.hidden=true;o.textContent=s.options[s.selectedIndex]?.text||"";
+  s.dataset.orig=s.value;s.prepend(o);s.value="__multi";
+});
+document.addEventListener("focusout",e=>{
+  const s=e.target,o=s.querySelector&&s.querySelector('option[value="__multi"]');
+  if(!o)return;
+  if(s.value==="__multi")s.value=s.dataset.orig;
+  o.remove();
+});
 document.addEventListener("input",e=>{
   const t=e.target,k=t.dataset.k;if(!k)return;
+  if(t.value==="__multi")return;
   const f=t.dataset.f;
   if(f==="sel")return; // handled in the click listener (needs shiftKey)
   if(f==="rkSearch"||f==="rkCat"){ // filter the picker in place (keeps focus)
