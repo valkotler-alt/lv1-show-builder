@@ -580,8 +580,11 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
 .sitem .srot{pointer-events:none;}
 .sitem img{width:100%;height:auto;display:block;pointer-events:none;-webkit-user-drag:none;}
 .sitem .slab{position:absolute;top:calc(100% + 1px);left:50%;transform:translateX(-50%);font:600 11px var(--font-ui);color:#23252a;background:rgba(255,255,255,.75);padding:0 4px;border-radius:3px;white-space:pre-line;text-align:center;line-height:1.3;pointer-events:none;}
-.disptoggles{display:inline-flex;gap:7px;align-items:center;font-size:12px;color:var(--dim);}
-.disptoggles label{display:inline-flex;gap:3px;align-items:center;font-size:11px;cursor:pointer;}
+#siCap{width:100%;display:grid;grid-template-columns:max-content minmax(140px,260px);gap:5px 10px;align-items:center;}
+#siCap .caphead{grid-column:1/-1;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);font-weight:600;}
+#siCap .caprow{display:inline-flex;gap:6px;align-items:center;font-size:12px;color:var(--dim);cursor:pointer;}
+#siCap .iotag{font-family:var(--font-num);font-size:12px;color:var(--fg);}
+#siCap.riser input[type="checkbox"]{visibility:hidden;} /* risers draw their label inside the box */
 .sitem.sel{outline:2px dashed var(--accent);outline-offset:2px;}
 .sitem.riser .rbox{width:100%;height:100%;border:3px solid #444;background:rgba(80,80,80,.06);border-radius:2px;box-sizing:border-box;}
 .sitem.riser .rlabel{position:absolute;top:4px;left:0;right:0;text-align:center;font:700 12px var(--font-ui);color:#333;pointer-events:none;}
@@ -772,11 +775,15 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
         <span class="hint">· depth <span id="stageD"></span> m (items are drawn at their real size — the chair is 50 cm)</span></div>
       <div id="stage"><div class="stagelabel">A U D I E N C E</div><div class="stagesize" id="stageSizeLab"></div></div>
       <div id="sinsp" class="sinsp" hidden>
-        <label id="siLabelWrap">Name <input id="siLabel" size="26" list="chanNames" placeholder="input / name" spellcheck="false"></label>
-        <span id="siDispWrap" class="disptoggles" title="Which lines the caption under the instrument shows — Position, Name, IO patch">Caption
-          <label><input type="checkbox" id="dispP">Pos</label>
-          <label><input type="checkbox" id="dispN">Name</label>
-          <label><input type="checkbox" id="dispI">IO</label></span>
+        <div id="siCap" title="The caption under the instrument: tick the lines to show. Position groups items (moves/rotates together) and syncs to the lists; Name is free text (empty = the linked channel's name); IO is the live patch.">
+          <span class="caphead">Caption · tick what the stage shows</span>
+          <label class="caprow" id="capRowP"><input type="checkbox" id="dispP"><span>Position</span></label>
+          <input id="siPos" list="posList" placeholder="e.g. DRUMS" spellcheck="false">
+          <label class="caprow" id="capRowN"><input type="checkbox" id="dispN"><span>Name</span></label>
+          <input id="siLabel" list="chanNames" placeholder="name" spellcheck="false">
+          <label class="caprow" id="capRowI"><input type="checkbox" id="dispI"><span>IO</span></label>
+          <span id="siIoTag" class="iotag">—</span>
+        </div>
         <label id="siCmWrap">Width <input type="number" id="siCm" min="5" max="1200" step="1" style="width:68px"> cm</label>
         <label id="siRsWrap" hidden>Riser size <select id="siRsize">
           <option value="" hidden>—</option>
@@ -785,7 +792,6 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
           <option value="240x120">240 × 120 cm</option>
           <option value="240x60">240 × 60 cm</option></select></label>
         <label id="siNoteWrap" hidden>Note <input id="siNote" size="14" placeholder="e.g. 240x120x20cm"></label>
-        <label id="siPosWrap" title="Items sharing a Position move and rotate together; the name syncs into the Position column of every linked input / aux">Position <input id="siPos" size="12" list="posList" placeholder="e.g. DRUMS" spellcheck="false"></label>
         <label id="siRotWrap">Rotate <input type="range" id="siRot" min="-180" max="180" step="4.5"></label>
         <span class="rotbtns"><button class="small" id="siRotM" title="Rotate −4.5°">−4.5°</button><button class="small" id="siRotP" title="Rotate +4.5°">+4.5°</button><button class="small" id="siRotR" title="Reset rotation to 0°">⟲ 0°</button></span>
         <label title="Apply an LV1 strip color to every input linked to the selected item(s)">Strip color <select id="siCol" class="colsel"></select></label>
@@ -1869,27 +1875,30 @@ function renderInspector(){
   if(!it&&!multi)return;
   const riser=!multi&&it&&it.img==="riser";
   // Single-item fields hide in group mode.
-  $("#siLabelWrap").hidden=multi;
   $("#siCmWrap").hidden=multi||riser;
   $("#siRsWrap").hidden=multi||!riser;
   $("#siNoteWrap").hidden=multi||!riser;
   $("#siRotWrap").hidden=multi; // a constellation rotates by steps only
   $("#siFlip").hidden=multi||riser;
   $("#siDup").hidden=multi;
-  // Position: shared by single and multi selection — the common value, or
-  // blank when the selection spans several positions.
+  // Caption block: one row per caption line — tick + value side by side.
+  // Multi-selection keeps only the Position row (applies to the whole set);
+  // risers keep Position + Name (drawn inside the box) and lose the ticks.
+  $("#siCap").classList.toggle("riser",riser);
+  $("#capRowN").hidden=multi;$("#siLabel").hidden=multi;
+  $("#capRowI").hidden=multi||riser;$("#siIoTag").hidden=multi||riser;
   if(document.activeElement!==$("#siPos")){
     const ps=new Set([...mSel].map(j=>((stg().items[j]||{}).pos||"").trim()));
     $("#siPos").value=ps.size===1?[...ps][0]:"";
   }
-  // Caption line toggles (single or multi; applied to the whole selection).
-  $("#siDispWrap").hidden=!multi&&riser;
   const d0=itemDisp(stg().items[multi?[...mSel][0]:stageSel]||{});
   $("#dispP").checked=d0.includes("p");
   $("#dispN").checked=d0.includes("n");
   $("#dispI").checked=d0.includes("i");
   if(multi){$("#siIO").hidden=true;return;}
   renderItemIO(it);
+  if(!riser)$("#siIoTag").textContent=itemIoTag(stageSel)||"— not linked —";
+  $("#siLabel").placeholder=singleIoName(stageSel)||"name";
   if(document.activeElement!==$("#siLabel"))$("#siLabel").value=it.label||"";
   $("#siRot").value=it.rot||0;
   if(riser){
@@ -1912,10 +1921,20 @@ function itemIoTag(idx){
   if(anums.length){const a=Math.min(...anums),b=Math.max(...anums);segs.push("OUT "+(a===b?a:a+"-"+b));}
   return segs.join(" · ");
 }
+function singleIoName(idx){ // the linked row's name when there is exactly one
+  const {chs,axs}=linkedRowsFor([idx]);
+  const all=[...chs.values(),...axs.values()];
+  return all.length===1?all[0].name.trim():"";
+}
 function itemCaption(idx,it){
   const d=itemDisp(it),lines=[];
   if(d.includes("p")&&(it.pos||"").trim())lines.push(it.pos.trim());
-  if(d.includes("n")&&(it.label||"").trim())lines.push(it.label.trim());
+  if(d.includes("n")){
+    // Empty Name falls back to the single linked channel/aux name, so a
+    // plain instrument needs only the tick — no typing, no copy button.
+    const nm=(it.label||"").trim()||singleIoName(idx);
+    if(nm)lines.push(nm);
+  }
   if(d.includes("i")){const t=itemIoTag(idx);if(t)lines.push(t);}
   return lines.join("\n");
 }
@@ -1940,16 +1959,7 @@ function renderItemIO(it){
   }
   box.hidden=!rows.length;
   if(!rows.length){box.innerHTML="";return;}
-  box.innerHTML=`<span class="iohead">Linked IO</span>`+rows.join("")+
-    (rows.length===1?`<button class="small" id="siCopyLab" title="Copy the IO name into the item label">→ Label</button>`:"");
-  const cp=$("#siCopyLab");
-  if(cp)cp.onclick=()=>{
-    // Copies the IO name into the Name line; the patch has its own caption
-    // line now (tick IO in the Caption toggles).
-    const it2=stg().items[stageSel];if(!it2)return;
-    it2.label=box.querySelector(".iorow input").value.trim();
-    render();
-  };
+  box.innerHTML=`<span class="iohead">Linked IO — rename here to keep the stage link</span>`+rows.join("");
 }
 function renameLinkedRow(kind,idx,newName){
   const row=kind==="ch"?state.channels[idx]:state.auxes[idx];
