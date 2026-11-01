@@ -794,13 +794,12 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
           <label class="caprow" id="capRowP"><input type="checkbox" id="dispP"><span>Position</span></label>
           <input id="siPos" list="posList" placeholder="e.g. DRUMS" spellcheck="false">
           <label class="caprow" id="capRowN"><input type="checkbox" id="dispN"><span>Name</span></label>
-          <input id="siLabel" list="chanNames" placeholder="name" spellcheck="false">
+          <input id="siLabel" placeholder="name" spellcheck="false">
           <label class="caprow" id="capRowI"><input type="checkbox" id="dispI"><span>IO</span></label>
           <span id="siIoTag" class="iotag">—</span>
         </div>
         <div id="siIO" hidden></div>
       </div>
-      <datalist id="chanNames"></datalist>
       <datalist id="posList"></datalist>
     </div>
   </div>
@@ -962,8 +961,6 @@ function render(){
   renderAux(); renderSimple("mtx",state.matrixes,"#mtxTable");
   renderMaster(); renderWarnings();
   renderStage();
-  $("#chanNames").innerHTML=state.channels.filter(c=>c.name.trim())
-    .map(c=>`<option value="${esc(c.name.trim())}">`).join("");
   $("#posList").innerHTML=allPositions().map(p=>`<option value="${esc(p)}">`).join("");
   if(typeof renderLocalShows==="function")renderLocalShows();
 }
