@@ -583,7 +583,7 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
 .rotbtns{display:inline-flex;gap:4px;}
 .colsel{min-width:52px;font-family:var(--font-num);font-size:11px;}
 .tplconfirm{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;padding:8px 10px;border:1px solid var(--accent);border-radius:8px;background:var(--panel);font-size:12px;}
-.gname{position:absolute;transform:translate(-50%,-100%);font:600 11px var(--font-ui);font-style:italic;color:#555;background:rgba(255,255,255,.65);padding:0 4px;border-radius:3px;pointer-events:none;white-space:nowrap;}
+.posname{position:absolute;transform:translate(-50%,0);font:600 11px var(--font-ui);font-style:italic;color:#555;background:rgba(255,255,255,.65);padding:0 4px;border-radius:3px;pointer-events:none;white-space:nowrap;}
 @media (max-width:860px){ .sbwrap{flex-direction:column;} .sbpal{width:100%;} #palGrid{max-height:200px;} }
 #status{font-size:13px;color:var(--ok);min-height:18px;margin:6px 0;}
 #status.err{color:var(--mtx);}
@@ -712,7 +712,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
     <span class="hint">LV1 aux strips ("Mon" bank). Output ports patch to named auxes top-down (stereo takes two). Destination / notes go to the Google Sheet.</span>
     <span class="selops"><button class="small" data-k="aux" data-f="selUp">▲ Selected</button><button class="small" data-k="aux" data-f="selDown">▼ Selected</button><button class="small" data-k="aux" data-f="selClr" title="Deselect all">✕ Deselect</button></span></div>
   <div class="tblwrap"><table id="auxTable">
-    <thead><tr><th></th><th>#</th><th>Patch</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>Notes</th><th></th></tr></thead>
+    <thead><tr><th></th><th>#</th><th>Patch</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>Position</th><th>Notes</th><th></th></tr></thead>
     <tbody></tbody>
   </table></div>
 </section>
@@ -773,18 +773,17 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
           <option value="240x120">240 × 120 cm</option>
           <option value="240x60">240 × 60 cm</option></select></label>
         <label id="siNoteWrap" hidden>Note <input id="siNote" size="14" placeholder="e.g. 240x120x20cm"></label>
-        <label id="giNameWrap" hidden>Group name <input id="giName" size="10" placeholder="e.g. IDO" spellcheck="false"></label>
-        <button class="small" id="giGroup" hidden>Group</button>
-        <button class="small" id="giUngroup" hidden>Ungroup</button>
+        <label id="siPosWrap" title="Items sharing a Position move and rotate together; the name syncs into the Position column of every linked input / aux">Position <input id="siPos" size="12" list="posList" placeholder="e.g. DRUMS" spellcheck="false"></label>
         <label id="siRotWrap">Rotate <input type="range" id="siRot" min="-180" max="180" step="4.5"></label>
         <span class="rotbtns"><button class="small" id="siRotM" title="Rotate −4.5°">−4.5°</button><button class="small" id="siRotP" title="Rotate +4.5°">+4.5°</button><button class="small" id="siRotR" title="Reset rotation to 0°">⟲ 0°</button></span>
         <label title="Apply an LV1 strip color to every input linked to the selected item(s)">Strip color <select id="siCol" class="colsel"></select></label>
         <button class="small" id="siFlip">Flip</button>
         <button class="small" id="siDup">Duplicate</button>
         <button class="small danger" id="siDel">Delete</button>
-        <span class="hint">drag moves · Shift-click multi-selects · click selects the whole group (Alt-click one member) · Delete key removes</span>
+        <span class="hint">drag moves · Shift-click multi-selects · click selects the whole position (Alt-click one item) · Delete key removes</span>
       </div>
       <datalist id="chanNames"></datalist>
+      <datalist id="posList"></datalist>
     </div>
   </div>
 </section>
@@ -848,7 +847,7 @@ function colorCell(kind,i,val){
 const defCh=()=>({name:"",stereo:false,group:"",link:"",matrix:"",mic:"",stand:"",pos:"",notes:"",rack:null,color:null});
 const defGrp=()=>({name:"",stereo:true,dest:"MASTER",postFx:false,matrix:[],rack:null,color:null});
 const defFx=()=>({name:"",stereo:true,dest:"MASTER",rack:null,color:null}); // fresh LV1 FX strips are stereo
-const defAux=()=>({name:"",stereo:false,dest:"",notes:"",color:null});
+const defAux=()=>({name:"",stereo:false,dest:"",pos:"",notes:"",color:null});
 const AUX_DESTS=["Wedge","Wireless IEM","Wired IEM","Mixer"];
 const defMtx=()=>({name:"",stereo:false,color:null});
 const DEF={ch:defCh,grp:defGrp,fx:defFx,aux:defAux,mtx:defMtx};
@@ -947,7 +946,17 @@ function render(){
   renderStage();
   $("#chanNames").innerHTML=state.channels.filter(c=>c.name.trim())
     .map(c=>`<option value="${esc(c.name.trim())}">`).join("");
+  $("#posList").innerHTML=allPositions().map(p=>`<option value="${esc(p)}">`).join("");
   if(typeof renderLocalShows==="function")renderLocalShows();
+}
+/* Every Position name in use — stage items + both IO lists (deduped). */
+function allPositions(){
+  const seen=new Map(); // UPPER -> first spelling
+  const add=s=>{const v=(s||"").trim();if(v&&!seen.has(v.toUpperCase()))seen.set(v.toUpperCase(),v);};
+  (state.stage&&state.stage.items||[]).forEach(it=>add(it.pos));
+  state.channels.forEach(c=>add(c.pos));
+  state.auxes.forEach(a=>add(a.pos));
+  return [...seen.values()].sort((a,b)=>a.localeCompare(b));
 }
 function renderConfig(){
   $("#cfgList").innerHTML=CONFIGS.map(c=>`<label class="cfg ${c.id===state.configId?"on":""}">
@@ -1076,7 +1085,7 @@ function renderChannels(){
       <td>${s("matrix",ch.matrix,mtxOpts,"None")}</td>
       <td><input id="ch-${i}-mic" value="${esc(ch.mic)}" data-k="ch" data-i="${i}" data-f="mic" placeholder="e.g. B91A"></td>
       <td><input id="ch-${i}-stand" value="${esc(ch.stand)}" data-k="ch" data-i="${i}" data-f="stand" placeholder="short / tall / clip"></td>
-      <td><input id="ch-${i}-pos" value="${esc(ch.pos)}" data-k="ch" data-i="${i}" data-f="pos" placeholder="e.g. DSC riser"></td>
+      <td><input id="ch-${i}-pos" value="${esc(ch.pos)}" data-k="ch" data-i="${i}" data-f="pos" list="posList" placeholder="position"></td>
       <td><input id="ch-${i}-notes" value="${esc(ch.notes)}" data-k="ch" data-i="${i}" data-f="notes"></td>
       ${rackCell("ch",i,ch.rack)}
       ${opsCell("ch",i,state.channels.length)}</tr>`+rackRow("ch",i,ch.rack,15,ch.stereo);
@@ -1136,9 +1145,10 @@ function renderAux(){
       <td><select id="aux-${i}-dest" data-k="aux" data-i="${i}" data-f="dest">
         <option value=""${(a.dest||"")===""?" selected":""}>—</option>
         ${AUX_DESTS.map(o=>`<option${o===a.dest?" selected":""}>${o}</option>`).join("")}</select></td>
+      <td><input id="aux-${i}-pos" value="${esc(a.pos||"")}" data-k="aux" data-i="${i}" data-f="pos" list="posList" placeholder="position"></td>
       <td><input id="aux-${i}-notes" value="${esc(a.notes||"")}" data-k="aux" data-i="${i}" data-f="notes"></td>
       ${opsCell("aux",i,state.auxes.length)}</tr>`).join("")
-    ||emptyRow(9,"This mixer configuration has no aux strips.");
+    ||emptyRow(10,"This mixer configuration has no aux strips.");
   $("#auxCount").textContent=cfg().mon?`${named(state.auxes).length} named / ${cfg().mon} strips`:"";
 }
 function renderSimple(kind,list,tableSel){
@@ -1233,10 +1243,21 @@ document.addEventListener("input",e=>{
   }
   if(f==="pos"){
     const i=+t.dataset.i;
+    const touched=new Set();
     for(const j of multiTargets()){
       const o=list[j];if(!o)continue;o.pos=t.value;
-      if(j!==i){const el=document.getElementById(`${k}-${j}-pos`);if(el)el.value=t.value;}
+      if(j!==i){const el=document.getElementById(`${k}-${j}-pos`);if(el&&el!==document.activeElement)el.value=t.value;}
+      // Live sync (IO list -> stage): a row linked to a stage item renames
+      // that item's Position — and with it the item's other linked rows.
+      const nm=(o.name||"").trim().toUpperCase();
+      if(nm&&typeof stg==="function")stg().items.forEach(it=>{
+        const isAux=!!(it.auxl&&it.auxl.trim().toUpperCase()===nm);
+        const names=new Set([...(it.ins||[]),(it.label||"").trim()].filter(Boolean).map(s=>s.toUpperCase()));
+        const hit=k==="aux"?isAux:(names.has(nm)&&!isAux);
+        if(hit&&!touched.has(it)){it.pos=t.value;touched.add(it);}
+      });
     }
+    if(touched.size){for(const it of touched)syncItemPosToRows(it);renderStage();}
     return;
   }
   if(f==="mx"){const m=t.dataset.m;it.matrix=t.checked?[...it.matrix,m]:it.matrix.filter(x=>x!==m);
@@ -1462,7 +1483,7 @@ function buildSpec(){
       ...(g.color!==null&&g.color!==undefined?{color:g.color}:{})},g.rack)),
     fx:named(state.fx).map(f=>withRack({name:f.name.trim(),stereo:f.stereo,dest:f.dest==="MASTER"?null:f.dest,
       ...(f.color!==null&&f.color!==undefined?{color:f.color}:{})},f.rack)),
-    auxes:named(state.auxes).map(a=>({name:a.name.trim(),stereo:a.stereo,dest:a.dest||"",notes:(a.notes||"").trim(),
+    auxes:named(state.auxes).map(a=>({name:a.name.trim(),stereo:a.stereo,dest:a.dest||"",position:(a.pos||"").trim(),notes:(a.notes||"").trim(),
       ...(a.color!==null&&a.color!==undefined?{color:a.color}:{})})),
     matrixes:named(state.matrixes).map(m=>({name:m.name.trim(),stereo:m.stereo,
       ...(m.color!==null&&m.color!==undefined?{color:m.color}:{})})),
@@ -1506,7 +1527,7 @@ function loadSpec(spec){
       matrix:(c.matrix&&c.matrix[0])||"",mic:c.mic||"",stand:c.stand||"",pos:c.position||"",notes:c.notes||"",rack:rackIn(c.rack),color:colIn(c)})),
     groups:(spec.groups||[]).map(g=>({...defGrp(),name:g.name||"",stereo:g.stereo!==false,dest:g.dest||"MASTER",postFx:!!g.postFx,matrix:g.matrix||[],rack:rackIn(g.rack),color:colIn(g)})),
     fx:(spec.fx||[]).map(f=>({...defFx(),name:f.name||"",stereo:f.stereo!==false,dest:f.dest||"MASTER",rack:rackIn(f.rack),color:colIn(f)})),
-    auxes:(spec.auxes||[]).map(a=>({...defAux(),name:a.name||"",stereo:!!a.stereo,dest:a.dest||"",notes:a.notes||"",color:colIn(a)})),
+    auxes:(spec.auxes||[]).map(a=>({...defAux(),name:a.name||"",stereo:!!a.stereo,dest:a.dest||"",pos:a.position||"",notes:a.notes||"",color:colIn(a)})),
     matrixes:(spec.matrixes||[]).map(m=>({...defMtx(),name:m.name||"",stereo:!!m.stereo,color:colIn(m)})),
     master:{rack:rackIn(spec.master?.rack)},
     stage:{
@@ -1519,7 +1540,7 @@ function loadSpec(spec){
         if(+it.w>0)o.w=+it.w;   // legacy fraction fallback
         if(+it.h>0)o.h=+it.h;
         if(it.note)o.note=String(it.note);
-        if(it.grp)o.grp=String(it.grp);
+        if(it.pos)o.pos=String(it.pos); // legacy it.grp is dropped by design
         if(Array.isArray(it.ins)&&it.ins.length)o.ins=it.ins.map(String);
         if(it.auxl)o.auxl=String(it.auxl);
         return o;}),
@@ -1717,7 +1738,7 @@ const stageOrder=()=>stg().items.map((it,i)=>i)
   .sort((a,b)=>((stg().items[a].img==="riser"?0:1)-(stg().items[b].img==="riser"?0:1))||a-b);
 function renderStage(){
   const st=$("#stage");
-  st.querySelectorAll(".sitem,.gname").forEach(e=>e.remove());
+  st.querySelectorAll(".sitem,.posname").forEach(e=>e.remove());
   for(const i of stageOrder()){
     const it=stg().items[i];
     const d=document.createElement("div");
@@ -1738,15 +1759,13 @@ function renderStage(){
     }
     st.appendChild(d);
   }
-  // Group name badges above each group's constellation.
-  const groups={};
-  stg().items.forEach(it=>{if(it.grp){(groups[it.grp]=groups[it.grp]||[]).push(it);}});
-  for(const [name,members] of Object.entries(groups)){
+  // Position name badges UNDER each position's constellation.
+  for(const [name,members] of Object.entries(positionSets())){
     const cx=members.reduce((s,m)=>s+m.x,0)/members.length;
-    const top=Math.min(...members.map(m=>m.y));
+    const bot=Math.max(...members.map(m=>m.y));
     const g=document.createElement("div");
-    g.className="gname";
-    g.style.left=(cx*100)+"%";g.style.top=(Math.max(0.02,top-0.06)*100)+"%";
+    g.className="posname";
+    g.style.left=(cx*100)+"%";g.style.top=(Math.min(0.97,bot+0.08)*100)+"%";
     g.textContent=name;
     st.appendChild(g);
   }
@@ -1770,17 +1789,13 @@ function renderInspector(){
   $("#siRotWrap").hidden=multi; // a constellation rotates by steps only
   $("#siFlip").hidden=multi||riser;
   $("#siDup").hidden=multi;
-  // Group controls.
-  $("#giNameWrap").hidden=!multi;
-  $("#giGroup").hidden=!multi;
-  const selGrps=[...mSel].map(i=>stg().items[i]&&stg().items[i].grp).filter(Boolean);
-  $("#giUngroup").hidden=!selGrps.length;
-  if(multi){
-    $("#giGroup").textContent=selGrps.length===mSel.size&&new Set(selGrps).size===1?"Rename":"Group";
-    if(document.activeElement!==$("#giName"))
-      $("#giName").value=new Set(selGrps).size===1?selGrps[0]:"";
-    return;
+  // Position: shared by single and multi selection — the common value, or
+  // blank when the selection spans several positions.
+  if(document.activeElement!==$("#siPos")){
+    const ps=new Set([...mSel].map(j=>((stg().items[j]||{}).pos||"").trim()));
+    $("#siPos").value=ps.size===1?[...ps][0]:"";
   }
+  if(multi)return;
   if(document.activeElement!==$("#siLabel"))$("#siLabel").value=it.label||"";
   $("#siRot").value=it.rot||0;
   if(riser){
@@ -1790,9 +1805,16 @@ function renderInspector(){
     $("#siCm").value=it.cm?Math.round(it.cm):"";
   }
 }
-const groupOf=i=>{const g=stg().items[i]&&stg().items[i].grp;
-  if(!g)return new Set([i]);
-  return new Set(stg().items.map((it,j)=>it.grp===g?j:-1).filter(j=>j>=0));};
+/* Items sharing a Position act as one: click selects them all, they move
+   and rotate together (the old Group, folded into Position). */
+const groupOf=i=>{const p=((stg().items[i]||{}).pos||"").trim().toUpperCase();
+  if(!p)return new Set([i]);
+  return new Set(stg().items.map((it,j)=>((it.pos||"").trim().toUpperCase())===p?j:-1).filter(j=>j>=0));};
+function positionSets(){ // {name: [items]} for badge drawing
+  const sets={};
+  stg().items.forEach(it=>{const p=(it.pos||"").trim();if(p)(sets[p]=sets[p]||[]).push(it);});
+  return sets;
+}
 const normRot=r=>((r+180)%360+360)%360-180;
 function rotateSelection(delta){
   const ms=[...mSel];if(!ms.length)return;
@@ -1867,7 +1889,7 @@ $("#tplApply").onclick=()=>{
       const free=state.channels.find(c=>!c.name.trim());
       if(!free){full=true;break;}
       const name=dedupeName(base,taken);
-      Object.assign(free,{name,stereo:!!st,mic:mic||"",stand:stand||"",pos:stageZone(it)});
+      Object.assign(free,{name,stereo:!!st,mic:mic||"",stand:stand||"",pos:(it.pos||"").trim()});
       made.push(name);
     }
     if(made.length)it.ins=made;
@@ -2016,19 +2038,39 @@ $("#siRotR").onclick=()=>{ // reset rotation to the original (0°) state
   for(const i of mSel){const it=stg().items[i];if(it)it.rot=0;}
   render();
 };
-$("#giGroup").onclick=()=>{
-  const name=$("#giName").value.trim();
-  if(!name){setStatus("Give the group a name first.",true);return;}
-  for(const i of mSel){const it=stg().items[i];if(it)it.grp=name;}
-  render();setStatus(`Grouped ${mSel.size} items as “${name}”.`);
-};
-$("#giUngroup").onclick=()=>{
-  for(const i of mSel){const it=stg().items[i];if(it)delete it.grp;}
-  render();setStatus("Ungrouped.");
-};
+/* Live Position sync (stage -> IO lists): push an item's position into the
+   Position column of every linked input / aux, updating cells in place. */
+function syncItemPosToRows(it){
+  const v=(it.pos||"").trim();
+  const chBy=new Map(state.channels.map((c,x)=>[c.name.trim().toUpperCase(),x]));
+  const axBy=new Map(state.auxes.map((a,x)=>[a.name.trim().toUpperCase(),x]));
+  const names=[...(it.ins||[])];
+  if(it.label&&it.label.trim())names.push(it.label.trim());
+  let n=0;
+  for(const nm of new Set(names.map(s=>s.toUpperCase()))){
+    if(it.auxl&&nm===it.auxl.trim().toUpperCase()){
+      const x=axBy.get(nm);
+      if(x!==undefined){state.auxes[x].pos=v;
+        const el=document.getElementById(`aux-${x}-pos`);
+        if(el&&el!==document.activeElement)el.value=v; n++;}
+    }else{
+      const x=chBy.get(nm);
+      if(x!==undefined){state.channels[x].pos=v;
+        const el=document.getElementById(`ch-${x}-pos`);
+        if(el&&el!==document.activeElement)el.value=v; n++;}
+    }
+  }
+  return n;
+}
+$("#siPos").addEventListener("input",()=>{
+  const v=$("#siPos").value;
+  for(const i of mSel){const it=stg().items[i];if(!it)continue;it.pos=v;syncItemPosToRows(it);}
+  renderStage(); // badge follows while typing; table cells were patched in place
+});
+$("#siPos").addEventListener("change",()=>render()); // persist + refresh the datalist
 $("#siFlip").onclick=()=>{const it=stg().items[stageSel];if(!it)return;it.flip=!it.flip;render();};
 $("#siDup").onclick=()=>{const it=stg().items[stageSel];if(!it)return;
-  const copy={...it};delete copy.grp;delete copy.ins;
+  const copy={...it};delete copy.pos;delete copy.ins; // a copy starts outside the position
   stg().items.push({...copy,x:Math.min(1,it.x+0.05),y:Math.min(1,it.y+0.05)});
   stageSel=stg().items.length-1;mSel=new Set([stageSel]);render();};
 /* ---- OK/Cancel confirm dialog (window.confirm is blocked in the artifact
@@ -2142,13 +2184,11 @@ $("#palFile").addEventListener("change",async e=>{
     $("#siCm").focus();$("#siCm").select();
   }catch(err){setStatus("Import failed: "+(err.message||err),true);}
 });
-/* Stage <-> input list. Zones: audience at the bottom, so stage left is the
-   drawing's right (performer's perspective). */
-function stageZone(it){
-  const col=it.x<1/3?"SR":it.x>2/3?"SL":"C";
-  const row=it.y<1/3?"US":it.y>2/3?"DS":"MS";
-  return row+(col==="C"?"C":" "+col);
-}
+/* Stage <-> input list. Positions are NAMES (no auto zones): the Position
+   column carries the stage item's Position, nothing is invented from
+   geometry. zoneCoords still reads legacy zone text (DS SL…) to place
+   items imported from an old list. Audience at the bottom, so stage left
+   is the drawing's right (performer's perspective). */
 function zoneCoords(text){
   const t=(text||"").toUpperCase();
   let x=0.5,y=0.55;
@@ -2161,14 +2201,14 @@ $("#stageToInputs").onclick=()=>{
   let created=0,updated=0,full=false,any=false;
   for(const it of stg().items){
     if(it.img==="riser")continue;
-    const zone=stageZone(it);
-    // Inputs this item spawned from its template: refresh their position
-    // zone (names that were renamed in the list are dropped from the link).
+    const pos=(it.pos||"").trim();
+    // Inputs this item spawned from its template: refresh their Position
+    // (names that were renamed in the list are dropped from the link).
     if(Array.isArray(it.ins)&&it.ins.length){
       any=true;
       it.ins=it.ins.filter(n=>{
         const ch=byName.get(n.trim().toUpperCase());
-        if(ch){ch.pos=zone;updated++;return true;}
+        if(ch){if(pos&&ch.pos!==pos){ch.pos=pos;updated++;}return true;}
         return false;
       });
       if(!it.ins.length)delete it.ins;
@@ -2177,10 +2217,10 @@ $("#stageToInputs").onclick=()=>{
     any=true;
     const key=it.label.trim().toUpperCase();
     const ch=byName.get(key);
-    if(ch){if(!it.ins||!it.ins.includes(ch.name)){ch.pos=zone;updated++;}continue;}
+    if(ch){if((!it.ins||!it.ins.includes(ch.name))&&pos&&ch.pos!==pos){ch.pos=pos;updated++;}continue;}
     const free=state.channels.find(c=>!c.name.trim());
     if(!free){full=true;continue;}
-    free.name=it.label.trim();free.pos=zone;
+    free.name=it.label.trim();free.pos=pos;
     byName.set(key,free);created++;
   }
   if(!any){setStatus("Nothing to sync — place instruments with templates, or label items with input names.",true);return;}
@@ -2198,7 +2238,8 @@ $("#inputsToStage").onclick=()=>{
   for(const c of missing){
     const p=zoneCoords(c.pos);
     stg().items.push({img:mic.id,x:Math.min(0.95,p.x+(n%5)*0.02),y:Math.min(0.92,p.y+(n%3)*0.03),
-      cm:mic.cm||65,rot:0,flip:false,label:c.name.trim()});
+      cm:mic.cm||65,rot:0,flip:false,label:c.name.trim(),
+      ...(c.pos.trim()?{pos:c.pos.trim()}:{})}); // same Position = one constellation
     n++;
   }
   render();
@@ -2250,14 +2291,12 @@ async function stageBitmap(){
       cx.fillText(it.label,it.x*W,it.y*H+h/2+24);
     }
   }
-  // Group name badges.
-  const groups={};
-  stg().items.forEach(it=>{if(it.grp){(groups[it.grp]=groups[it.grp]||[]).push(it);}});
+  // Position name badges, under each position's constellation.
   cx.textAlign="center";cx.font="italic 600 24px Arial";cx.fillStyle="#555";
-  for(const [name,members] of Object.entries(groups)){
+  for(const [name,members] of Object.entries(positionSets())){
     const gx=members.reduce((s,m)=>s+m.x,0)/members.length;
-    const top=Math.min(...members.map(m=>m.y));
-    cx.fillText(name,gx*W,Math.max(0.04,top-0.05)*H);
+    const bot=Math.max(...members.map(m=>m.y));
+    cx.fillText(name,gx*W,Math.min(0.96,bot+0.1)*H);
   }
   return cv;
 }
@@ -2307,7 +2346,7 @@ const GS_SCRIPT=`/**
  */
 
 var HEADERS = ["PATCH", "CH NAME", "M/L/R", "MIC", "STAND", "POSITION", "NOTES"];
-var AUX_HEADERS = ["PATCH", "AUX NAME", "M/L/R", "DESTINATION", "NOTES"];
+var AUX_HEADERS = ["PATCH", "AUX NAME", "M/L/R", "DESTINATION", "POSITION", "NOTES"];
 var AUX_COL = 9; // aux table starts at column I
 var AUX_DESTS = ["Wedge", "Wireless IEM", "Wired IEM", "Mixer"];
 var DATA_ROW = 6; // first data row
@@ -2371,7 +2410,7 @@ function doGet(e) {
           notes: _str(v[6]),
         });
       }
-      var avals = sh.getRange(DATA_ROW, AUX_COL, last - DATA_ROW + 1, 5).getValues();
+      var avals = sh.getRange(DATA_ROW, AUX_COL, last - DATA_ROW + 1, 6).getValues();
       for (var a = 0; a < avals.length; a++) {
         var w = avals[a];
         var aname = _str(w[1]);
@@ -2382,7 +2421,8 @@ function doGet(e) {
           name: aname,
           cfg: acfg === "L" || acfg === "R" ? acfg : "M",
           dest: _str(w[3]),
-          notes: _str(w[4]),
+          pos: _str(w[4]),
+          notes: _str(w[5]),
         });
       }
     }
@@ -2456,8 +2496,8 @@ function _write(d) {
       sh.getRange(DATA_ROW, 2, vals.length, 6).setValues(vals);
     }
 
-    // AUX / monitor-outputs table at columns I..M: OUT | AUX NAME | M/L/R |
-    // DESTINATION | NOTES, with a pre-numbered OUT column and dropdowns.
+    // AUX / monitor-outputs table at columns I..N: OUT | AUX NAME | M/L/R |
+    // DESTINATION | POSITION | NOTES, with a pre-numbered OUT column and dropdowns.
     sh.getRange(5, AUX_COL, 1, AUX_HEADERS.length)
       .setValues([AUX_HEADERS])
       .setFontWeight("bold")
@@ -2471,9 +2511,9 @@ function _write(d) {
     sh.getRange(DATA_ROW, AUX_COL, auxPrefill, 1).setValues(anums).setFontColor("#888888");
     if (auxes.length) {
       var avals = auxes.map(function (r) {
-        return [r.name || "", r.cfg || "M", r.dest || "", r.notes || ""];
+        return [r.name || "", r.cfg || "M", r.dest || "", r.pos || "", r.notes || ""];
       });
-      sh.getRange(DATA_ROW, AUX_COL + 1, avals.length, 4).setValues(avals);
+      sh.getRange(DATA_ROW, AUX_COL + 1, avals.length, 5).setValues(avals);
     }
 
     // M/L/R dropdowns (inputs col C, auxes col K) and the aux DESTINATION
@@ -2500,7 +2540,8 @@ function _write(d) {
     sh.setColumnWidth(AUX_COL + 1, 160);
     sh.setColumnWidth(AUX_COL + 2, 64);
     sh.setColumnWidth(AUX_COL + 3, 120);
-    sh.setColumnWidth(AUX_COL + 4, 220);
+    sh.setColumnWidth(AUX_COL + 4, 130);
+    sh.setColumnWidth(AUX_COL + 5, 220);
     sh.getRange(DATA_ROW, 1, MAX_ROWS, 1).setHorizontalAlignment("right");
     sh.getRange(DATA_ROW, AUX_COL, MAX_ROWS, 1).setHorizontalAlignment("right");
 
@@ -2647,7 +2688,7 @@ function auxSheetRows(){ // builder auxes -> sheet rows (stereo = L row + R row)
   const pts=auxPorts();const out=[];
   state.auxes.forEach((a,i)=>{
     if(!a.name.trim())return;
-    const f={dest:a.dest||"",notes:(a.notes||"").trim()};
+    const f={dest:a.dest||"",pos:(a.pos||"").trim(),notes:(a.notes||"").trim()};
     if(a.stereo){out.push({out:pts[i][0],name:a.name.trim(),cfg:"L",...f});
                  out.push({out:pts[i][1],name:a.name.trim(),cfg:"R",...f});}
     else out.push({out:pts[i][0],name:a.name.trim(),cfg:"M",...f});
@@ -2688,7 +2729,7 @@ function applySheet(data){ // sheet rows -> builder channels (keeps routing/rack
   let nAux=-1;
   if(Array.isArray(data.auxes)){
     const auxes=foldLR(data.auxes,warn,(name,stereo,r)=>(
-      {...defAux(),name,stereo,dest:r.dest||"",notes:r.notes||""}));
+      {...defAux(),name,stereo,dest:r.dest||"",pos:r.pos||"",notes:r.notes||""}));
     nAux=Math.min(auxes.length,cfg().mon);
     if(auxes.length>cfg().mon)warn.push(`${auxes.length-cfg().mon} aux(es) beyond the ${cfg().mon}-strip bank were dropped`);
     state.auxes=auxes;
