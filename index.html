@@ -621,6 +621,7 @@ td .rgrip{color:var(--dim);font-size:11px;letter-spacing:-2px;margin-right:5px;}
 .tabbar button:hover{color:var(--fg);}
 .tabbar button.on{color:var(--fg);border-bottom-color:var(--accent);background:var(--panel);}
 section[data-tab]{display:none;}
+body[data-tab="mixer"] section[data-tab="mixer"],
 body[data-tab="in"] section[data-tab="in"],
 body[data-tab="out"] section[data-tab="out"],
 body[data-tab="link"] section[data-tab="link"],
@@ -696,21 +697,22 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
   <textarea id="gsScript" readonly rows="8"></textarea>
 </div>
 
-<section style="--seccolor:var(--accent)">
-  <div class="sechead"><h2>Mixer configuration</h2>
-    <span class="hint">Same options as LV1's session config. Strip banks are fixed — rename, reorder or reset strips; none can be added or deleted. Only <b>named</b> strips are built into the session.</span></div>
-  <div class="cfglist" id="cfgList"></div>
-</section>
-
 <div id="warnings"></div>
 
 <div class="tabbar" id="tabbar">
+  <button data-tab="mixer">MIXER</button>
   <button data-tab="stage" class="on">STAGE</button>
   <button data-tab="in">INPUTS</button>
   <button data-tab="out">OUTPUTS</button>
   <button data-tab="link">LINK</button>
   <button data-tab="notes">NOTES</button>
 </div>
+
+<section style="--seccolor:var(--accent)" data-tab="mixer">
+  <div class="sechead"><h2>Mixer configuration</h2>
+    <span class="hint">Same options as LV1's session config. Strip banks are fixed — rename, reorder or reset strips; none can be added or deleted. Only <b>named</b> strips are built into the session.</span></div>
+  <div class="cfglist" id="cfgList"></div>
+</section>
 
 <section style="--seccolor:var(--ch)" data-tab="in">
   <div class="sechead"><h2>Inputs</h2><span class="count" id="chCount"></span>
