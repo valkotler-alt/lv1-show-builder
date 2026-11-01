@@ -586,6 +586,14 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
 @media (max-width:860px){ .sbwrap{flex-direction:column;} .sbpal{width:100%;} #palGrid{max-height:200px;} }
 #status{font-size:13px;color:var(--ok);min-height:18px;margin:6px 0;}
 #status.err{color:var(--mtx);}
+.tabbar{display:flex;gap:4px;margin:16px 0 12px;border-bottom:2px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:60;padding-top:6px;}
+.tabbar button{font:600 13px var(--font-ui);letter-spacing:.08em;background:none;border:none;border-bottom:3px solid transparent;color:var(--dim);padding:9px 18px;margin-bottom:-2px;border-radius:7px 7px 0 0;cursor:pointer;}
+.tabbar button:hover{color:var(--fg);}
+.tabbar button.on{color:var(--fg);border-bottom-color:var(--accent);background:var(--panel);}
+section[data-tab]{display:none;}
+body[data-tab="in"] section[data-tab="in"],
+body[data-tab="out"] section[data-tab="out"],
+body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 #cfm{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;}
 #cfm[hidden]{display:none;}
 .cfmbox{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:18px 20px;max-width:480px;box-shadow:0 12px 40px rgba(0,0,0,.45);}
@@ -661,7 +669,13 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
 
 <div id="warnings"></div>
 
-<section style="--seccolor:var(--ch)">
+<div class="tabbar" id="tabbar">
+  <button data-tab="in" class="on">INPUTS</button>
+  <button data-tab="out">OUTPUTS</button>
+  <button data-tab="stage">STAGE</button>
+</div>
+
+<section style="--seccolor:var(--ch)" data-tab="in">
   <div class="sechead"><h2>Inputs</h2><span class="count" id="chCount"></span>
     <span class="hint">MGB ports patch to named inputs top-down (stereo takes two). Mic / stand / position go to the vendor PDF only.</span>
     <span class="selops"><button class="small" data-k="ch" data-f="selUp">▲ Selected</button><button class="small" data-k="ch" data-f="selDown">▼ Selected</button><button class="small" data-k="ch" data-f="selClr" title="Deselect all">✕ Deselect</button></span></div>
@@ -671,7 +685,7 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
   </table></div>
 </section>
 
-<section style="--seccolor:var(--grp)">
+<section style="--seccolor:var(--grp)" data-tab="out">
   <div class="sechead"><h2>Groups</h2><span class="count" id="grpCount"></span>
     <span class="hint">Pre/Post FX is the LV1 group processing point. Destination MASTER = LR.</span>
     <span class="selops"><button class="small" data-k="grp" data-f="selUp">▲ Selected</button><button class="small" data-k="grp" data-f="selDown">▼ Selected</button><button class="small" data-k="grp" data-f="selClr" title="Deselect all">✕ Deselect</button></span></div>
@@ -681,7 +695,7 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
   </table></div>
 </section>
 
-<section style="--seccolor:var(--fx)">
+<section style="--seccolor:var(--fx)" data-tab="out">
   <div class="sechead"><h2>FX returns</h2><span class="count" id="fxCount"></span>
     <span class="hint">LV1 FX strips 1–8.</span>
     <span class="selops"><button class="small" data-k="fx" data-f="selUp">▲ Selected</button><button class="small" data-k="fx" data-f="selDown">▼ Selected</button><button class="small" data-k="fx" data-f="selClr" title="Deselect all">✕ Deselect</button></span></div>
@@ -691,7 +705,7 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
   </table></div>
 </section>
 
-<section style="--seccolor:var(--aux)">
+<section style="--seccolor:var(--aux)" data-tab="out">
   <div class="sechead"><h2>Auxes / Monitors</h2><span class="count" id="auxCount"></span>
     <span class="hint">LV1 aux strips ("Mon" bank). Output ports patch to named auxes top-down (stereo takes two). Destination / notes go to the Google Sheet.</span>
     <span class="selops"><button class="small" data-k="aux" data-f="selUp">▲ Selected</button><button class="small" data-k="aux" data-f="selDown">▼ Selected</button><button class="small" data-k="aux" data-f="selClr" title="Deselect all">✕ Deselect</button></span></div>
@@ -701,7 +715,7 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
   </table></div>
 </section>
 
-<section style="--seccolor:var(--accent)">
+<section style="--seccolor:var(--accent)" data-tab="out">
   <div class="sechead"><h2>Master (LR)</h2>
     <span class="hint">Plugin rack on the stereo master strip. “Stock” = LV1’s default F2 + Dynamics + EQ.</span></div>
   <div class="tblwrap"><table id="mstTable">
@@ -710,7 +724,7 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
   </table></div>
 </section>
 
-<section style="--seccolor:var(--mtx)">
+<section style="--seccolor:var(--mtx)" data-tab="out">
   <div class="sechead"><h2>Matrixes</h2><span class="count" id="mtxCount"></span>
     <span class="hint">LV1 matrix strips 1–8. Feed them from inputs or groups above.</span>
     <span class="selops"><button class="small" data-k="mtx" data-f="selUp">▲ Selected</button><button class="small" data-k="mtx" data-f="selDown">▼ Selected</button><button class="small" data-k="mtx" data-f="selClr" title="Deselect all">✕ Deselect</button></span></div>
@@ -720,7 +734,7 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
   </table></div>
 </section>
 
-<section style="--seccolor:var(--grp)" id="stageSec">
+<section style="--seccolor:var(--grp)" id="stageSec" data-tab="stage">
   <div class="sechead"><h2>Stage plot</h2><span class="count" id="stageCount"></span>
     <span class="hint">Click a library item to place it, drag to position, label it with the input it belongs to.
     Drawn from the audience; position zones use stage left/right (performer's view).</span>
@@ -1016,13 +1030,38 @@ function dupNames(list){const seen=new Set(),dup=new Set();
   for(const it of list){const n=it.name.trim().toUpperCase();if(!n)continue;if(seen.has(n))dup.add(n);seen.add(n);}return dup;}
 const rowCls=(kind,i)=>sel[kind].has(i)?' class="selon"':'';
 
+/* Assignment menus list EVERY strip of the selected mixer configuration:
+   the strip's name when set, else its default label ("Group 3"). Picking an
+   unnamed strip auto-names it so the assignment is actually built. */
+function stripOpts(kind,exceptLabel){
+  const list=listFor[kind]();
+  const used=new Set(list.map(x=>x.name.trim().toUpperCase()).filter(Boolean));
+  return list.map((x,i)=>{
+    const n=x.name.trim();
+    if(n)return n;
+    const d=DEFNAME[kind](i);
+    return used.has(d.toUpperCase())?null:d; // a real name shadows a default label
+  }).filter(o=>o&&o!==exceptLabel);
+}
+function autoName(kind,label){ // picking an unnamed strip's default label names it
+  const list=listFor[kind]();
+  if(!label||list.some(x=>x.name.trim().toUpperCase()===label.trim().toUpperCase()))return false;
+  const j=list.findIndex((x,i)=>!x.name.trim()&&DEFNAME[kind](i)===label);
+  if(j<0)return false;
+  list[j].name=label;return true;
+}
+const LINK_COUNT=16; // LV1 link strips
+const linkOpts=()=>["None",...Array.from({length:LINK_COUNT},(_,i)=>`Link ${i+1}`)];
+
 function renderChannels(){
   const tb=$("#chTable tbody"); const pts=ports(); const dups=dupNames(state.channels);
-  const grpOpts=state.groups.map(g=>g.name.trim()).filter(Boolean);
-  const mtxOpts=state.matrixes.map(m=>m.name.trim()).filter(Boolean);
+  const grpOpts=stripOpts("grp");
+  const mtxOpts=stripOpts("mtx");
   tb.innerHTML=state.channels.map((ch,i)=>{
-    const s=(f,cur,opts,none)=>`<select id="ch-${i}-${f}" data-k="ch" data-i="${i}" data-f="${f}">
-      <option value=""${cur===""?" selected":""}>${none}</option>${opts.map(o=>`<option${o===cur?" selected":""}>${esc(o)}</option>`).join("")}</select>`;
+    const s=(f,cur,opts,none)=>{
+      const all=cur&&!opts.includes(cur)?[cur,...opts]:opts; // keep a legacy/custom value visible
+      return `<select id="ch-${i}-${f}" data-k="ch" data-i="${i}" data-f="${f}">
+      <option value=""${cur===""?" selected":""}>${none}</option>${all.map(o=>`<option${o===cur?" selected":""}>${esc(o)}</option>`).join("")}</select>`;};
     return `<tr${rowCls("ch",i)}>
       ${selCell("ch",i)}
       <td class="num">${i+1}</td>
@@ -1030,9 +1069,9 @@ function renderChannels(){
       ${nameCell("ch",i,ch.name,dups)}
       ${stCell("ch",i,ch.stereo)}
       ${colorCell("ch",i,ch.color)}
-      <td>${s("group",ch.group,grpOpts,"— Master")}</td>
-      <td>${s("link",ch.link,["None",...grpOpts],"= Group")}</td>
-      <td>${s("matrix",ch.matrix,mtxOpts,"—")}</td>
+      <td>${s("group",ch.group,grpOpts,"MASTER")}</td>
+      <td>${s("link",ch.link,linkOpts(),"= Group")}</td>
+      <td>${s("matrix",ch.matrix,mtxOpts,"None")}</td>
       <td><input id="ch-${i}-mic" value="${esc(ch.mic)}" data-k="ch" data-i="${i}" data-f="mic" placeholder="e.g. B91A"></td>
       <td><input id="ch-${i}-stand" value="${esc(ch.stand)}" data-k="ch" data-i="${i}" data-f="stand" placeholder="short / tall / clip"></td>
       <td><input id="ch-${i}-pos" value="${esc(ch.pos)}" data-k="ch" data-i="${i}" data-f="pos" placeholder="e.g. DSC riser"></td>
@@ -1046,9 +1085,11 @@ function renderChannels(){
 }
 function renderGroups(){
   const tb=$("#grpTable tbody"); const dups=dupNames(state.groups);
-  const mtxOpts=state.matrixes.map(m=>m.name.trim()).filter(Boolean);
+  const mtxOpts=stripOpts("mtx");
   tb.innerHTML=state.groups.map((g,i)=>{
-    const destOpts=["MASTER",...state.groups.map(x=>x.name.trim()).filter(n=>n&&n!==g.name.trim())];
+    const selfLabel=g.name.trim()||DEFNAME.grp(i);
+    const destOpts=["MASTER",...stripOpts("grp",selfLabel)];
+    if(g.dest&&!destOpts.includes(g.dest))destOpts.splice(1,0,g.dest);
     return `<tr${rowCls("grp",i)}>
       ${selCell("grp",i)}
       <td class="num">${i+1}</td>
@@ -1057,7 +1098,7 @@ function renderGroups(){
       ${colorCell("grp",i,g.color)}
       <td><select id="grp-${i}-dest" data-k="grp" data-i="${i}" data-f="dest">${destOpts.map(o=>`<option${o===g.dest?" selected":""}>${esc(o)}</option>`).join("")}</select></td>
       <td><button class="pfbtn small ${g.postFx?"post":""}" id="grp-${i}-pf" data-k="grp" data-i="${i}" data-f="postFx">${g.postFx?"POST":"PRE"}</button></td>
-      <td><div class="chips">${mtxOpts.length?mtxOpts.map(m=>`<label class="${g.matrix.includes(m)?"on":""}"><input type="checkbox" id="grp-${i}-mx-${esc(m)}" data-k="grp" data-i="${i}" data-f="mx" data-m="${esc(m)}" ${g.matrix.includes(m)?"checked":""}>${esc(m)}</label>`).join(""):'<span style="color:var(--dim);font-size:11px">no matrixes named</span>'}</div></td>
+      <td><div class="chips">${mtxOpts.length?mtxOpts.map(m=>`<label class="${g.matrix.includes(m)?"on":""}"><input type="checkbox" id="grp-${i}-mx-${esc(m)}" data-k="grp" data-i="${i}" data-f="mx" data-m="${esc(m)}" ${g.matrix.includes(m)?"checked":""}>${esc(m)}</label>`).join(""):'<span style="color:var(--dim);font-size:11px">no matrix strips in this configuration</span>'}</div></td>
       ${rackCell("grp",i,g.rack)}
       ${opsCell("grp",i,state.groups.length)}</tr>`+rackRow("grp",i,g.rack,10,g.stereo);
   }).join("")||emptyRow(10,"This mixer configuration has no group strips.");
@@ -1066,7 +1107,8 @@ function renderGroups(){
 function renderFx(){
   const tb=$("#fxTable tbody"); const dups=dupNames(state.fx);
   tb.innerHTML=state.fx.map((f,i)=>{
-    const destOpts=["MASTER",...state.groups.map(x=>x.name.trim()).filter(Boolean)];
+    const destOpts=["MASTER",...stripOpts("grp")];
+    if(f.dest&&!destOpts.includes(f.dest))destOpts.splice(1,0,f.dest);
     return `<tr${rowCls("fx",i)}>${selCell("fx",i)}<td class="num">${i+1}</td>${nameCell("fx",i,f.name,dups)}${stCell("fx",i,f.stereo)}
       ${colorCell("fx",i,f.color)}
       <td><select id="fx-${i}-dest" data-k="fx" data-i="${i}" data-f="dest">${destOpts.map(o=>`<option${o===f.dest?" selected":""}>${esc(o)}</option>`).join("")}</select></td>
@@ -1195,9 +1237,20 @@ document.addEventListener("input",e=>{
     }
     return;
   }
-  if(f==="mx"){const m=t.dataset.m;it.matrix=t.checked?[...it.matrix,m]:it.matrix.filter(x=>x!==m);renderGroups();return;}
+  if(f==="mx"){const m=t.dataset.m;it.matrix=t.checked?[...it.matrix,m]:it.matrix.filter(x=>x!==m);
+    if(t.checked&&autoName("mtx",m)){render();setStatus(`Matrix strip “${m}” named automatically so the feed is built.`);}
+    else renderGroups();
+    return;}
   if(["name","group","link","matrix","mic","stand","notes","dest"].includes(f)){it[f]=t.value;
     if(f==="name"&&(k==="grp"||k==="mtx")){render();t&&focusBack(k,t.dataset.i,"name");return;}
+    // Assigning to an unnamed strip (shown by its default label) names it,
+    // so the routing is actually built into the session.
+    const nk=f==="group"||(f==="dest"&&(k==="grp"||k==="fx"))?"grp":f==="matrix"?"mtx":null;
+    if(nk&&autoName(nk,t.value)){
+      render();
+      setStatus(`${nk==="grp"?"Group":"Matrix"} strip “${t.value}” named automatically so the assignment is built.`);
+      return;
+    }
     renderWarnings(); if(f==="name"){refreshNameHighlights(k);if(k==="ch")refreshPorts();}
   }
 });
@@ -2810,6 +2863,15 @@ $("#btnPdf").onclick=async()=>{
   try{ await dl.save({filename:fileStem()+" input list.pdf",data:out}); setStatus("PDF exported."); }
   catch(err){ if(err&&err.code==="declined")return; setStatus("PDF export failed: "+(err.message||""),true); }
 };
+
+/* ---- page tabs: INPUTS / OUTPUTS / STAGE ---- */
+function setTab(t){
+  document.body.dataset.tab=t;
+  document.querySelectorAll("#tabbar button").forEach(b=>b.classList.toggle("on",b.dataset.tab===t));
+  try{localStorage.setItem("lv1.tab",t);}catch(_){}
+}
+$("#tabbar").addEventListener("click",e=>{const b=e.target.closest("button");if(b)setTab(b.dataset.tab);});
+setTab((()=>{try{return localStorage.getItem("lv1.tab")||"in";}catch(_){return "in";}})());
 
 applyConfig();
 let restored=false;
