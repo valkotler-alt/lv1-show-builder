@@ -785,7 +785,6 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
         <label id="siNoteWrap" hidden>Note <input id="siNote" size="14" placeholder="e.g. 240x120x20cm"></label>
         <label id="siRotWrap">Rotate <input type="range" id="siRot" min="-180" max="180" step="4.5"></label>
         <span class="rotbtns"><button class="small" id="siRotM" title="Rotate −4.5°">−4.5°</button><button class="small" id="siRotP" title="Rotate +4.5°">+4.5°</button><button class="small" id="siRotR" title="Reset rotation to 0°">⟲ 0°</button></span>
-        <label title="Apply an LV1 strip color to every input linked to the selected item(s)">Strip color <select id="siCol" class="colsel"></select></label>
         <button class="small" id="siFlip">Flip</button>
         <button class="small" id="siDup">Duplicate</button>
         <button class="small danger" id="siDel">Delete</button>
@@ -2194,28 +2193,8 @@ $("#siRot").addEventListener("input",e=>{
   if(el)el.style.transform=`rotate(${it.rot}deg)${it.flip?" scaleX(-1)":""}`;
 });
 $("#siRot").addEventListener("change",()=>render());
-/* Share one LV1 strip color across everything linked to the selected stage
-   item(s) — a whole musician position colored in one pick. */
-$("#siCol").innerHTML='<option value="" hidden>pick…</option>'+palOpts(-1).replace('<option value="">—</option>','<option value="">— none</option>');
-$("#siCol").addEventListener("change",e=>{
-  const v=e.target.value===""?null:+e.target.value;
-  const chBy=new Map(state.channels.map(c=>[c.name.trim().toUpperCase(),c]));
-  const axBy=new Map(state.auxes.map(a=>[a.name.trim().toUpperCase(),a]));
-  let n=0;
-  for(const i of mSel){
-    const it=stg().items[i];if(!it)continue;
-    const names=[...(it.ins||[])];
-    if(it.label&&it.label.trim())names.push(it.label.trim());
-    for(const nm of new Set(names.map(s=>s.toUpperCase()))){
-      const tgt=(it.auxl&&nm===it.auxl.toUpperCase())?axBy.get(nm):chBy.get(nm);
-      if(tgt){tgt.color=v;n++;}
-    }
-  }
-  e.target.value="";
-  render();
-  setStatus(n?`Color applied to ${n} linked strip${n===1?"":"s"}.`
-    :"No linked inputs on the selected item(s) — add them via the template confirm or a label first.",!n);
-});
+/* (The stage "Strip color" picker was removed for now — color the linked
+   rows from the IO lists; stage click-selection ticks them for multi-edit.) */
 for(const id of ["dispP","dispN","dispI"])$("#"+id).addEventListener("change",()=>{
   const d=($("#dispP").checked?"p":"")+($("#dispN").checked?"n":"")+($("#dispI").checked?"i":"");
   for(const j of mSel){const it=stg().items[j];if(it&&it.img!=="riser")it.disp=d;}
