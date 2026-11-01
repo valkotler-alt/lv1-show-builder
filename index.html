@@ -585,6 +585,11 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
 .sitem.riser .rlabel{position:absolute;top:4px;left:0;right:0;text-align:center;font:700 12px var(--font-ui);color:#333;pointer-events:none;}
 .palshape{width:52px;height:36px;border:2.5px solid currentColor;border-radius:2px;}
 [hidden]{display:none!important;} /* flex/grid display rules must not defeat the hidden attribute */
+#siIO{width:100%;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;padding-top:6px;border-top:1px dashed var(--line);}
+#siIO .iohead{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);font-weight:600;flex:none;}
+#siIO .iorow{display:inline-flex;gap:5px;align-items:center;font-family:var(--font-num);font-size:11px;color:var(--dim);}
+#siIO .iorow input{width:110px;padding:3px 6px;font-size:12px;}
+#siIO button{flex:none;}
 .sinsp{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:8px;font-size:12px;color:var(--dim);}
 .sinsp label{display:inline-flex;gap:6px;align-items:center;}
 .rotbtns{display:inline-flex;gap:4px;}
@@ -788,6 +793,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
         <button class="small" id="siDup">Duplicate</button>
         <button class="small danger" id="siDel">Delete</button>
         <span class="hint">drag moves · Shift-click multi-selects · click selects the whole position (Alt-click one item) · Delete key removes</span>
+        <div id="siIO" hidden></div>
       </div>
       <datalist id="chanNames"></datalist>
       <datalist id="posList"></datalist>
@@ -1854,7 +1860,8 @@ function renderInspector(){
     const ps=new Set([...mSel].map(j=>((stg().items[j]||{}).pos||"").trim()));
     $("#siPos").value=ps.size===1?[...ps][0]:"";
   }
-  if(multi)return;
+  if(multi){$("#siIO").hidden=true;return;}
+  renderItemIO(it);
   if(document.activeElement!==$("#siLabel"))$("#siLabel").value=it.label||"";
   $("#siRot").value=it.rot||0;
   if(riser){
@@ -1864,6 +1871,62 @@ function renderInspector(){
     $("#siCm").value=it.cm?Math.round(it.cm):"";
   }
 }
+/* Linked-IO panel in the inspector: the selected item's inputs / aux with
+   their patch numbers; names are editable HERE without breaking the link
+   (the ins/auxl/label references are renamed along). With exactly one IO
+   row (mono or stereo single instrument), "→ Label" copies it to the label. */
+function renderItemIO(it){
+  const box=$("#siIO");
+  if(box.contains(document.activeElement))return; // don't rebuild under the caret
+  const pts=ports(),apts=auxPorts();
+  const {chs,axs}=linkedRowsFor([stageSel]);
+  const rows=[];
+  for(const c of chs.values()){
+    const x=state.channels.indexOf(c);
+    rows.push(`<span class="iorow">${pts[x]?pts[x].join("–"):"—"}<input data-iok="ch" data-ioi="${x}" value="${esc(c.name)}" spellcheck="false"></span>`);
+  }
+  for(const a of axs.values()){
+    const x=state.auxes.indexOf(a);
+    rows.push(`<span class="iorow">out ${apts[x]?apts[x].join("–"):"—"}<input data-iok="aux" data-ioi="${x}" value="${esc(a.name)}" spellcheck="false"></span>`);
+  }
+  box.hidden=!rows.length;
+  if(!rows.length){box.innerHTML="";return;}
+  box.innerHTML=`<span class="iohead">Linked IO</span>`+rows.join("")+
+    (rows.length===1?`<button class="small" id="siCopyLab" title="Copy the IO name into the item label">→ Label</button>`:"");
+  const cp=$("#siCopyLab");
+  if(cp)cp.onclick=()=>{
+    const it2=stg().items[stageSel];if(!it2)return;
+    it2.label=box.querySelector(".iorow input").value.trim();
+    render();
+  };
+}
+function renameLinkedRow(kind,idx,newName){
+  const row=kind==="ch"?state.channels[idx]:state.auxes[idx];
+  if(!row)return;
+  const oldUC=row.name.trim().toUpperCase();
+  row.name=newName;
+  const v=newName.trim();
+  if(oldUC&&v){ // every stage reference follows the rename, so links survive
+    stg().items.forEach(it=>{
+      if(Array.isArray(it.ins))it.ins=it.ins.map(n=>n.trim().toUpperCase()===oldUC?v:n);
+      const wasAuxLink=!!(it.auxl&&it.auxl.trim().toUpperCase()===oldUC);
+      if(kind==="aux"&&wasAuxLink)it.auxl=v;
+      if(it.label&&it.label.trim().toUpperCase()===oldUC&&(kind==="aux")===wasAuxLink)it.label=v;
+    });
+  }
+  const cell=document.getElementById(`${kind}-${idx}-name`);
+  if(cell&&cell!==document.activeElement)cell.value=newName;
+  refreshNameHighlights(kind);
+  if(kind==="ch")renderWarnings();
+}
+document.addEventListener("input",e=>{
+  const t=e.target;
+  if(t.dataset&&t.dataset.iok)renameLinkedRow(t.dataset.iok,+t.dataset.ioi,t.value);
+});
+document.addEventListener("change",e=>{
+  if(e.target.dataset&&e.target.dataset.iok)render(); // commit: refresh tables, labels, datalists
+});
+
 /* Items sharing a Position act as one: click selects them all, they move
    and rotate together (the old Group, folded into Position). */
 const groupOf=i=>{const p=((stg().items[i]||{}).pos||"").trim().toUpperCase();
