@@ -524,6 +524,7 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
 .slotrow.fixed .sname{color:var(--dim);letter-spacing:.05em;}
 .slotrow.ins{border-color:var(--seccolor,var(--accent));cursor:grab;}
 .slotrow.ins .sname{color:var(--fg);}
+td .rgrip{color:var(--dim);font-size:11px;letter-spacing:-2px;margin-right:5px;}
 .slotrow.ins .grip{color:var(--dim);font-size:11px;letter-spacing:-2px;cursor:grab;flex:none;}
 .slotrow.ins.dragging{opacity:.4;}
 .slotrow.ins.dragover,.slotrow.add.dragover{outline:2px dashed var(--seccolor,var(--accent));outline-offset:-2px;}
@@ -806,7 +807,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
         <button class="small" id="siFlip">Flip</button>
         <button class="small" id="siDup">Duplicate</button>
         <button class="small danger" id="siDel">Delete</button>
-        <span class="hint">drag moves · Shift-click multi-selects · click selects the whole position (Alt-click one item) · Delete key removes</span>
+        <span class="hint">click selects the whole position (Alt-click one item, click again to deselect) · Ctrl/Shift-click adds · Esc clears · drag moves · Delete key removes</span>
         <div id="siCap" title="The caption under the instrument: tick the lines to show. Position groups items (moves/rotates together) and syncs to the lists; Name is free text (empty = the linked channel's name); IO is the live patch.">
           <span class="caphead">Caption · tick what the stage shows</span>
           <label class="caprow" id="capRowP"><input type="checkbox" id="dispP"><span>Position</span></label>
@@ -914,6 +915,9 @@ function refreshSel(k){ // sync the row highlight to sel[k] without a re-render
 }
 document.addEventListener("keydown",e=>{ // Esc clears every list selection
   if(e.key!=="Escape"||!$("#cfm").hidden)return;
+  if(typeof mSel!=="undefined"&&mSel.size){ // stage first; its sync clears the linked rows
+    mSel=new Set();stageSel=-1;renderStage();
+  }
   if(!Object.values(sel).some(s=>s.size))return;
   for(const k of Object.keys(sel)){sel[k]=new Set();lastSel[k]=-1;refreshSel(k);}
   if(typeof syncStageSelection==="function")syncStageSelection();
@@ -1122,7 +1126,7 @@ function renderChannels(){
       return `<select id="ch-${i}-${f}" data-k="ch" data-i="${i}" data-f="${f}">
       <option value=""${cur===""?" selected":""}>${none}</option>${all.map(o=>`<option${o===cur?" selected":""}>${esc(o)}</option>`).join("")}</select>`;};
     return `<tr${rowCls("ch",i)}>
-      <td class="num">${i+1}</td>
+      <td class="num"><span class="rgrip">⋮⋮</span>${i+1}</td>
       <td class="num">${pts[i]?pts[i].join("–"):"—"}</td>
       ${nameCell("ch",i,ch.name,dups)}
       ${stCell("ch",i,ch.stereo)}
@@ -1149,7 +1153,7 @@ function renderGroups(){
     const destOpts=["MASTER",...stripOpts("grp",selfLabel)];
     if(g.dest&&!destOpts.includes(g.dest))destOpts.splice(1,0,g.dest);
     return `<tr${rowCls("grp",i)}>
-      <td class="num">${i+1}</td>
+      <td class="num"><span class="rgrip">⋮⋮</span>${i+1}</td>
       ${nameCell("grp",i,g.name,dups)}
       ${stCell("grp",i,g.stereo)}
       ${colorCell("grp",i,g.color)}
@@ -1166,7 +1170,7 @@ function renderFx(){
   tb.innerHTML=state.fx.map((f,i)=>{
     const destOpts=["MASTER",...stripOpts("grp")];
     if(f.dest&&!destOpts.includes(f.dest))destOpts.splice(1,0,f.dest);
-    return `<tr${rowCls("fx",i)}><td class="num">${i+1}</td>${nameCell("fx",i,f.name,dups)}${stCell("fx",i,f.stereo)}
+    return `<tr${rowCls("fx",i)}><td class="num"><span class="rgrip">⋮⋮</span>${i+1}</td>${nameCell("fx",i,f.name,dups)}${stCell("fx",i,f.stereo)}
       ${colorCell("fx",i,f.color)}
       <td><select id="fx-${i}-dest" data-k="fx" data-i="${i}" data-f="dest">${destOpts.map(o=>`<option${o===f.dest?" selected":""}>${esc(o)}</option>`).join("")}</select></td>
       ${rackCell("fx",i,f.rack)}
@@ -1182,7 +1186,7 @@ function auxPorts(){ // 1-based output port list per NAMED aux (unnamed -> null)
 function renderAux(){
   const tb=$("#auxTable tbody"); const dups=dupNames(state.auxes); const pts=auxPorts();
   tb.innerHTML=state.auxes.map((a,i)=>`<tr${rowCls("aux",i)}>
-      <td class="num">${i+1}</td>
+      <td class="num"><span class="rgrip">⋮⋮</span>${i+1}</td>
       <td class="num">${pts[i]?pts[i].join("–"):"—"}</td>
       ${nameCell("aux",i,a.name,dups)}
       ${stCell("aux",i,a.stereo)}
@@ -1198,7 +1202,7 @@ function renderAux(){
 }
 function renderSimple(kind,list,tableSel){
   const tb=$(tableSel+" tbody"); const dups=dupNames(list);
-  tb.innerHTML=list.map((it,i)=>`<tr${rowCls(kind,i)}><td class="num">${i+1}</td>${nameCell(kind,i,it.name,dups)}${stCell(kind,i,it.stereo)}${colorCell(kind,i,it.color)}${opsCell(kind,i,list.length)}${ioOpsCell(kind,i)}</tr>`).join("")
+  tb.innerHTML=list.map((it,i)=>`<tr${rowCls(kind,i)}><td class="num"><span class="rgrip">⋮⋮</span>${i+1}</td>${nameCell(kind,i,it.name,dups)}${stCell(kind,i,it.stereo)}${colorCell(kind,i,it.color)}${opsCell(kind,i,list.length)}${ioOpsCell(kind,i)}</tr>`).join("")
     ||emptyRow(7,kind==="aux"?"This mixer configuration has no aux strips.":"No matrix strips in this configuration.");
   const total=kind==="aux"?cfg().mon:MTX_COUNT;
   $(kind==="aux"?"#auxCount":"#mtxCount").textContent=total?`${named(list).length} named / ${total} strips`:"";
@@ -2214,22 +2218,28 @@ $("#stage").addEventListener("pointerdown",e=>{
   }
   const i=+el.dataset.si;
   const unit=e.altKey?new Set([i]):groupOf(i);
-  if(e.shiftKey){
+  // Same model as the lists: Ctrl/Cmd (or Shift) click adds / removes.
+  if(e.shiftKey||e.ctrlKey||e.metaKey){
     const on=[...unit].every(j=>mSel.has(j));
     for(const j of unit){if(on)mSel.delete(j);else mSel.add(j);}
     if(!mSel.size)stageSel=-1;else stageSel=i;
     renderStage();
-    return; // shift-click adjusts the selection; no drag
+    return; // additive click adjusts the selection; no drag
   }
   // Alt-click always narrows to the clicked item — even inside an already
   // selected position (click the position, then Alt-click one member).
+  const wasSelected=mSel.has(i)&&!e.altKey;
   if(e.altKey)mSel=unit;
   else if(!mSel.has(i))mSel=unit;
   stageSel=i;
   renderStage();
   const px=(e.clientX-r.left)/r.width, py=(e.clientY-r.top)/r.height;
-  sdrag={moved:false,members:[...mSel].map(j=>({j,dx:stg().items[j].x-px,dy:stg().items[j].y-py}))};
-  el.setPointerCapture(e.pointerId);
+  // A press on an already-selected item that ends without movement acts
+  // like the lists' click-again: deselect (or narrow a larger selection).
+  sdrag={moved:false,wasSelected,unit,members:[...mSel].map(j=>({j,dx:stg().items[j].x-px,dy:stg().items[j].y-py}))};
+  // Capture on the stage: renderStage() above rebuilt the item elements, so
+  // `el` is detached by now.
+  try{$("#stage").setPointerCapture(e.pointerId);}catch(_){/* synthetic / ended pointer */}
 });
 $("#stage").addEventListener("pointermove",e=>{
   if(!sdrag)return;
@@ -2246,6 +2256,11 @@ $("#stage").addEventListener("pointermove",e=>{
 });
 $("#stage").addEventListener("pointerup",()=>{
   if(sdrag&&sdrag.moved)render(); // persists via autosave
+  else if(sdrag&&sdrag.wasSelected){
+    const same=mSel.size===sdrag.unit.size&&[...sdrag.unit].every(j=>mSel.has(j));
+    if(same){mSel=new Set();stageSel=-1;}else mSel=new Set(sdrag.unit);
+    renderStage();
+  }
   sdrag=null;
 });
 $("#siLabel").addEventListener("input",e=>{
