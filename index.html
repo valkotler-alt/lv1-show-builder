@@ -851,7 +851,7 @@ const defAux=()=>({name:"",stereo:false,dest:"",pos:"",notes:"",color:null});
 const AUX_DESTS=["Wedge","Wireless IEM","Wired IEM","Mixer"];
 const defMtx=()=>({name:"",stereo:false,color:null});
 const DEF={ch:defCh,grp:defGrp,fx:defFx,aux:defAux,mtx:defMtx};
-const DEFNAME={ch:i=>`Channel ${i+1}`,grp:i=>`Group ${i+1}`,fx:i=>`Fx ${i+1}`,aux:i=>`Mon ${i+1}`,mtx:i=>`Matrix ${i+1}`};
+const DEFNAME={ch:i=>`Channel ${i+1}`,grp:i=>`Group ${i+1}`,fx:i=>`Fx ${i+1}`,aux:i=>`Mon ${i+1}`,mtx:i=>`MTX ${i+1}`}; // MTX: short enough for the matrix-feed chips
 
 let state=defaultShow();
 let rackOpen=null; // "ch-3" | "grp-0" | "fx-1" | "mst-0" | null
