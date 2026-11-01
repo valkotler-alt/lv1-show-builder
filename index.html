@@ -596,7 +596,6 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
 .sinsp label{display:inline-flex;gap:6px;align-items:center;}
 .rotbtns{display:inline-flex;gap:4px;}
 .colsel{min-width:52px;font-family:var(--font-num);font-size:11px;}
-.tplconfirm{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;padding:8px 10px;border:1px solid var(--accent);border-radius:8px;background:var(--panel);font-size:12px;}
 .posname{position:absolute;transform:translate(-50%,0);font:600 11px var(--font-ui);font-style:italic;color:#555;background:rgba(255,255,255,.65);padding:0 4px;border-radius:3px;pointer-events:none;white-space:nowrap;}
 @media (max-width:860px){ .sbwrap{flex-direction:column;} .sbpal{width:100%;} #palGrid{max-height:200px;} }
 #status{font-size:13px;color:var(--ok);min-height:18px;margin:6px 0;}
@@ -772,11 +771,6 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
       <div class="stagedims">Stage width <input type="number" id="stageW" min="4" max="40" step="0.5" style="width:60px"> m
         <span class="hint">· depth <span id="stageD"></span> m (items are drawn at their real size — the chair is 50 cm)</span></div>
       <div id="stage"><div class="stagelabel">A U D I E N C E</div><div class="stagesize" id="stageSizeLab"></div></div>
-      <div id="tplConfirm" class="tplconfirm" hidden>
-        <span id="tplText"></span>
-        <button class="small" id="tplApply">Add</button>
-        <button class="small" id="tplSkip">Skip</button>
-      </div>
       <div id="sinsp" class="sinsp" hidden>
         <label id="siLabelWrap">Name <input id="siLabel" size="26" list="chanNames" placeholder="input / name" spellcheck="false"></label>
         <span id="siDispWrap" class="disptoggles" title="Which lines the caption under the instrument shows — Position, Name, IO patch">Caption
@@ -1590,7 +1584,6 @@ function loadSpec(spec){
     },
   };
   stageSel=-1;mSel=new Set();
-  if(typeof tplPending!=="undefined"){tplPending=null;try{$("#tplConfirm").hidden=true;}catch(_){}}
   clearSel();rackOpen=null;pendingCfg=null;
   applyConfig();
   render();
@@ -2034,21 +2027,21 @@ function addStageItem(ref){
   render();
 }
 /* Instrument -> input-list correlation: placing an item with a template
-   offers (never silently adds) its inputs / aux. */
-let tplPending=null;
-function offerTemplate(it,ref){
+   offers (never silently adds) its inputs / aux — as a MODAL Add/Skip
+   dialog, so the decision cannot be skipped by clicking elsewhere. */
+async function offerTemplate(it,ref){
   const t=TPL[ref];
-  tplPending=null;$("#tplConfirm").hidden=true;
   if(!t)return;
-  tplPending={it,t};
+  let msg="";
   if(t.ins){
     const names=t.ins.map(e=>e[0]+(e[1]?" (st)":""));
     const ports=t.ins.reduce((s,e)=>s+(e[1]?2:1),0);
-    $("#tplText").textContent=`${libName(ref)}: add ${ports} input${ports===1?"":"s"} — ${names.join(", ")}?`;
+    msg=`${libName(ref)}: add ${ports} input${ports===1?"":"s"} — ${names.join(", ")}?`;
   }else if(t.aux){
-    $("#tplText").textContent=`${libName(ref)}: add aux “${t.aux[0]}”${t.aux[1]?" (st)":""} → ${t.aux[2]}?`;
-  }
-  $("#tplConfirm").hidden=false;
+    msg=`${libName(ref)}: add aux “${t.aux[0]}”${t.aux[1]?" (st)":""} → ${t.aux[2]}?`;
+  }else return;
+  const ok=await askConfirm(msg,"Add","Skip");
+  if(ok&&stg().items.includes(it))applyTemplate(it,t); // item may have been deleted meanwhile
 }
 function libName(ref){const e=STAGELIB.find(x=>x.id===ref);return (e&&e.name)||ref;}
 function dedupeName(base,taken){
@@ -2057,11 +2050,7 @@ function dedupeName(base,taken){
   taken.add(n.toUpperCase());
   return n;
 }
-$("#tplSkip").onclick=()=>{tplPending=null;$("#tplConfirm").hidden=true;};
-$("#tplApply").onclick=()=>{
-  if(!tplPending)return;
-  const {it,t}=tplPending;
-  tplPending=null;$("#tplConfirm").hidden=true;
+function applyTemplate(it,t){
   if(t.ins){
     const taken=new Set(state.channels.filter(c=>c.name.trim()).map(c=>c.name.trim().toUpperCase()));
     const made=[];let full=false;
@@ -2086,7 +2075,7 @@ $("#tplApply").onclick=()=>{
     render();
     setStatus(`Added aux “${name}” → ${t.aux[2]}.`);
   }
-};
+}
 document.addEventListener("click",e=>{
   const p=e.target.closest("[data-add]");
   if(p)addStageItem(p.dataset.add);
@@ -2271,9 +2260,11 @@ $("#siDup").onclick=()=>{const it=stg().items[stageSel];if(!it)return;
 /* ---- OK/Cancel confirm dialog (window.confirm is blocked in the artifact
    iframe). Resolves true on OK, false on Cancel / Escape. ---- */
 let cfmRes=null;
-function askConfirm(msg,okText){
+function askConfirm(msg,okText,cancelText){
   $("#cfmText").textContent=msg;
   $("#cfmOk").textContent=okText||"OK — remove";
+  $("#cfmOk").classList.toggle("danger",!okText||/remove|discard/i.test(okText));
+  $("#cfmNo").textContent=cancelText||"Cancel";
   $("#cfm").hidden=false;
   $("#cfmOk").focus();
   return new Promise(res=>{cfmRes=res;});
