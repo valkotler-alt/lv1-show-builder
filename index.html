@@ -703,7 +703,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
     <span class="hint">MGB ports patch to named inputs top-down (stereo takes two). Mic / stand / position go to the vendor PDF only.</span></div>
     <div class="selops"><button class="small" data-k="ch" data-f="selUp">▲ Selected</button><button class="small" data-k="ch" data-f="selDown">▼ Selected</button><button class="small" data-k="ch" data-f="selClr" title="Deselect all">✕ Deselect</button></div>
   <div class="tblwrap"><table id="chTable">
-    <thead><tr><th></th><th>#</th><th>Patch</th><th>Name</th><th>M/ST</th><th>Color</th><th>Group</th><th>Link</th><th>Matrix</th><th>Mic</th><th>Stand</th><th>Stage position</th><th>Notes</th><th>Rack</th><th></th></tr></thead>
+    <thead><tr><th></th><th>#</th><th>Patch</th><th>Name</th><th>M/ST</th><th>Color</th><th>Group</th><th>Link</th><th>Matrix</th><th>Mic</th><th>Stand</th><th>Stage position</th><th>Notes</th><th>Rack</th><th></th><th>Add</th><th>Delete</th></tr></thead>
     <tbody></tbody>
   </table></div>
 </section>
@@ -733,7 +733,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
     <span class="hint">LV1 aux strips ("Mon" bank). Output ports patch to named auxes top-down (stereo takes two). Destination / notes go to the Google Sheet.</span></div>
     <div class="selops"><button class="small" data-k="aux" data-f="selUp">▲ Selected</button><button class="small" data-k="aux" data-f="selDown">▼ Selected</button><button class="small" data-k="aux" data-f="selClr" title="Deselect all">✕ Deselect</button></div>
   <div class="tblwrap"><table id="auxTable">
-    <thead><tr><th></th><th>#</th><th>Patch</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>Position</th><th>Notes</th><th></th></tr></thead>
+    <thead><tr><th></th><th>#</th><th>Patch</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>Position</th><th>Notes</th><th></th><th>Add</th><th>Delete</th></tr></thead>
     <tbody></tbody>
   </table></div>
 </section>
@@ -1136,7 +1136,7 @@ function renderChannels(){
       <td><input id="ch-${i}-pos" value="${esc(ch.pos)}" data-k="ch" data-i="${i}" data-f="pos" list="posList" placeholder="position"></td>
       <td><input id="ch-${i}-notes" value="${esc(ch.notes)}" data-k="ch" data-i="${i}" data-f="notes"></td>
       ${rackCell("ch",i,ch.rack)}
-      ${opsCell("ch",i,state.channels.length)}</tr>`+rackRow("ch",i,ch.rack,15,ch.stereo);
+      ${opsCell("ch",i,state.channels.length)}${ioOpsCell("ch",i)}</tr>`+rackRow("ch",i,ch.rack,17,ch.stereo);
   }).join("");
   const lastPts=[...pts].reverse().find(Boolean);
   const used=lastPts?lastPts[lastPts.length-1]:0;
@@ -1195,8 +1195,8 @@ function renderAux(){
         ${AUX_DESTS.map(o=>`<option${o===a.dest?" selected":""}>${o}</option>`).join("")}</select></td>
       <td><input id="aux-${i}-pos" value="${esc(a.pos||"")}" data-k="aux" data-i="${i}" data-f="pos" list="posList" placeholder="position"></td>
       <td><input id="aux-${i}-notes" value="${esc(a.notes||"")}" data-k="aux" data-i="${i}" data-f="notes"></td>
-      ${opsCell("aux",i,state.auxes.length)}</tr>`).join("")
-    ||emptyRow(10,"This mixer configuration has no aux strips.");
+      ${opsCell("aux",i,state.auxes.length)}${ioOpsCell("aux",i)}</tr>`).join("")
+    ||emptyRow(12,"This mixer configuration has no aux strips.");
   $("#auxCount").textContent=cfg().mon?`${named(state.auxes).length} named / ${cfg().mon} strips`:"";
 }
 function renderSimple(kind,list,tableSel){
@@ -1403,6 +1403,8 @@ document.addEventListener("click",e=>{
   if(f==="stereo"){list[i].stereo=!list[i].stereo;render();return;}
   if(f==="postFx"){list[i].postFx=!list[i].postFx;render();return;}
   if(f==="reset"){resetStrip(k,i);return;}
+  if(f==="del"){resetStrip(k,i,"delete");return;}
+  if(f==="ins"){insertStrip(k,i);return;}
   if(f==="up"&&i>0){[list[i-1],list[i]]=[list[i],list[i-1]];clearSel(k);rackOpen=null;render();return;}
   if(f==="down"&&i<list.length-1){[list[i+1],list[i]]=[list[i],list[i+1]];clearSel(k);rackOpen=null;render();return;}
 });
@@ -1410,7 +1412,8 @@ document.addEventListener("click",e=>{
    and the list in sync: the instrument is removed from the stage (or, when
    it has other linked inputs — a drum kit — just unlinked), after an
    OK/Cancel prompt naming exactly what goes. */
-async function resetStrip(k,i){
+async function resetStrip(k,i,mode){
+  const del=mode==="delete";
   const list=listFor[k]();if(!list[i])return;
   if((k==="ch"||k==="aux")&&typeof stg==="function"){
     const nm=(list[i].name||"").trim().toUpperCase();
@@ -1433,7 +1436,7 @@ async function resetStrip(k,i){
         const lines=[];
         if(removals.length)lines.push(`remove ${removals.map(h=>dn(h.it)).join(", ")} from the stage`);
         if(unlinks.length)lines.push(`unlink it from ${unlinks.map(h=>dn(h.it)).join(", ")} (the instrument stays on stage)`);
-        const ok=await askConfirm(`Resetting ${k==="ch"?"input":"aux"} “${list[i].name.trim()}” will also ${lines.join(", and ")}.`);
+        const ok=await askConfirm(`${del?"Deleting":"Resetting"} ${k==="ch"?"input":"aux"} “${list[i].name.trim()}” will also ${lines.join(", and ")}.`);
         if(!ok)return;
         if(removals.length){
           for(const h of removals.sort((a,b)=>b.x-a.x))stg().items.splice(h.x,1);
@@ -1448,7 +1451,35 @@ async function resetStrip(k,i){
       }
     }
   }
+  if(del){ // remove the row: following strips move up (patch re-flows), bank keeps its size
+    const name=list[i].name.trim();
+    list.splice(i,1);list.push(DEF[k]());
+    clearSel(k);rackOpen=null;render();
+    if(name)setStatus(`Deleted “${name}” — the following ${k==="ch"?"inputs":"auxes"} moved up and were re-patched.`);
+    return;
+  }
   list[i]=DEF[k]();clearSel(k);rackOpen=null;render();
+}
+/* Add a strip BELOW row i in a fixed-size LV1 bank: the new row is named
+   (so it is patched right away) and the following rows shift down; the
+   bank absorbs it by dropping its last UNNAMED strip. */
+function insertStrip(k,i){
+  const list=listFor[k]();
+  let drop=-1;
+  for(let j=list.length-1;j>i;j--)if(!list[j].name.trim()){drop=j;break;}
+  if(drop<0){setStatus(`The ${k==="ch"?"input":"aux"} bank is full (${list.length} strips) — delete a row first.`,true);return;}
+  list.splice(drop,1);
+  const taken=new Set(list.filter(x=>x.name.trim()).map(x=>x.name.trim().toUpperCase()));
+  const row=DEF[k]();row.name=dedupeName(k==="ch"?"New Input":"New Aux",taken);
+  list.splice(i+1,0,row);
+  clearSel(k);rackOpen=null;render();
+  focusBack(k,i+1,"name");
+  const el=document.getElementById(`${k}-${i+1}-name`);if(el)el.select();
+  setStatus(`Added “${row.name}” below row ${i+1} — type its name; following ${k==="ch"?"inputs":"auxes"} were re-patched.`);
+}
+function ioOpsCell(kind,i){
+  return `<td class="rowops"><button class="small" data-k="${kind}" data-i="${i}" data-f="ins" title="Add a new ${kind==="ch"?"input":"aux"} below this row (patch shifts down)">＋</button></td>
+    <td class="rowops"><button class="small danger" data-k="${kind}" data-i="${i}" data-f="del" title="Delete this row (following rows move up and are re-patched)">✕</button></td>`;
 }
 /* Rack insert picker: mousedown (not click) so the search input's blur
    doesn't hide the list before the pick lands. */
