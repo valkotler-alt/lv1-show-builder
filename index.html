@@ -2016,8 +2016,10 @@ function renderInspector(){
   if(multi){$("#siIO").hidden=true;return;}
   renderItemIO(it);
   if(!riser)$("#siIoTag").textContent=itemIoTag(stageSel)||"— not linked —";
-  $("#siLabel").placeholder=singleIoName(stageSel)||"name";
-  if(document.activeElement!==$("#siLabel"))$("#siLabel").value=it.label||"";
+  const one=riser?null:singleIoRow(stageSel);
+  $("#siLabel").placeholder=one?(one.kind==="ch"?"input name":"aux name"):"name";
+  $("#siLabel").title=one?`Renames ${one.kind==="ch"?"input":"aux"} “${one.row.name.trim()}” in the list too`:"";
+  if(document.activeElement!==$("#siLabel"))$("#siLabel").value=one?one.row.name:(it.label||"");
   $("#siRot").value=it.rot||0;
   if(riser){
     $("#siRsize").value=(it.rw&&it.rd)?`${it.rw}x${it.rd}`:"";
@@ -2041,17 +2043,24 @@ function ioTagFor(indices){ // combined patch range over the given stage items
 }
 const itemIoTag=idx=>ioTagFor([idx]);
 function singleIoName(idx){ // the linked row's name when there is exactly one
+  const one=singleIoRow(idx);
+  return one?one.row.name.trim():"";
+}
+/* Single-IO instrument (one linked input OR one aux: amp, vocal, wedge,
+   IEM): its caption Name IS that row's name — editing it renames the row.
+   Multi-IO instruments (kit, piano) keep a free-text Name (it.label). */
+function singleIoRow(idx){
   const {chs,axs}=linkedRowsFor([idx]);
-  const all=[...chs.values(),...axs.values()];
-  return all.length===1?all[0].name.trim():"";
+  if(chs.size+axs.size!==1)return null;
+  if(chs.size){const row=[...chs.values()][0];return {kind:"ch",i:state.channels.indexOf(row),row};}
+  const row=[...axs.values()][0];return {kind:"aux",i:state.auxes.indexOf(row),row};
 }
 function itemCaption(idx,it){
   const d=itemDisp(it),lines=[];
   if(d.includes("p")&&(it.pos||"").trim())lines.push(it.pos.trim());
   if(d.includes("n")){
-    // Empty Name falls back to the single linked channel/aux name, so a
-    // plain instrument needs only the tick — no typing, no copy button.
-    const nm=(it.label||"").trim()||singleIoName(idx);
+    // Single-IO instruments show their channel/aux name; others the label.
+    const nm=singleIoName(idx)||(it.label||"").trim();
     if(nm)lines.push(nm);
   }
   if(d.includes("i")){const t=itemIoTag(idx);if(t)lines.push(t);}
@@ -2076,8 +2085,9 @@ function renderItemIO(it){
     const x=state.auxes.indexOf(a);
     rows.push(`<span class="iorow">out ${apts[x]?apts[x].join("–"):"—"}<input data-iok="aux" data-ioi="${x}" value="${esc(a.name)}" spellcheck="false"></span>`);
   }
-  box.hidden=!rows.length;
-  if(!rows.length){box.innerHTML="";return;}
+  // A single linked row is renamed through the caption Name field instead.
+  box.hidden=rows.length<2;
+  if(rows.length<2){box.innerHTML="";return;}
   box.innerHTML=`<span class="iohead">Linked IO — rename here to keep the stage link</span>`+rows.join("");
 }
 function renameLinkedRow(kind,idx,newName){
@@ -2268,7 +2278,15 @@ $("#stage").addEventListener("pointerup",()=>{
 });
 $("#siLabel").addEventListener("input",e=>{
   const it=stg().items[stageSel];if(!it)return;
-  it.label=e.target.value;
+  const one=it.img==="riser"?null:singleIoRow(stageSel);
+  if(one){
+    // Rename the linked row; empty text is not applied (it would orphan
+    // the link mid-typing) — the field snaps back on change.
+    if(!e.target.value.trim())return;
+    const labelIsLink=!(it.ins&&it.ins.length)&&!it.auxl;
+    renameLinkedRow(one.kind,one.i,e.target.value);
+    if(!labelIsLink)it.label=""; // the name lives on the row now
+  }else it.label=e.target.value;
   const el=$("#stage").querySelector(".sitem.sel");if(!el)return;
   if(it.img==="riser"){const rl=el.querySelector(".rlabel");if(rl)rl.textContent=it.label;return;}
   let lab=el.querySelector(".slab");
@@ -2276,7 +2294,12 @@ $("#siLabel").addEventListener("input",e=>{
   if(cap){if(!lab){lab=document.createElement("div");lab.className="slab";el.appendChild(lab);}lab.textContent=cap;}
   else if(lab)lab.remove();
 });
-$("#siLabel").addEventListener("change",()=>render());
+$("#siLabel").addEventListener("change",e=>{
+  const it=stg().items[stageSel];
+  const one=it&&it.img!=="riser"?singleIoRow(stageSel):null;
+  if(one&&!e.target.value.trim())e.target.value=one.row.name; // an emptied name snaps back
+  render();
+});
 $("#siCm").addEventListener("input",e=>{
   const it=stg().items[stageSel];if(!it||it.img==="riser")return;
   const v=+e.target.value;
