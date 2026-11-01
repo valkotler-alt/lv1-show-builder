@@ -1798,6 +1798,21 @@ function renderStage(){
   $("#stageSizeLab").textContent=`${+stg().widthM||12} m × ${(((+stg().widthM||12))*9/16).toFixed(1)} m`;
   $("#stageCount").textContent=stg().items.length?`${stg().items.length} item${stg().items.length===1?"":"s"}`:"";
   renderInspector();
+  syncListSelection();
+}
+/* The IO lists' row selection FOLLOWS the stage selection: picking a drum
+   kit on stage ticks every linked input (and a wedge's aux), so multi-edit
+   (color, position, move) is ready to go. Runs only when the stage
+   selection actually changes, so manual list selections survive drags. */
+let lastSelSig=null;
+function syncListSelection(){
+  const sig=[...mSel].sort((a,b)=>a-b).join(",");
+  if(sig===lastSelSig)return;
+  lastSelSig=sig;
+  const {chs,axs}=linkedRowsFor([...mSel]);
+  sel.ch=new Set([...chs.values()].map(c=>state.channels.indexOf(c)).filter(i=>i>=0));
+  sel.aux=new Set([...axs.values()].map(a=>state.auxes.indexOf(a)).filter(i=>i>=0));
+  refreshSel("ch");refreshSel("aux");
 }
 function renderInspector(){
   const it=stg().items[stageSel];
