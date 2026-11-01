@@ -1896,7 +1896,13 @@ function renderItemIO(it){
   const cp=$("#siCopyLab");
   if(cp)cp.onclick=()=>{
     const it2=stg().items[stageSel];if(!it2)return;
-    it2.label=box.querySelector(".iorow input").value.trim();
+    const inp=box.querySelector(".iorow input");
+    // Label = IO name + its patch, e.g. "GT Amp 2 - IN15" / "MIX 1 - OUT3-4".
+    // The link itself lives in ins/auxl, so the decorated label stays safe.
+    const x=+inp.dataset.ioi;
+    const p=inp.dataset.iok==="ch"?ports()[x]:auxPorts()[x];
+    const tag=p?` - ${inp.dataset.iok==="ch"?"IN":"OUT"}${p.join("-")}`:"";
+    it2.label=inp.value.trim()+tag;
     render();
   };
 }
