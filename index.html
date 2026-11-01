@@ -773,7 +773,6 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
     <thead><tr><th>#</th><th>Name</th><th>Members</th></tr></thead>
     <tbody></tbody>
   </table></div>
-  <div class="hint" id="lnkAuto" style="margin-top:8px"></div>
 </section>
 
 <section style="--seccolor:var(--accent)" data-tab="notes">
@@ -952,6 +951,7 @@ function applyConfig(){
   fit(state.fx,FX_COUNT,defFx); fit(state.auxes,c.mon,defAux); fit(state.matrixes,MTX_COUNT,defMtx);
   if(!Array.isArray(state.links))state.links=[];
   while(state.links.length<LINK_COUNT)state.links.push("");state.links.length=LINK_COUNT;
+  for(const ch of state.channels)if(ch.link==="None")ch.link="";
 }
 function namedDrops(newId){
   const c=CONFIGS.find(x=>x.id===newId); const out=[];
@@ -1024,14 +1024,14 @@ function healDefaultRefs(){
     return row&&row.name.trim()?row.name.trim():ref;
   };
   const G=/^Group (\d+)$/,M=/^(?:MTX|Matrix) (\d+)$/;
-  for(const c of state.channels){c.group=fix(state.groups,G,c.group);c.link=fix(state.groups,G,c.link);
+  for(const c of state.channels){c.group=fix(state.groups,G,c.group);
     c.matrix=fix(state.matrixes,M,c.matrix);}
   for(const g of state.groups){g.dest=fix(state.groups,G,g.dest);g.matrix=(g.matrix||[]).map(x=>fix(state.matrixes,M,x));}
   for(const f of state.fx)f.dest=fix(state.groups,G,f.dest);
   // "Link N" whose slot has since been named -> that name
   const L=/^Link (\d+)$/,lk=(state.links||[]).map(n=>({name:(n||"").trim()}));
   for(const l of [state.channels,state.groups,state.fx,state.auxes,state.matrixes])
-    for(const x of l)if(x.link&&x.link!=="None")x.link=fix(lk,L,x.link);
+    for(const x of l)if(x.link)x.link=fix(lk,L,x.link);
 }
 function render(){
   healDefaultRefs();
@@ -1158,7 +1158,6 @@ const LINK_COUNT=16; // LV1 link strips (every config)
 const MUTE_COUNT=8;  // LV1 mute groups (every config; no names)
 const linkLabel=i=>((state.links||[])[i]||"").trim()||`Link ${i+1}`;
 const linkLabels=()=>Array.from({length:LINK_COUNT},(_,i)=>linkLabel(i));
-const linkOpts=()=>["None",...linkLabels()];
 
 function renderChannels(){
   const tb=$("#chTable tbody"); const pts=ports(); const dups=dupNames(state.channels);
@@ -1168,7 +1167,7 @@ function renderChannels(){
     const s=(f,cur,opts,none)=>{
       // A value that is not in the bank (deleted / misspelt strip) stays
       // visible, flagged — exporting it would route to MASTER.
-      const miss=cur&&!opts.includes(cur)&&f!=="stand"&&!(f==="link"&&cur==="None");
+      const miss=cur&&!opts.includes(cur)&&f!=="stand";
       const all=cur&&!opts.includes(cur)?[cur,...opts]:opts;
       return `<select id="ch-${i}-${f}" class="asg${miss?" missing":""}" data-k="ch" data-i="${i}" data-f="${f}">
       <option value=""${cur===""?" selected":""}>${none}</option>${all.map(o=>`<option value="${esc(o)}"${o===cur?" selected":""}>${miss&&o===cur?"⚠ ":""}${esc(o)}</option>`).join("")}</select>`;};
@@ -1179,7 +1178,7 @@ function renderChannels(){
       ${stCell("ch",i,ch.stereo)}
       ${colorCell("ch",i,ch.color)}
       <td>${s("group",ch.group,grpOpts,"MASTER")}</td>
-      <td>${s("link",ch.link,linkOpts(),"= Group")}</td>
+      <td>${s("link",ch.link,linkLabels(),"None")}</td>
       ${muteCell("ch",i,ch.mute)}
       <td>${s("matrix",ch.matrix,mtxOpts,"None")}</td>
       <td><input id="ch-${i}-mic" value="${esc(ch.mic)}" data-k="ch" data-i="${i}" data-f="mic" placeholder="e.g. B91A"></td>
@@ -1254,8 +1253,7 @@ function renderAux(){
 function linkMembers(){ // label -> [strip names], over every strip type
   const m={};
   const add=(lab,nm)=>{if(lab)(m[lab]=m[lab]||[]).push(nm);};
-  for(const c of state.channels)if(c.name.trim()&&c.link&&c.link!=="None")add(c.link,c.name.trim());
-  for(const l of [state.groups,state.fx,state.auxes,state.matrixes])
+  for(const l of [state.channels,state.groups,state.fx,state.auxes,state.matrixes])
     for(const x of l)if(x.name.trim())add(x.link,x.name.trim());
   return m;
 }
@@ -1269,10 +1267,6 @@ function renderLinks(){
       <td class="lnkmem">${memberCell(linkLabel(i))}</td></tr>`).join("");
   else [...tb.children].forEach((tr,i)=>{tr.children[2].innerHTML=memberCell(linkLabel(i));});
   $("#lnkCount").textContent=`${state.links.filter(n=>n.trim()).length} named / ${LINK_COUNT}`;
-  // Inputs left on "= Group" become auto links (named after the group) on export.
-  const auto=[...new Set(state.channels.filter(c=>c.name.trim()&&!c.link&&c.group).map(c=>c.group))]
-    .filter(g=>!linkLabels().includes(g));
-  $("#lnkAuto").textContent=auto.length?`Also created on export (inputs set to "= Group"): ${auto.join(", ")} — each takes a free unnamed link.`:"";
 }
 function renderSimple(kind,list,tableSel){
   const tb=$(tableSel+" tbody"); const dups=dupNames(list);
@@ -1296,9 +1290,8 @@ function renderWarnings(){
     const bad=new Set();
     for(const c of state.channels){if(!c.name.trim())continue;
       if(c.group&&!gN.has(c.group))bad.add(c.group);
-      if(c.link&&c.link!=="None"&&!lN.has(c.link)&&!gN.has(c.link))bad.add(c.link);
       if(c.matrix&&!mN.has(c.matrix))bad.add(c.matrix);}
-    for(const l of [state.groups,state.fx,state.auxes,state.matrixes])
+    for(const l of [state.channels,state.groups,state.fx,state.auxes,state.matrixes])
       for(const x of l)if(x.name.trim()&&x.link&&!lN.has(x.link))bad.add(x.link);
     if(bad.size)w.push(`Strips point to groups / links / matrixes that don't exist: ${[...bad].join(", ")} — re-pick them (⚠ in the menus).`);
   }
@@ -1575,14 +1568,14 @@ async function resetStrip(k,i,mode){
     const name=list[i].name.trim();
     let rerouted=0;
     if(k==="grp"&&name){
-      // Everything routed / linked to this group by name falls back to MASTER.
-      const refs=[...state.channels.filter(c=>c.group===name||c.link===name),
+      // Everything routed to this group by name falls back to MASTER.
+      const refs=[...state.channels.filter(c=>c.group===name),
                   ...state.groups.filter((g,j)=>j!==i&&g.dest===name),
                   ...state.fx.filter(f=>f.dest===name)];
       if(refs.length){
-        const ok=await askConfirm(`Deleting group “${name}” re-routes ${refs.length} strip${refs.length===1?"":"s"} that feed or link to it to MASTER.`,"OK — delete");
+        const ok=await askConfirm(`Deleting group “${name}” re-routes ${refs.length} strip${refs.length===1?"":"s"} that feed it to MASTER.`,"OK — delete");
         if(!ok)return;
-        for(const c of state.channels){if(c.group===name)c.group="";if(c.link===name)c.link="";}
+        for(const c of state.channels)if(c.group===name)c.group="";
         for(const g of state.groups)if(g.dest===name)g.dest="MASTER";
         for(const f of state.fx)if(f.dest===name)f.dest="MASTER";
         rerouted=refs.length;
@@ -1786,26 +1779,25 @@ function buildSpec(){
   const rackOut=r=>isStock(r)?undefined:{slots:[...r.slots]};
   const withRack=(o,r)=>{const rr=rackOut(r);if(rr)o.rack=rr;return o;};
   const spec={
-    format:"lv1-input-list",version:5,
+    format:"lv1-input-list",version:6,
     show:{...state.show},
     config:{id:c.id,inputs:c.ch,groups:c.grp,aux:c.mon,fx:FX_COUNT,matrix:MTX_COUNT,mains:c.mains},
     channels:state.channels.map((ch,i)=>ch.name.trim()?withRack({
       name:ch.name.trim(),stereo:ch.stereo,ports:pts[i],
       group:ch.group||null,
-      link:ch.link==="None"?null:(ch.link||ch.group||null),
       matrix:ch.matrix?[ch.matrix]:[],
       mic:ch.mic.trim(),stand:ch.stand.trim(),position:ch.pos.trim(),notes:(ch.notes||"").trim(),
       ...(ch.color!==null&&ch.color!==undefined?{color:ch.color}:{}),
-      ...lm(ch,false),
+      ...lm(ch),
     },ch.rack):null).filter(Boolean),
     groups:named(state.groups).map(g=>withRack({name:g.name.trim(),stereo:g.stereo,dest:g.dest==="MASTER"?null:g.dest,postFx:!!g.postFx,matrix:g.matrix,
-      ...(g.color!==null&&g.color!==undefined?{color:g.color}:{}),...lm(g,true)},g.rack)),
+      ...(g.color!==null&&g.color!==undefined?{color:g.color}:{}),...lm(g)},g.rack)),
     fx:named(state.fx).map(f=>withRack({name:f.name.trim(),stereo:f.stereo,dest:f.dest==="MASTER"?null:f.dest,
-      ...(f.color!==null&&f.color!==undefined?{color:f.color}:{}),...lm(f,true)},f.rack)),
+      ...(f.color!==null&&f.color!==undefined?{color:f.color}:{}),...lm(f)},f.rack)),
     auxes:named(state.auxes).map(a=>({name:a.name.trim(),stereo:a.stereo,dest:a.dest||"",position:(a.pos||"").trim(),notes:(a.notes||"").trim(),
-      ...(a.color!==null&&a.color!==undefined?{color:a.color}:{}),...lm(a,true)})),
+      ...(a.color!==null&&a.color!==undefined?{color:a.color}:{}),...lm(a)})),
     matrixes:named(state.matrixes).map(m=>({name:m.name.trim(),stereo:m.stereo,
-      ...(m.color!==null&&m.color!==undefined?{color:m.color}:{}),...lm(m,true)})),
+      ...(m.color!==null&&m.color!==undefined?{color:m.color}:{}),...lm(m)})),
   };
   if((state.links||[]).some(n=>n.trim()))spec.links=state.links.map(n=>n.trim());
   const mr=rackOut(state.master.rack);
@@ -1819,9 +1811,9 @@ function buildSpec(){
   }
   return spec;
 }
-function lm(x,withLink){ // link / mute keys of one strip, only when set
+function lm(x){ // link / mute keys of one strip, only when set
   const o={};
-  if(withLink&&x.link)o.link=x.link;
+  if(x.link)o.link=x.link;
   if(x.mute)o.mute=+x.mute;
   return o;
 }
@@ -1851,7 +1843,7 @@ function loadSpec(spec){
     show:{name:spec.show?.name||"",date:spec.show?.date||"",venue:spec.show?.venue||"",sheetUrl:spec.show?.sheetUrl||"",fohDesk:spec.show?.fohDesk||"",monDesk:spec.show?.monDesk||"",pa:spec.show?.pa||"",notes:spec.show?.notes||""},
     configId:id,
     channels:(spec.channels||[]).map(c=>({...defCh(),name:c.name||"",stereo:!!c.stereo,group:grpName(c.group),
-      link:c.link===null?"None":(c.link&&c.link!==c.group?c.link:""),
+      link:(spec.version||0)<6&&c.link===c.group?"":linkIn(c),
       matrix:(c.matrix&&c.matrix[0])||"",mic:c.mic||"",stand:c.stand||"",pos:c.position||"",notes:c.notes||"",rack:rackIn(c.rack),color:colIn(c),mute:muteIn(c)})),
     groups:(spec.groups||[]).map(g=>({...defGrp(),name:g.name||"",stereo:g.stereo!==false,dest:g.dest||"MASTER",postFx:!!g.postFx,matrix:g.matrix||[],rack:rackIn(g.rack),color:colIn(g),link:linkIn(g),mute:muteIn(g)})),
     fx:(spec.fx||[]).map(f=>({...defFx(),name:f.name||"",stereo:f.stereo!==false,dest:f.dest||"MASTER",rack:rackIn(f.rack),color:colIn(f),link:linkIn(f),mute:muteIn(f)})),
@@ -2261,7 +2253,7 @@ function renameRefs(kind,oldName,newName){
     return;
   }
   if(kind==="grp"){
-    for(const c of state.channels){if(c.group===o)c.group=v;if(c.link===o&&!linkLabels().includes(o))c.link=v;}
+    for(const c of state.channels)if(c.group===o)c.group=v;
     for(const g of state.groups)if(g.dest===o)g.dest=v;
     for(const f of state.fx)if(f.dest===o)f.dest=v;
   }else if(kind==="mtx"){
@@ -3443,7 +3435,6 @@ $("#btnPdf").onclick=async()=>{
    verified by dumping every table of both outputs and diffing. */
 
 const EMO_ROOT=STAGELIB_BASE.replace(/stagelib\/$/,"");
-const EMO_LINK_FOLLOWS="=group";
 
 let _sqlP=null;
 function emoSql(){
@@ -3650,12 +3641,11 @@ async function emoExport(spec){
     // LINK + MUTE GROUP membership rows — a statement-for-statement port of
     // make_lv1_session (keep in sync): every strip type may join a link /
     // mute group; links resolve 1. named slot, 2. "Link N" on an unnamed
-    // slot, 3. auto link in the first free unnamed slot (e.g. "= Group").
+    // slot, 3. auto link in the first free unnamed slot.
     const MUTE0=first[13];
     const member=[];
     chans.forEach((c,i)=>{
-      const lk=!("link" in c)?EMO_LINK_FOLLOWS:(c.link===c.group?EMO_LINK_FOLLOWS:c.link);
-      member.push([1+i,lk===EMO_LINK_FOLLOWS?(c.group||null):lk,c.mute]);
+      member.push([1+i,c.link||null,c.mute]);
     });
     groups.forEach((g,i)=>member.push([GRP0+i,g.link||null,g.mute]));
     fx.forEach((f,i)=>member.push([FX0+i,f.link||null,f.mute]));
@@ -3755,7 +3745,7 @@ async function emoImport(bytes,fileStemName){
     const linkTable=Array.from({length:16},(_,s)=>{
       const nm=(nameOf[LNK0+s]||"").trim();return /^Link \d+$/.test(nm)?"":nm;});
     const linkLab=obj=>{const s=obj-LNK0;return (linkTable[s]||"")||`Link ${s+1}`;};
-    const lmOf=(cid,withLink)=>({...(withLink&&links[cid]!==undefined?{link:linkLab(links[cid])}:{}),
+    const lmOf=cid=>({...(links[cid]!==undefined?{link:linkLab(links[cid])}:{}),
       ...(mutes[cid]?{mute:mutes[cid]}:{})});
     // racks: untouched fixed modules -> null; otherwise role-0 slot list
     const rackRows={};
@@ -3783,14 +3773,14 @@ async function emoImport(bytes,fileStemName){
       grpLabel[cid]=nm&&!isDef(nm,grpRe)?nm:"Group "+(i+1);
       if(used)groups.push({_cid:cid,name:grpLabel[cid],stereo:stereoOf[cid]!==false,
         postFx:!!postFxOf[cid],matrix:[],rack:rackOf(cid),
-        ...(colorOf[cid]!=null?{color:colorOf[cid]}:{}),...lmOf(cid,true)});
+        ...(colorOf[cid]!=null?{color:colorOf[cid]}:{}),...lmOf(cid)});
     }
     for(let i=0;i<nMtx;i++){
       const cid=MTX0+i,nm=(nameOf[cid]||"").trim();
       const used=referenced.has(cid)||!isDef(nm,mtxRe)||colorOf[cid]!=null;
       mtxLabel[cid]=nm&&!isDef(nm,mtxRe)?nm:"MTX "+(i+1);
       if(used)matrixes.push({name:mtxLabel[cid],stereo:stereoOf[cid]!==false,
-        ...(colorOf[cid]!=null?{color:colorOf[cid]}:{}),...lmOf(cid,true)});
+        ...(colorOf[cid]!=null?{color:colorOf[cid]}:{}),...lmOf(cid)});
     }
     // group destinations + matrix feeds
     for(const g of groups){
@@ -3810,16 +3800,14 @@ async function emoImport(bytes,fileStemName){
       const st=!!stereoOf[cid];
       const d=dests[cid],lk=links[cid];
       const grp=(d!==undefined&&d!==LR&&grpLabel[d])?grpLabel[d]:null;
-      const linkName=lk!==undefined?linkLab(lk):null;
       const c={name:nm&&!isDef(nm,chRe)?nm:"Channel "+(i+1),
         stereo:st,ports:st?[port,port+1]:[port],
-        group:grp,link:lk===undefined?null:(linkName===grp?undefined:linkName),
+        group:grp,
         matrix:(mtxFeeds[cid]||[]).map(m=>mtxLabel[m]).filter(Boolean),
         mic:"",stand:"",position:"",notes:"",
         ...(colorOf[cid]!=null?{color:colorOf[cid]}:{}),
-        ...lmOf(cid,false),
+        ...lmOf(cid),
         ...(rackOf(cid)?{rack:rackOf(cid)}:{})};
-      if(c.link===undefined)delete c.link; // follows group
       channels.push(c);port+=st?2:1;
     }
     const fxRe=/^Fx \d+$/,monRe=/^Mon \d+$/;
@@ -3830,7 +3818,7 @@ async function emoImport(bytes,fileStemName){
       const d=dests[cid];
       fxs.push({name:nm&&!isDef(nm,fxRe)?nm:"Fx "+(i+1),stereo:stereoOf[cid]!==false,
         dest:(d!==undefined&&d!==LR&&grpLabel[d])?grpLabel[d]:null,
-        ...(colorOf[cid]!=null?{color:colorOf[cid]}:{}),...lmOf(cid,true),
+        ...(colorOf[cid]!=null?{color:colorOf[cid]}:{}),...lmOf(cid),
         ...(rackOf(cid)?{rack:rackOf(cid)}:{})});
     }
     for(let i=0;i<nAux;i++){
@@ -3840,11 +3828,11 @@ async function emoImport(bytes,fileStemName){
       if(!nm||isDef(nm,monRe))continue;
       auxes.push({name:nm,stereo:!!stereoOf[cid],
         dest:"",position:"",notes:"",
-        ...(colorOf[cid]!=null?{color:colorOf[cid]}:{}),...lmOf(cid,true)});
+        ...(colorOf[cid]!=null?{color:colorOf[cid]}:{}),...lmOf(cid)});
     }
     const mRack=rackOf(LR);
     return {
-      format:"lv1-input-list",version:5,
+      format:"lv1-input-list",version:6,
       ...(linkTable.some(Boolean)?{links:linkTable}:{}),
       config:{id:cfg.id,inputs:cfg.ch,groups:cfg.grp,aux:cfg.mon,fx:FX_COUNT,matrix:MTX_COUNT,mains:cfg.mains},
       show:{name:fileStemName||"Imported show",date:"",venue:""},
