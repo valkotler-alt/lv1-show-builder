@@ -625,6 +625,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
   <button id="btnNew">New empty show</button>
   <input type="file" id="fileImport" accept=".json,application/json" hidden>
   <span id="status" role="status"></span>
+  <button id="btnTheme" class="small" style="margin-left:auto" title="Switch between dark, light and the system skin"></button>
 </div>
 
 <div class="showmeta">
@@ -2864,6 +2865,21 @@ $("#btnPdf").onclick=async()=>{
   try{ await dl.save({filename:fileStem()+" input list.pdf",data:out}); setStatus("PDF exported."); }
   catch(err){ if(err&&err.code==="declined")return; setStatus("PDF export failed: "+(err.message||""),true); }
 };
+
+/* ---- skin switch: Auto (system) -> Light -> Dark, persisted locally ---- */
+const THEMES=[["","◐ Auto skin"],["light","☀ Light skin"],["dark","☾ Dark skin"]];
+function setTheme(t){
+  if(t)document.documentElement.dataset.theme=t;
+  else delete document.documentElement.dataset.theme;
+  $("#btnTheme").textContent=(THEMES.find(x=>x[0]===t)||THEMES[0])[1];
+  try{localStorage.setItem("lv1.theme",t);}catch(_){}
+}
+$("#btnTheme").onclick=()=>{
+  const cur=document.documentElement.dataset.theme||"";
+  const n=THEMES[(THEMES.findIndex(x=>x[0]===cur)+1)%THEMES.length][0];
+  setTheme(n);
+};
+setTheme((()=>{try{return localStorage.getItem("lv1.theme")||"";}catch(_){return "";}})());
 
 /* ---- page tabs: INPUTS / OUTPUTS / STAGE ---- */
 function setTab(t){
