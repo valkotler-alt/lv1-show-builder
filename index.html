@@ -1991,7 +1991,10 @@ $("#stage").addEventListener("pointerdown",e=>{
     renderStage();
     return; // shift-click adjusts the selection; no drag
   }
-  if(!mSel.has(i))mSel=unit;
+  // Alt-click always narrows to the clicked item — even inside an already
+  // selected position (click the position, then Alt-click one member).
+  if(e.altKey)mSel=unit;
+  else if(!mSel.has(i))mSel=unit;
   stageSel=i;
   renderStage();
   const px=(e.clientX-r.left)/r.width, py=(e.clientY-r.top)/r.height;
