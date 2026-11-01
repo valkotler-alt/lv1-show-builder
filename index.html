@@ -1311,6 +1311,21 @@ document.addEventListener("input",e=>{
     // Assigning to an unnamed strip (shown by its default label) names it,
     // so the routing is actually built into the session.
     const nk=f==="group"||(f==="dest"&&(k==="grp"||k==="fx"))?"grp":f==="matrix"?"mtx":null;
+    // Assignment menus edited on a selected row apply to the whole selection
+    // (a group is never set as its own destination).
+    const tg=["group","link","matrix","stand","dest"].includes(f)?multiTargets():[];
+    if(tg.length>1){
+      let n=0;
+      for(const j of tg){const o=list[j];if(!o)continue;
+        if(f==="dest"&&k==="grp"&&o.name.trim()&&o.name.trim()===t.value)continue;
+        o[f]=t.value;n++;}
+      const named=nk&&autoName(nk,t.value);
+      render();
+      const lab={group:"Group",link:"Link",matrix:"Matrix",stand:"Stand",dest:"Destination"}[f];
+      setStatus(`${lab} “${t.value||"—"}” set on ${n} selected ${STRIP_PLURAL[k]}`
+        +(named?` (strip “${t.value}” named automatically).`:"."));
+      return;
+    }
     if(nk&&autoName(nk,t.value)){
       render();
       setStatus(`${nk==="grp"?"Group":"Matrix"} strip “${t.value}” named automatically so the assignment is built.`);
