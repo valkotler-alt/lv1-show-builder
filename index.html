@@ -2175,6 +2175,7 @@ function dedupeName(base,taken){
   return n;
 }
 function applyTemplate(it,t){
+  lastSelSig=null; // the selected item just gained links: re-sync the list highlight on render
   if(t.ins){
     const taken=new Set(state.channels.filter(c=>c.name.trim()).map(c=>c.name.trim().toUpperCase()));
     const made=[];let full=false;
@@ -2340,6 +2341,7 @@ function syncItemPosToRows(it){
   const axBy=new Map(state.auxes.map((a,x)=>[a.name.trim().toUpperCase(),x]));
   const names=[...(it.ins||[])];
   if(it.label&&it.label.trim())names.push(it.label.trim());
+  if(it.auxl&&it.auxl.trim())names.push(it.auxl.trim()); // the aux link survives a label rename
   let n=0;
   for(const nm of new Set(names.map(s=>s.toUpperCase()))){
     if(it.auxl&&nm===it.auxl.trim().toUpperCase()){
@@ -2399,6 +2401,7 @@ function linkedRowsFor(indices){
     const it=stg().items[i];if(!it)continue;
     const names=[...(it.ins||[])];
     if(it.label&&it.label.trim())names.push(it.label.trim());
+  if(it.auxl&&it.auxl.trim())names.push(it.auxl.trim()); // the aux link survives a label rename
     for(const nm of new Set(names.map(s=>s.toUpperCase()))){
       if(it.auxl&&nm===it.auxl.trim().toUpperCase()){const a=axBy.get(nm);if(a)axs.set(nm,a);}
       else{const c=chBy.get(nm);if(c)chs.set(nm,c);}
