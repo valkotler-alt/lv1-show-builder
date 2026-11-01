@@ -520,6 +520,7 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
    slots 3-8 = inserts. */
 .rackv{display:flex;flex-direction:column;gap:8px;max-width:460px;}
 .rackhead{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+.rackhead .rkacts{margin-left:auto;display:flex;flex-wrap:wrap;gap:6px;}
 .rackhead .rlab{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);font-weight:600;}
 .slots{display:flex;flex-direction:column;gap:3px;}
 .slotrow{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:6px;padding:5px 8px;background:var(--panel);min-height:26px;}
@@ -921,6 +922,7 @@ const DEFNAME={ch:i=>`Channel ${i+1}`,grp:i=>`Group ${i+1}`,fx:i=>`Fx ${i+1}`,au
 
 let state=defaultShow();
 let rackOpen=null; // "ch-3" | "grp-0" | "fx-1" | "mst-0" | null
+let rackClip=null; // copied rack: {slots:[...], from:"KICK"}
 let pendingCfg=null; // two-click confirm when switching config would drop named strips
 const sel={ch:new Set(),grp:new Set(),fx:new Set(),aux:new Set(),mtx:new Set()};
 const lastSel={ch:-1,grp:-1,fx:-1,aux:-1,mtx:-1}; // anchor row for Shift-click range select
@@ -1102,9 +1104,26 @@ function rackRow(kind,i,r,colspan,stereo){
   }
   return `<tr class="rackrow"><td colspan="${colspan}"><div class="rackv">
     <div class="rackhead"><span class="rlab">${esc(rackLabel(kind,i))} · ${stereo?"stereo":"mono"} rack</span>
-      <button class="small" style="margin-left:auto" data-k="${kind}" data-i="${i}" data-f="rkReset">Reset to stock</button></div>
+      <span class="rkacts">
+        <button class="small" data-k="${kind}" data-i="${i}" data-f="rkCopy" title="Copy this rack's plugin list">Copy</button>
+        ${(()=>{const n=rackPasteTargets(kind,i).length;
+          return `<button class="small" data-k="${kind}" data-i="${i}" data-f="rkPaste"${rackClip?"":" disabled"}
+          title="${rackClip?esc("Replace "+(n>1?`the racks of the ${n} selected strips`:"this rack")+" with: "+(rackClip.slots.join(" → ")||"(empty)")+" — copied from "+rackClip.from):"Copy a rack first"}">Paste${n>1?` → ${n} selected`:""}</button>`;})()}
+        <button class="small danger" data-k="${kind}" data-i="${i}" data-f="rkClear"${r.slots.length?"":" disabled"} title="Remove every plugin from this rack">Remove all</button>
+        <button class="small" data-k="${kind}" data-i="${i}" data-f="rkReset">Reset to stock</button>
+      </span></div>
     <div class="slots">${rows.join("")}</div>
   </div></td></tr>`;
+}
+/* Paste targets: the selected rows of that list when there is a selection,
+   else the strip whose rack is open. */
+function rackPasteTargets(kind,i){
+  return kind!=="mst"&&sel[kind]&&sel[kind].size?[...sel[kind]].sort((a,b)=>a-b):[i];
+}
+const holderStereo=(k,h)=>k==="mst"?true:!!h.stereo;
+function rackFits(name,stereo){ // unknown names (legacy) are kept as-is
+  const p=PLUGINS.find(x=>x[0]===name);
+  return !p||(stereo?/[SX]/:/[MX]/).test(p[1]);
 }
 function rackLabel(kind,i){
   if(kind==="mst")return "MASTER";
@@ -1505,9 +1524,29 @@ document.addEventListener("click",e=>{
   const t=e.target.closest("button");if(!t||!t.dataset.k)return;
   const k=t.dataset.k,i=+t.dataset.i,f=t.dataset.f;
   if(f==="rack"){const key=k+"-"+i;rackOpen=rackOpen===key?null:key;render();return;}
-  if(["rkDel","rkReset"].includes(f)){
+  if(["rkDel","rkReset","rkClear","rkCopy","rkPaste"].includes(f)){
     const h=rackHolder(k,i);if(!h)return;
     if(f==="rkReset"){h.rack=null;render();return;}
+    if(f==="rkClear"){h.rack={slots:[]};render();setStatus(`All plugins removed from ${rackLabel(k,i)}.`);return;}
+    if(f==="rkCopy"){
+      rackClip={slots:[...(h.rack||STOCK_RACK()).slots],from:rackLabel(k,i)};
+      render();setStatus(`Rack of ${rackClip.from} copied (${rackClip.slots.length} plugin${rackClip.slots.length===1?"":"s"}) — select strips and press Paste.`);
+      return;
+    }
+    if(f==="rkPaste"){
+      if(!rackClip)return;
+      const tg=rackPasteTargets(k,i),skipped=new Set();
+      for(const j of tg){
+        const o=rackHolder(k,j);if(!o)continue;
+        const st=holderStereo(k,o);
+        const slots=rackClip.slots.filter(n=>rackFits(n,st)||(skipped.add(`${n} (${st?"stereo":"mono"})`),false));
+        o.rack={slots};
+      }
+      render();
+      setStatus(`Rack of ${rackClip.from} pasted to ${tg.length===1?rackLabel(k,tg[0]):tg.length+" strips"}`
+        +(skipped.size?` — skipped, no matching format: ${[...skipped].join(", ")}.`:"."),!!skipped.size);
+      return;
+    }
     if(!h.rack)h.rack=STOCK_RACK();
     const arr=h.rack.slots,n=+t.dataset.n;
     arr.splice(n,1);
@@ -3768,10 +3807,15 @@ async function emoImport(bytes,fileStemName){
       (rackRows[cid]=rackRows[cid]||[]).push([slot,cc2name[cc]||nm,role]);
     const rackOf=cid=>{
       const rws=rackRows[cid]||[];
+      // Every factory strip carries its fixed modules: none left = emptied rack.
+      if(!rws.length)return {slots:[]};
       const r0=rws.filter(r=>r[2]===0);
       if(!r0.length)return null; // factory modules only = untouched
       return {slots:r0.sort((a,b)=>a[0]-b[0]).map(r=>r[1])};
     };
+    // A plugin in the rack is content; an emptied rack alone does not make an
+    // unused default-named strip worth importing.
+    const hasPlugs=cid=>!!(rackOf(cid)&&rackOf(cid).slots.length);
     const isDef=(nm,re)=>re.test(nm);
     const label=(cid,re,def)=>{const nm=(nameOf[cid]||"").trim();return nm&&!isDef(nm,re)?nm:def;};
 
@@ -3783,7 +3827,7 @@ async function emoImport(bytes,fileStemName){
     const groups=[],matrixes=[];
     for(let i=0;i<nGrp;i++){
       const cid=GRP0+i,nm=(nameOf[cid]||"").trim();
-      const used=referenced.has(cid)||!isDef(nm,grpRe)||rackOf(cid)||colorOf[cid]!=null;
+      const used=referenced.has(cid)||!isDef(nm,grpRe)||hasPlugs(cid)||colorOf[cid]!=null;
       grpLabel[cid]=nm&&!isDef(nm,grpRe)?nm:"Group "+(i+1);
       if(used)groups.push({_cid:cid,name:grpLabel[cid],stereo:stereoOf[cid]!==false,
         postFx:!!postFxOf[cid],matrix:[],rack:rackOf(cid),
@@ -3810,7 +3854,7 @@ async function emoImport(bytes,fileStemName){
       const cid=1+i,nm=(nameOf[cid]||"").trim();
       // Default-named strips are imported only when they carry content
       // (a touched rack or a color); they keep their default label.
-      if((!nm||isDef(nm,chRe))&&!rackOf(cid)&&colorOf[cid]==null)continue;
+      if((!nm||isDef(nm,chRe))&&!hasPlugs(cid)&&colorOf[cid]==null)continue;
       const st=!!stereoOf[cid];
       const d=dests[cid],lk=links[cid];
       const grp=(d!==undefined&&d!==LR&&grpLabel[d])?grpLabel[d]:null;
@@ -3828,7 +3872,7 @@ async function emoImport(bytes,fileStemName){
     const fxs=[],auxes=[];
     for(let i=0;i<8;i++){
       const cid=FX0+i,nm=(nameOf[cid]||"").trim();
-      if((!nm||isDef(nm,fxRe))&&!rackOf(cid))continue;
+      if((!nm||isDef(nm,fxRe))&&!hasPlugs(cid))continue;
       const d=dests[cid];
       fxs.push({name:nm&&!isDef(nm,fxRe)?nm:"Fx "+(i+1),stereo:stereoOf[cid]!==false,
         dest:(d!==undefined&&d!==LR&&grpLabel[d])?grpLabel[d]:null,
