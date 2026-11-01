@@ -2073,8 +2073,10 @@ function itemHfrac(it){ // rendered height as a fraction of the stage height
 /* Risers always render UNDER the instruments. */
 const stageOrder=()=>stg().items.map((it,i)=>i)
   .sort((a,b)=>((stg().items[a].img==="riser"?0:1)-(stg().items[b].img==="riser"?0:1))||a-b);
+let stageCssW=1150; // last on-screen #stage width (CSS px): the export's scale
 function renderStage(){
   const st=$("#stage");
+  if(st.clientWidth)stageCssW=st.clientWidth;
   st.querySelectorAll(".sitem").forEach(e=>e.remove());
   for(const i of stageOrder()){
     const it=stg().items[i];
@@ -2746,35 +2748,43 @@ $("#inputsToStage").onclick=()=>{
   render();
   setStatus(`${n} stage item${n===1?"":"s"} added from the input list (generic mic stand — swap images as needed).`);
 };
-/* Render the stage to a bitmap (used by Export PNG and the vendor PDF). */
+/* Render the stage to a bitmap (used by Export PNG and the vendor PDF).
+   It reproduces the on-screen stage (#stage + .sitem/.slab/.rbox CSS) at a
+   fixed print scale: every CSS pixel is k bitmap pixels, k measured from the
+   stage's last on-screen width, so captions keep the size and spacing seen
+   in the builder. Print surface: fixed white/ink colors only — the exported
+   plot must NOT follow the UI skin. The show title lives on the PDF page,
+   not in the plot. */
 async function stageBitmap(){
-  // Print surface: fixed white/ink colors only — the exported plot must NOT
-  // follow the UI skin (no var(--…) / computed styles in here).
-  const W=1600,H=900;
+  const W=2400,H=1350,k=W/stageCssW;
+  const UI='"Archivo", Arial, sans-serif',NUM='"JetBrains Mono", Consolas, monospace';
+  try{await Promise.all([document.fonts.load(`600 ${11*k}px Archivo`),document.fonts.load(`700 ${12*k}px Archivo`),
+    document.fonts.load(`600 ${10*k}px "JetBrains Mono"`)]);}catch(_){/* fall back to Arial */}
   const cv=document.createElement("canvas");cv.width=W;cv.height=H;
   const cx=cv.getContext("2d");
   cx.fillStyle="#ffffff";cx.fillRect(0,0,W,H);
-  // Stage border: thick enough to survive the downscale onto the PDF page.
-  cx.strokeStyle="#222";cx.lineWidth=6;cx.strokeRect(3,3,W-6,H-6);
-  cx.fillStyle="#999";cx.font="600 22px Arial";cx.textAlign="center";
-  cx.fillText("A  U  D  I  E  N  C  E",W/2,H-16);
-  const title=(state.show.name||"").trim();
-  if(title){cx.fillStyle="#222";cx.font="700 30px Arial";cx.textAlign="left";cx.fillText(title+"  —  STAGE PLOT",20,42);}
-  cx.fillStyle="#999";cx.font="600 20px Arial";cx.textAlign="right";
-  cx.fillText(`${+stg().widthM||12} m × ${(((+stg().widthM||12))*9/16).toFixed(1)} m`,W-14,H-16);
+  cx.textBaseline="alphabetic";
+  // .slab: centered under the item box, white .75 pill, one row per line
+  const slab=(text,x,top)=>{
+    const fs=11*k,lh=fs*1.3,pad=4*k,lines=text.split("\n");
+    cx.font=`600 ${fs}px ${UI}`;
+    const bw=Math.max(...lines.map(l=>cx.measureText(l).width))+2*pad,bh=lines.length*lh;
+    cx.fillStyle="rgba(255,255,255,.75)";
+    cx.beginPath();cx.roundRect(x-bw/2,top,bw,bh,3*k);cx.fill();
+    cx.fillStyle="#23252a";cx.textAlign="center";
+    lines.forEach((l,i)=>cx.fillText(l,x,top+i*lh+lh/2+fs*0.36));
+  };
   for(const idx of stageOrder()){
-    const it=stg().items[idx];
+    const it=stg().items[idx],X=it.x*W,Y=it.y*H;
     if(it.img==="riser"){
-      const w=itemWfrac(it)*W,h=riserHfrac(it)*H;
-      cx.save();
-      cx.translate(it.x*W,it.y*H);
-      cx.rotate((it.rot||0)*Math.PI/180);
-      cx.fillStyle="rgba(80,80,80,0.05)";cx.fillRect(-w/2,-h/2,w,h);
-      cx.strokeStyle="#444";cx.lineWidth=5;cx.strokeRect(-w/2,-h/2,w,h);
+      const w=itemWfrac(it)*W,h=riserHfrac(it)*H,bw=3*k;
+      cx.save();cx.translate(X,Y);cx.rotate((it.rot||0)*Math.PI/180);
+      cx.fillStyle="rgba(80,80,80,.06)";cx.fillRect(-w/2,-h/2,w,h);
+      cx.strokeStyle="#444";cx.lineWidth=bw;cx.strokeRect(-w/2+bw/2,-h/2+bw/2,w-bw,h-bw);
       cx.restore();
-      cx.fillStyle="#333";cx.textAlign="center";
-      if(it.label){cx.font="700 26px Arial";cx.fillText(it.label,it.x*W,it.y*H-h/2+34);}
-      if(it.note){cx.font="600 20px Arial";cx.fillText(it.note,it.x*W,it.y*H+h/2+26);}
+      if(it.label){cx.fillStyle="#333";cx.textAlign="center";cx.font=`700 ${12*k}px ${UI}`;
+        cx.fillText(it.label,X,Y-h/2+4*k+12*k*0.95);}
+      if(it.note)slab(it.note,X,Y+h/2+k);
       continue;
     }
     const src=imgSrc(it.img);if(!src)continue;
@@ -2782,19 +2792,23 @@ async function stageBitmap(){
       i.onload=()=>res(i);i.onerror=()=>res(null);i.src=src;});
     if(!img)continue;
     const w=itemWfrac(it)*W,h=w*img.naturalHeight/img.naturalWidth;
-    cx.save();
-    cx.translate(it.x*W,it.y*H);
-    cx.rotate((it.rot||0)*Math.PI/180);
+    cx.save();cx.translate(X,Y);cx.rotate((it.rot||0)*Math.PI/180);
     if(it.flip)cx.scale(-1,1);
     cx.drawImage(img,-w/2,-h/2,w,h);
     cx.restore();
     const cap=itemCaption(idx,it);
-    if(cap){
-      cx.fillStyle="#111";cx.font="600 22px Arial";cx.textAlign="center";
-      cap.split("\n").forEach((ln,k)=>cx.fillText(ln,it.x*W,it.y*H+h/2+24+k*25));
-    }
+    if(cap)slab(cap,X,Y+h/2+k);
   }
-  // (No automatic position badges — captions carry the Position line.)
+  // .stagelabel / .stagesize
+  cx.fillStyle="#b5b0a6";cx.textAlign="center";cx.font=`400 ${10*k}px ${UI}`;
+  if("letterSpacing" in cx)cx.letterSpacing=`${3.5*k}px`;
+  cx.fillText("A U D I E N C E",W/2,H-4*k-10*k*0.3);
+  if("letterSpacing" in cx)cx.letterSpacing="0px";
+  cx.textAlign="right";cx.font=`600 ${10*k}px ${NUM}`;
+  cx.fillText(`${+stg().widthM||12} m × ${(((+stg().widthM||12))*9/16).toFixed(1)} m`,W-8*k,H-4*k-10*k*0.3);
+  // Stage border (always in the export): drawn last so nothing covers it.
+  cx.strokeStyle="#222";cx.lineWidth=3*k;
+  cx.beginPath();cx.roundRect(1.5*k,1.5*k,W-3*k,H-3*k,8*k);cx.stroke();
   return cv;
 }
 $("#stagePng").onclick=async()=>{
