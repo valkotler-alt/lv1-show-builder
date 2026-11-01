@@ -2132,9 +2132,14 @@ $("#siPos").addEventListener("input",()=>{
 $("#siPos").addEventListener("change",()=>render()); // persist + refresh the datalist
 $("#siFlip").onclick=()=>{const it=stg().items[stageSel];if(!it)return;it.flip=!it.flip;render();};
 $("#siDup").onclick=()=>{const it=stg().items[stageSel];if(!it)return;
-  const copy={...it};delete copy.pos;delete copy.ins; // a copy starts outside the position
+  // A duplicate is a NEW instrument: it starts outside the position, without
+  // the original's input/aux links, and gets its own add-to-IO-list offer.
+  const copy={...it};delete copy.pos;delete copy.ins;
+  if(copy.auxl){delete copy.auxl;copy.label="";} // a copied wedge offers a new aux
   stg().items.push({...copy,x:Math.min(1,it.x+0.05),y:Math.min(1,it.y+0.05)});
-  stageSel=stg().items.length-1;mSel=new Set([stageSel]);render();};
+  stageSel=stg().items.length-1;mSel=new Set([stageSel]);
+  offerTemplate(stg().items[stageSel],copy.img);
+  render();};
 /* ---- OK/Cancel confirm dialog (window.confirm is blocked in the artifact
    iframe). Resolves true on OK, false on Cancel / Escape. ---- */
 let cfmRes=null;
