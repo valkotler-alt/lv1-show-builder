@@ -3908,7 +3908,13 @@ let restored=false;
 if(!IS_ARTIFACT){
   // Standalone: autosave the working state locally and restore it on open.
   const _render=render;
-  render=function(){_render();try{localStorage.setItem("lv1.autosave",JSON.stringify(buildSpec()));}catch(_){}};
+  const save=()=>{try{localStorage.setItem("lv1.autosave",JSON.stringify(buildSpec()));}catch(_){}};
+  render=function(){_render();save();};
+  // Edits that update the state without a full render (assignment menus,
+  // typing) must be saved too, or a refresh drops them.
+  let saveT=0;const saveSoon=()=>{clearTimeout(saveT);saveT=setTimeout(save,250);};
+  document.addEventListener("input",saveSoon);document.addEventListener("change",saveSoon);
+  addEventListener("pagehide",save);
   try{
     const s=localStorage.getItem("lv1.autosave");
     if(s){
