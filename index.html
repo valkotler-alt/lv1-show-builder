@@ -1328,6 +1328,7 @@ document.addEventListener("click",e=>{
       const tr=cb.closest("tr");if(tr)tr.classList.toggle("selon",cb.checked);
     }
     if(cb.checked)lastSel[k]=i;
+    if(k==="ch"||k==="aux")syncStageSelection();
     return;
   }
   const t=e.target.closest("button");if(!t||!t.dataset.k)return;
@@ -1352,7 +1353,9 @@ document.addEventListener("click",e=>{
   if(f==="selClr"){
     if(!sel[k].size)return;
     const n=sel[k].size;
-    clearSel(k);refreshSel(k);setStatus(`${n} strip(s) deselected.`);return;
+    clearSel(k);refreshSel(k);
+    if(k==="ch"||k==="aux")syncStageSelection();
+    setStatus(`${n} strip(s) deselected.`);return;
   }
   if(f==="stereo"){list[i].stereo=!list[i].stereo;render();return;}
   if(f==="postFx"){list[i].postFx=!list[i].postFx;render();return;}
@@ -1813,6 +1816,23 @@ function syncListSelection(){
   sel.ch=new Set([...chs.values()].map(c=>state.channels.indexOf(c)).filter(i=>i>=0));
   sel.aux=new Set([...axs.values()].map(a=>state.auxes.indexOf(a)).filter(i=>i>=0));
   refreshSel("ch");refreshSel("aux");
+}
+/* …and the other way: ticking list rows highlights the linked stage items.
+   lastSelSig is pre-set so the forward sync doesn't then rewrite the list. */
+function syncStageSelection(){
+  const names=[]; // [isAux, NAME]
+  for(const i of sel.ch){const c=state.channels[i];if(c&&c.name.trim())names.push([false,c.name.trim().toUpperCase()]);}
+  for(const i of sel.aux){const a=state.auxes[i];if(a&&a.name.trim())names.push([true,a.name.trim().toUpperCase()]);}
+  const hit=new Set();
+  stg().items.forEach((it,x)=>{
+    const auxl=it.auxl?it.auxl.trim().toUpperCase():null;
+    const ins=new Set([...(it.ins||[]),(it.label||"").trim()].filter(Boolean).map(s=>s.toUpperCase()));
+    for(const [isAux,nm] of names)
+      if(isAux?auxl===nm:(ins.has(nm)&&auxl!==nm)){hit.add(x);break;}
+  });
+  mSel=hit;stageSel=hit.size?Math.min(...hit):-1;
+  lastSelSig=[...mSel].sort((a,b)=>a-b).join(",");
+  renderStage();
 }
 function renderInspector(){
   const it=stg().items[stageSel];
