@@ -889,7 +889,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
     <div class="layhead">
       <label class="layname">Layer name <input id="layName" maxlength="16" spellcheck="false"></label>
       <span class="headops">
-        <select id="layFill" title="Add a group's members (inputs, FX and groups routed to it), then the group itself, into the free slots"></select>
+        <select id="layFill" title="Add a group's members (inputs, FX and groups routed to it) or a link's members (every strip on it), then the group / link strip itself, into the free slots"></select>
         <button class="small" id="layCopy" title="Copy this layer's strips">Copy layer</button>
         <button class="small" id="layPaste" title="Replace this layer's strips with the copied ones (the name stays)">Paste</button>
         <button class="small" id="layClear">Clear layer</button></span>
@@ -1462,8 +1462,10 @@ function renderLayers(){
   $("#layName").placeholder=`Page-${layerSel+1} (LV1 default)`;
   $("#layCount").textContent=`${L.filter(l=>l.name.trim()||used(l)).length} in use / ${LAYER_COUNT}`;
   const grps=named(state.groups).map(g=>g.name.trim());
-  $("#layFill").innerHTML=`<option value="" selected hidden>Fill from group…</option>`+
-    (grps.map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join("")||`<option value="" disabled>no named groups</option>`);
+  const lms=linkMembers(),lnks=linkLabels().filter(l=>lms[l]);
+  $("#layFill").innerHTML=`<option value="" selected hidden>Fill from…</option>`+
+    `<optgroup label="Groups">${grps.map(g=>`<option value="grp:${esc(g)}">${esc(g)}</option>`).join("")||`<option value="" disabled>no named groups</option>`}</optgroup>`+
+    `<optgroup label="Links">${lnks.map(l=>`<option value="link:${esc(l)}">${esc(l)}</option>`).join("")||`<option value="" disabled>no links in use</option>`}</optgroup>`;
   $("#layPaste").disabled=!layClip;
   $("#layPaste").textContent=layClip?`Paste “${layClip.from}”`:"Paste";
   $("#laySlots").innerHTML=cur.strips.map((s,i)=>{
@@ -1524,22 +1526,28 @@ $("#laySec").addEventListener("click",async e=>{
   }
 });
 $("#layName").addEventListener("input",e=>{state.layers[layerSel].name=e.target.value;renderLayers();});
-/* Fill from group: the strips routed to the group (inputs, then FX, then
-   sub-groups, in list order) followed by the group itself, into the free
-   slots; strips already on the layer are left where they are. */
+/* Fill from group / link, into the free slots (strips already on the
+   layer stay where they are):
+   - group: the strips routed to it (inputs, then FX, then sub-groups, in
+     list order), then the group itself;
+   - link: every strip on the link (inputs, groups, FX, auxes, matrixes, in
+     list order), then the link strip itself. */
 $("#layFill").addEventListener("change",e=>{
-  const g=e.target.value;e.target.value="";if(!g)return;
-  const want=[
-    ...named(state.channels).filter(c=>c.group===g).map(c=>["ch",c.name.trim()]),
-    ...named(state.fx).filter(f=>f.dest===g).map(f=>["fx",f.name.trim()]),
-    ...named(state.groups).filter(x=>x.dest===g&&x.name.trim()!==g).map(x=>["grp",x.name.trim()]),
-    ["grp",g]];
+  const v=e.target.value;e.target.value="";if(!v)return;
+  const kind=v.slice(0,v.indexOf(":")),g=v.slice(v.indexOf(":")+1);
+  const want=kind==="link"
+    ?[...[["ch",state.channels],["grp",state.groups],["fx",state.fx],["aux",state.auxes],["mtx",state.matrixes]]
+        .flatMap(([k,list])=>named(list).filter(x=>x.link===g).map(x=>[k,x.name.trim()])),["link",g]]
+    :[...named(state.channels).filter(c=>c.group===g).map(c=>["ch",c.name.trim()]),
+      ...named(state.fx).filter(f=>f.dest===g).map(f=>["fx",f.name.trim()]),
+      ...named(state.groups).filter(x=>x.dest===g&&x.name.trim()!==g).map(x=>["grp",x.name.trim()]),
+      ["grp",g]];
   const s=state.layers[layerSel].strips,have=new Set(s.filter(Boolean).map(x=>layerKey(x[0],x[1])));
   const todo=want.filter(([k,n])=>!have.has(layerKey(k,n)));
   const wasEmpty=!have.size;
   let added=0;
   for(const ref of todo){const at=s.indexOf(null);if(at<0)break;s[at]=ref;added++;}
-  if(wasEmpty&&!state.layers[layerSel].name.trim())state.layers[layerSel].name=g; // an empty, unnamed layer takes the group's name
+  if(wasEmpty&&!state.layers[layerSel].name.trim())state.layers[layerSel].name=g; // an empty, unnamed layer takes the group / link name
   render();
   const left=todo.length-added;
   setStatus(`${g}: added ${added} strip${added===1?"":"s"}`+(want.length>todo.length?`, ${want.length-todo.length} already on the layer`:"")+
