@@ -801,7 +801,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
   <br><b>Online show library:</b> with the bridge set, <b>Shows ▾ → Save current show</b> also saves the show to your Google Drive
   (folder <i>LV1 Show Builder - Shows</i>), so it opens from any computer — and teammates who paste the same bridge URL share the
   same library. Shows saved earlier only on this computer get a <b>☁ Upload</b> button there. Bridges deployed before this feature
-  need the current script + a redeploy, then <b>once</b>: pick <i>doGet</i> in the editor's function menu → ▷ Run → allow
+  need the current script + a redeploy, then <b>once</b>: pick <i>authorize</i> in the editor's function menu → ▷ Run → allow
   access (a redeploy alone doesn't ask Google for the new Drive permission).
   <br><b>Note:</b> the <b>standalone app file</b> (opened in Chrome/Edge/Safari) syncs with Google directly. On claude.ai the page
   can't call Google itself, so there the sync runs through the <b>Claude desktop app's built-in browser</b> (open the builder in the
@@ -3192,8 +3192,9 @@ const GS_SCRIPT=`/**
  *   GET  <exec>?shows=get&sid=<ID>   -> {doc}
  *   POST <exec> {op:"saveShow", id, doc} / {op:"deleteShow", id}
  *        (delete moves the file to the Drive trash, so it can be restored)
- *   Drive access must be granted once: in the editor pick doGet -> Run ->
- *   allow (a redeploy alone does not ask for the new permission).
+ *   Drive access must be granted once: in the editor pick "authorize" in
+ *   the function menu -> Run -> allow (a redeploy alone does not ask for
+ *   the new permission). The log then shows the shows folder's link.
  *
  * Sheet layout (created by the first push, or fill it by hand):
  *   Rows 1-10 = show meta, label in A, value in C: show name / date / venue /
@@ -3337,6 +3338,10 @@ function _dispatch(d) {
 
 // ---- saved shows: one JSON file per show in a Drive folder ----
 var SHOWS_FOLDER = "LV1 Show Builder - Shows";
+// Run once from the editor to grant Drive access (and create the folder).
+function authorize() {
+  Logger.log("Shows folder: " + _showsFolder().getUrl());
+}
 function _showsFolder() {
   var props = PropertiesService.getScriptProperties();
   var fid = props.getProperty("showsFolder");
@@ -3803,7 +3808,7 @@ const showRow=(id,name,savedAt,cur,src,up)=>`<div class="showrow${id===cur?" cur
 function lsShows(){try{return JSON.parse(localStorage.getItem("lv1.shows")||"{}");}catch(_){return {};}}
 function lsSetShows(o){try{localStorage.setItem("lv1.shows",JSON.stringify(o));}catch(e){setStatus("Could not save locally: "+(e.message||e),true);}}
 const OLD_BRIDGE="the deployed bridge script is an older version without the online show library — Google Sheet → Setup… → Copy bridge script, paste it over the old code, then Deploy → Manage deployments → ✎ → Version: New version → Deploy (Google asks once to allow Drive access)";
-const NO_DRIVE="the bridge isn't allowed to use Google Drive yet — open the bridge project on script.google.com, pick doGet in the function menu, press ▷ Run and allow access (Review permissions → your account → Allow); no redeploy needed";
+const NO_DRIVE="the bridge isn't allowed to use Google Drive yet — open the bridge project on script.google.com, pick authorize in the function menu (paste the current bridge script first if it isn't there), press ▷ Run and allow access (Review permissions → your account → Allow)";
 const bridgeErr=r=>new Error(/missing (\?)?id/.test(r.error||"")?OLD_BRIDGE
   :/auth\/drive/.test(r.error||"")?NO_DRIVE:(r.error||"bridge error"));
 let onlineShows=null,onlineErr=""; // the bridge's show list [{id,name,savedAt}]; null = not loaded
