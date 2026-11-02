@@ -824,6 +824,11 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
         <label id="siNoteWrap" hidden>Note <input id="siNote" size="14" placeholder="e.g. 240x120x20cm"></label>
         <label id="siRotWrap">Rotate <input type="range" id="siRot" min="-180" max="180" step="4.5"></label>
         <span class="rotbtns"><button class="small" id="siRotM" title="Rotate −4.5°">−4.5°</button><button class="small" id="siRotP" title="Rotate +4.5°">+4.5°</button><button class="small" id="siRotR" title="Reset rotation to 0°">⟲ 0°</button></span>
+        <select id="siAlign" class="small" title="Align the selected items to the edges / centers of the selection, or space them evenly" hidden>
+          <option value="" selected hidden>Align…</option>
+          <option value="l">Align left</option><option value="c">Align center</option><option value="r">Align right</option>
+          <option value="t">Align top</option><option value="m">Align middle</option><option value="b">Align bottom</option>
+          <option value="dh">Distribute horizontally</option><option value="dv">Distribute vertically</option></select>
         <button class="small" id="siFlip">Flip</button>
         <button class="small" id="siDup">Duplicate</button>
         <button class="small danger" id="siDel">Delete</button>
@@ -2200,6 +2205,8 @@ function renderInspector(){
   $("#siRotWrap").hidden=multi; // a constellation rotates by steps only
   $("#siFlip").hidden=multi||riser;
   $("#siDup").hidden=multi;
+  $("#siAlign").hidden=!multi;
+  for(const o of $("#siAlign").options)if(o.value[0]==="d")o.disabled=mSel.size<3; // spacing needs 3+
   // Caption block: one row per caption line — tick + value side by side.
   // Multi-selection keeps only the Position row (applies to the whole set);
   // risers keep Position + Name (drawn inside the box) and lose the ticks.
@@ -2366,6 +2373,33 @@ function rotateSelection(delta){
   }
   render();
 }
+/* Align / distribute the multi-selection against the selection's bounding
+   box. Extents come from each item's on-screen box (rotation included), as
+   stage fractions; it.x / it.y stay the item centers. */
+function alignSelection(mode){
+  const st=$("#stage"),r=st.getBoundingClientRect();
+  const bs=[...mSel].map(j=>{
+    const b=st.querySelector(`.sitem[data-si="${j}"] .srot`).getBoundingClientRect(),it=stg().items[j];
+    return {it,hw:b.width/2/r.width,hh:b.height/2/r.height};
+  });
+  if(bs.length<2)return;
+  const H=mode==="l"||mode==="c"||mode==="r"||mode==="dh";
+  const [p,h]=H?["x","hw"]:["y","hh"];
+  const lo=Math.min(...bs.map(b=>b.it[p]-b[h])),hi=Math.max(...bs.map(b=>b.it[p]+b[h]));
+  if(mode[0]==="d"){
+    // Equal gaps between neighbours; the outermost two stay put. Items too
+    // wide for the span (they would overlap) get equally spaced centers.
+    bs.sort((a,b)=>a.it[p]-b.it[p]);
+    const n=bs.length-1,gap=(hi-lo-bs.reduce((s,b)=>s+2*b[h],0))/n;
+    if(gap<0){const c0=bs[0].it[p],step=(bs[n].it[p]-c0)/n;bs.forEach((b,i)=>b.it[p]=c0+i*step);}
+    else{let edge=lo;for(const b of bs){b.it[p]=edge+b[h];edge+=2*b[h]+gap;}}
+  }else for(const b of bs){
+    b.it[p]="lt".includes(mode)?lo+b[h]:"rb".includes(mode)?hi-b[h]:(lo+hi)/2;
+  }
+  for(const b of bs)b.it[p]=Math.min(1,Math.max(0,b.it[p]));
+  render();
+}
+$("#siAlign").addEventListener("change",e=>{alignSelection(e.target.value);e.target.value="";});
 function libCm(ref){
   if(ref==="riser")return 0;
   if(ref.startsWith("custom:")){const c=stg().custom[ref.slice(7)]||lsCustoms()[ref.slice(7)];return (c&&c.cm)||0;}
