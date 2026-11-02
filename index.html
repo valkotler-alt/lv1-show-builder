@@ -541,7 +541,7 @@ td input::placeholder{color:var(--dim);opacity:.55;font-style:italic;}
 .stbtn.st{color:var(--seccolor,var(--accent));border-color:var(--seccolor,var(--accent));}
 .stbtn:disabled{opacity:.55;cursor:default;}
 /* Digital split rows (operating-only copies of an input) */
-.dstag{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.06em;padding:1px 4px;border-radius:4px;background:var(--brand);color:#fff;vertical-align:1px;margin-left:3px;}
+.dstag{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.06em;padding:1px 4px;border-radius:4px;background:var(--brand);color:#fff;vertical-align:1px;margin-right:3px;}
 tr[data-ds] td.dscell{white-space:nowrap;font-size:12px;color:var(--dim);}
 tr[data-ds] td.dscell select{margin:0 6px;max-width:170px;}
 tr[data-ds] td.dscell .dsnote{font-size:11px;}
@@ -1183,7 +1183,7 @@ function splitSource(ch){ // row index of a split's source (a named, non-split c
   return state.channels.findIndex(c=>!c.ds&&c.name.trim()&&c.name.trim()===ch.ds);
 }
 const portsUsed=pts=>Math.max(0,...pts.filter((p,i)=>p&&!state.channels[i].ds).flat());
-const patchHtml=(pts,i)=>(pts[i]?pts[i].join("–"):"—")+(state.channels[i].ds&&state.channels[i].name.trim()?' <span class="dstag">DS</span>':"");
+const patchHtml=(pts,i)=>(state.channels[i].ds&&state.channels[i].name.trim()?'<span class="dstag">DS</span> ':"")+(pts[i]?pts[i].join("–"):"—");
 const named=list=>list.filter(it=>it.name.trim());
 function setStatus(msg,err){const el=$("#status");el.textContent=msg||"";el.classList.toggle("err",!!err);
   if(msg){clearTimeout(setStatus._t);setStatus._t=setTimeout(()=>{el.textContent="";},6000);}}
