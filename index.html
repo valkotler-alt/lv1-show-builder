@@ -684,6 +684,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 .lcell.full{border:1px solid var(--kc);background:color-mix(in srgb,var(--kc) 13%,var(--panel));cursor:grab;}
 .lcell .sc{position:absolute;top:0;left:0;right:0;height:4px;}
 .lcell .ktag{position:absolute;bottom:2px;left:5px;font:500 8.5px var(--font-num);letter-spacing:.05em;color:var(--kc);}
+.lcell .grip{position:absolute;top:5px;left:4px;color:var(--dim);font-size:10px;line-height:1;letter-spacing:-2px;pointer-events:none;} /* same ⋮⋮ grip as table rows / rack slots */
 .lcell .x{position:absolute;top:2px;right:2px;border:none;background:none;padding:0 4px;font-size:11px;line-height:1.2;color:var(--dim);display:none;}
 .lcell .x:hover{color:var(--mtx);background:none;}
 .lcell.full:hover .x{display:block;}
@@ -701,6 +702,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
   font-size:11.5px;font-weight:500;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;}
 .lpchip.in{background:color-mix(in srgb,var(--kc) 20%,var(--panel));border-color:var(--kc);}
 .lpchip.dim{color:var(--dim);}
+.lpchip .grip{color:var(--dim);font-size:10px;letter-spacing:-2px;margin-right:6px;}
 #cfm{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;}
 #cfm[hidden]{display:none;}
 .cfmbox{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:18px 20px;max-width:480px;box-shadow:0 12px 40px rgba(0,0,0,.45);}
@@ -805,7 +807,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
   <button data-tab="stage" class="on">STAGE</button>
   <button data-tab="in">INPUTS</button>
   <button data-tab="out">OUTPUTS</button>
-  <button data-tab="link">LINK</button>
+  <button data-tab="link">LINKS</button>
   <button data-tab="layers">LAYERS</button>
   <button data-tab="notes">NOTES</button>
 </div>
@@ -1469,7 +1471,7 @@ function renderLayers(){
       const row=layerRow(s[0],s[1]),nm=s[0]==="main"?"MASTER":s[1];
       cell=`<div class="lcell full${row?"":" missing"}" draggable="true" data-si="${i}" style="--kc:var(${KIND_VAR[s[0]]})"`+
         ` title="${esc(nm)}${row?" — drag to move":" — no longer in the show (renamed or cleared): not exported"}">`+
-        `${row&&row.color!=null?`<span class="sc" style="background:${palCss(row.color)}"></span>`:""}${esc(nm)}`+
+        `${row&&row.color!=null?`<span class="sc" style="background:${palCss(row.color)}"></span>`:""}<span class="grip">⋮⋮</span>${esc(nm)}`+
         `<span class="ktag">${KIND_TAG[s[0]]}</span><button class="x" data-lx="${i}" title="Remove from this layer">✕</button></div>`;
     }
     return `<div class="lslot"><span class="no">${i+1}</span>${cell}</div>`;
@@ -1479,7 +1481,7 @@ function renderLayers(){
   $("#layPal").innerHTML=layerPalette().map(g=>`<div class="lpsub">${g.sub}</div>`+g.items.map(([k,n,,dim])=>{
     const on=inLayer.has(layerKey(k,n));
     return `<button class="lpchip${on?" in":""}${dim?" dim":""}" draggable="true" data-lk="${k}" data-ln="${esc(n)}" style="--kc:var(${KIND_VAR[k]})"`+
-      ` title="${on?"On this layer — click to remove":"Click to add to the first free slot, or drag onto a slot"}">${esc(k==="main"?"MASTER":n)}</button>`;
+      ` title="${on?"On this layer — click to remove":"Click to add to the first free slot, or drag onto a slot"}"><span class="grip">⋮⋮</span>${esc(k==="main"?"MASTER":n)}</button>`;
   }).join("")).join("")||`<div class="menuempty">Name some ${layPal==="in"?"inputs":"output strips"} first — only named strips go into the session.</div>`;
 }
 /* Put a strip on the current layer. No slot given (a click): toggles it —
@@ -1627,7 +1629,7 @@ function renderWarnings(){
 
 /* ---------- edits ---------- */
 const listFor={ch:()=>state.channels,grp:()=>state.groups,fx:()=>state.fx,aux:()=>state.auxes,mtx:()=>state.matrixes};
-document.addEventListener("input",e=>{ // LINK tab names
+document.addEventListener("input",e=>{ // LINKS tab names
   const t=e.target;if(t.dataset.k!=="lnk")return;
   const i=+t.dataset.i,before=linkLabel(i);
   state.links[i]=t.value;
