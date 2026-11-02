@@ -601,6 +601,11 @@ td .rgrip{color:var(--dim);font-size:11px;letter-spacing:-2px;margin-right:5px;}
 .showrow .when{font-family:var(--font-num);font-size:11px;color:var(--dim);flex:none;}
 .showrow button{flex:none;}
 .menuempty{font-size:12px;color:var(--dim);padding:4px 6px;}
+.menuempty.err{color:var(--warn-fg);}
+.menusub{font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);font-weight:500;padding:8px 6px 4px;border-top:1px solid var(--line);margin-top:4px;}
+.menuact+div>.menusub:first-child{border-top:0;margin-top:0;padding-top:0;}
+#showsMenu{min-width:340px;}
+.toolbar:has(#showsMenu:not([hidden])){z-index:70;} /* open menu above the sticky tab bar */
 /* Stage Builder: library palette + a paper-like stage canvas (kept light in
    both themes -- it is what gets exported/printed). */
 .sbwrap{display:flex;gap:12px;align-items:flex-start;}
@@ -793,6 +798,10 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
   <b>⬆ Update Google Sheet</b> — the sheet gets the input-list template (show info, #/CH NAME/M·L·R dropdown/MIC/STAND/POSITION/NOTES)
   filled with the builder's current inputs. Edit the sheet, press <b>⬇ Update Builder</b> to pull it back: a stereo channel is an
   L row followed by an R row; routing, links and racks set in the builder are kept for channels with the same name.
+  <br><b>Online show library:</b> with the bridge set, <b>Shows ▾ → Save current show</b> also saves the show to your Google Drive
+  (folder <i>LV1 Show Builder - Shows</i>), so it opens from any computer — and teammates who paste the same bridge URL share the
+  same library. Shows saved earlier only on this computer get a <b>☁ Upload</b> button there. Bridges deployed before this feature
+  need the current script + a redeploy (Google then asks once to allow Drive access).
   <br><b>Note:</b> the <b>standalone app file</b> (opened in Chrome/Edge/Safari) syncs with Google directly. On claude.ai the page
   can't call Google itself, so there the sync runs through the <b>Claude desktop app's built-in browser</b> (open the builder in the
   desktop app; it asks once for permission and its Browser pane briefly shows the bridge responses). If you update the bridge script,
@@ -1189,7 +1198,7 @@ function render(){
   renderMaster(); renderLinks(); renderLayers(); renderWarnings();
   renderStage();
   $("#posList").innerHTML=allPositions().map(p=>`<option value="${esc(p)}">`).join("");
-  if(typeof renderLocalShows==="function")renderLocalShows();
+  if(typeof renderShows==="function")renderShows();
 }
 /* Every Position name in use — stage items + both IO lists (deduped). */
 function allPositions(){
@@ -3176,6 +3185,13 @@ const GS_SCRIPT=`/**
  *           builder page cannot POST and syncs through the Claude desktop
  *           app's browser instead; pieces are held in CacheService).
  *
+ * Saved shows (online show library), kept as <ID>.json files in the Drive
+ * folder "LV1 Show Builder - Shows" of the account that deployed the bridge:
+ *   GET  <exec>?shows=list           -> [{id, name, savedAt}]
+ *   GET  <exec>?shows=get&sid=<ID>   -> {doc}
+ *   POST <exec> {op:"saveShow", id, doc} / {op:"deleteShow", id}
+ *        (delete moves the file to the Drive trash, so it can be restored)
+ *
  * Sheet layout (created by the first push, or fill it by hand):
  *   Rows 1-10 = show meta, label in A, value in C: show name / date / venue /
  *     FOH, MON and production-manager name & contact / FOH desk / MON desk /
@@ -3231,8 +3247,10 @@ function doGet(e) {
         b64 += piece;
       }
       var text = Utilities.newBlob(Utilities.base64DecodeWebSafe(b64)).getDataAsString();
-      return _json(_write(JSON.parse(text)));
+      return _json(_dispatch(JSON.parse(text)));
     }
+    if (p.shows === "list") return _json(_listShows());
+    if (p.shows === "get") return _json(_getShow(p.sid));
     var id = p.id;
     if (!id) return _json({ ok: false, error: "missing ?id=<spreadsheetId>" });
     var sh = SpreadsheetApp.openById(id).getSheets()[0];
@@ -3302,9 +3320,99 @@ function doGet(e) {
 
 function doPost(e) {
   try {
-    return _json(_write(JSON.parse(e.postData.contents)));
+    return _json(_dispatch(JSON.parse(e.postData.contents)));
   } catch (err) {
     return _json({ ok: false, error: String(err) });
+  }
+}
+
+function _dispatch(d) {
+  if (d.op === "saveShow") return _saveShow(d);
+  if (d.op === "deleteShow") return _deleteShow(d);
+  return _write(d);
+}
+
+// ---- saved shows: one JSON file per show in a Drive folder ----
+var SHOWS_FOLDER = "LV1 Show Builder - Shows";
+function _showsFolder() {
+  var props = PropertiesService.getScriptProperties();
+  var fid = props.getProperty("showsFolder");
+  if (fid) {
+    try {
+      var f = DriveApp.getFolderById(fid);
+      if (!f.isTrashed()) return f;
+    } catch (e) {}
+  }
+  var it = DriveApp.getFoldersByName(SHOWS_FOLDER);
+  var folder = it.hasNext() ? it.next() : DriveApp.createFolder(SHOWS_FOLDER);
+  props.setProperty("showsFolder", folder.getId());
+  return folder;
+}
+function _showFile(sid) {
+  if (!/^[A-Z0-9-]{1,80}$/.test(sid || "")) throw new Error("bad show id");
+  var it = _showsFolder().getFilesByName(sid + ".json");
+  while (it.hasNext()) {
+    var f = it.next();
+    if (!f.isTrashed()) return f;
+  }
+  return null;
+}
+function _listShows() {
+  try {
+    var out = [];
+    var it = _showsFolder().getFiles();
+    while (it.hasNext()) {
+      var f = it.next();
+      var n = f.getName();
+      if (f.isTrashed() || n.slice(-5) !== ".json") continue;
+      var sid = n.slice(0, -5);
+      var meta = {};
+      try { meta = JSON.parse(f.getDescription() || "{}"); } catch (e) {}
+      out.push({
+        id: sid,
+        name: meta.name || sid,
+        savedAt: meta.savedAt || f.getLastUpdated().toISOString(),
+      });
+    }
+    return { ok: true, shows: out };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+}
+function _getShow(sid) {
+  try {
+    var f = _showFile(sid);
+    if (!f) return { ok: false, error: "show not found: " + sid };
+    return { ok: true, doc: JSON.parse(f.getBlob().getDataAsString()) };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+}
+function _saveShow(d) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(20000);
+    var doc = d.doc || {};
+    var text = JSON.stringify(doc);
+    var meta = JSON.stringify({ name: (doc.show && doc.show.name) || d.id, savedAt: doc.savedAt || new Date().toISOString() });
+    var f = _showFile(d.id);
+    if (f) f.setContent(text);
+    else f = _showsFolder().createFile(d.id + ".json", text, "application/json");
+    f.setDescription(meta);
+    return { ok: true, id: d.id };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  } finally {
+    lock.releaseLock();
+  }
+}
+function _deleteShow(d) {
+  try {
+    var f = _showFile(d.id);
+    if (f) f.setTrashed(true);
+    return { ok: true, id: d.id };
+  } catch (err) {
+    return { ok: false, error: String(err) };
   }
 }
 
@@ -3532,20 +3640,32 @@ function utf8ToB64Url(s){
   for(let i=0;i<bytes.length;i+=0x8000)bin+=String.fromCharCode(...bytes.subarray(i,i+0x8000));
   return btoa(bin).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
 }
-async function gsPushChunked(br,payload){
+async function gsPushChunked(br,payload,label){
   const b64=utf8ToB64Url(payload);
   const CH=1200;
   const token=Math.random().toString(36).slice(2,10)+Date.now().toString(36);
   const n=Math.ceil(b64.length/CH)||1;
   for(let i=0;i<n;i++){
-    setStatus(`Writing the sheet… (part ${i+1}/${n+1})`);
+    setStatus(`${label} (part ${i+1}/${n+1})`);
     const r=await gsGet(`${br}?push=chunk&token=${token}&i=${i}&n=${n}&data=${encodeURIComponent(b64.slice(i*CH,(i+1)*CH))}`);
     if(!r.ok)throw new Error(r.error||"chunk upload failed");
   }
-  setStatus(`Writing the sheet… (part ${n+1}/${n+1})`);
+  setStatus(`${label} (part ${n+1}/${n+1})`);
   const r=await gsGet(`${br}?push=commit&token=${token}&n=${n}`);
   if(!r.ok)throw new Error(r.error||"bridge error (redeploy the bridge script if you updated it: Deploy → Manage deployments → Edit → New version)");
   return r;
+}
+async function gsPost(br,body,label){ // POST; where POST is blocked -> chunked GETs (direct or via the app browser)
+  if(!window.GS_FORCE_CHUNKS){
+    try{
+      const r=await fetch(br,{method:"POST",redirect:"follow",
+        headers:{"Content-Type":"text/plain;charset=utf-8"},body});
+      return await r.json();
+    }catch(err){
+      if(!(err instanceof TypeError))throw err;
+    }
+  }
+  return gsPushChunked(br,body,label);
 }
 function sheetRows(){ // builder channels -> sheet rows (stereo = L row + R row)
   const pts=ports();const out=[];
@@ -3635,18 +3755,7 @@ $("#btnPush").onclick=async()=>{
   try{
     const body=JSON.stringify({id:p.id,show:{name:state.show.name,date:state.show.date,venue:state.show.venue,fohContact:state.show.fohContact||"",monContact:state.show.monContact||"",pmContact:state.show.pmContact||"",fohDesk:state.show.fohDesk||"",monDesk:state.show.monDesk||"",pa:state.show.pa||"",notes:state.show.notes||""},
       rows:sheetRows(),prefill:cfg().ch,auxes:auxSheetRows(),auxPrefill:cfg().mon});
-    let data=null;
-    if(!window.GS_FORCE_CHUNKS){
-      try{
-        const r=await fetch(p.br,{method:"POST",redirect:"follow",
-          headers:{"Content-Type":"text/plain;charset=utf-8"},body});
-        data=await r.json();
-      }catch(err){
-        if(!(err instanceof TypeError))throw err;
-        data=null; // POST blocked -> chunked GETs (direct or via the app browser)
-      }
-    }
-    if(data===null)data=await gsPushChunked(p.br,body);
+    const data=await gsPost(p.br,body,"Writing the sheet…");
     if(!data.ok)throw new Error(data.error||"bridge error");
     setStatus(`Google Sheet updated: ${data.rows} row${data.rows===1?"":"s"} written (template layout refreshed).`);
   }catch(err){gsError(err);}
@@ -3676,56 +3785,126 @@ function nativeSave({filename,data}){
 })();
 /* ---------- show management ----------
    Save / recall whole shows (strips, routing, racks, config AND the linked
-   Google Sheet). On claude.ai they live in the artifact's cloud database;
-   in the standalone app they live in this computer's browser storage. */
+   Google Sheet). On claude.ai they live in the artifact's cloud database.
+   Elsewhere they go ONLINE once the Google bridge is set up: one JSON file
+   per show in the bridge account's Drive folder "LV1 Show Builder - Shows",
+   so every browser with the same bridge URL (any computer, the whole team)
+   sees the same library. A copy always stays in this computer's browser
+   storage, which is also the whole library when no bridge is set. */
 const slugShow=n=>n.toUpperCase().replace(/[^A-Z0-9]+/g,"-").replace(/^-+|-+$/g,"")||"SHOW";
-const showRow=(id,s,cur)=>`<div class="showrow${id===cur?" cur":""}" data-load="${esc(id)}" title="Load this show">
-  <span class="name">${esc(s.show?.name||id)}</span><span class="when">${esc((s.savedAt||"").slice(0,10))}</span>
+const byNewest=(a,b)=>(b.savedAt||"").localeCompare(a.savedAt||"");
+const showRow=(id,name,savedAt,cur,src,up)=>`<div class="showrow${id===cur?" cur":""}" data-load="${esc(id)}" data-src="${src}" title="Load this show">
+  <span class="name">${esc(name||id)}</span><span class="when">${esc((savedAt||"").slice(0,10))}</span>
+  ${up?`<button class="small" data-up="${esc(id)}" title="Upload this show to the online library">☁ Upload</button>`:""}
   <button class="small danger" data-rm="${esc(id)}" title="Delete this saved show">✕</button></div>`;
 function lsShows(){try{return JSON.parse(localStorage.getItem("lv1.shows")||"{}");}catch(_){return {};}}
 function lsSetShows(o){try{localStorage.setItem("lv1.shows",JSON.stringify(o));}catch(e){setStatus("Could not save locally: "+(e.message||e),true);}}
-function renderLocalShows(){
-  if(IS_ARTIFACT)return;
-  const o=lsShows();const cur=slugShow(state.show.name.trim());
-  const items=Object.entries(o).sort((a,b)=>(b[1].savedAt||"").localeCompare(a[1].savedAt||""));
-  $("#savedshows").innerHTML=items.map(([id,s])=>showRow(id,s,cur)).join("")
-    ||'<div class="menuempty">none yet — name the show, then “Save current show”</div>';
+const OLD_BRIDGE="the deployed bridge script is an older version without the online show library — Google Sheet → Setup… → Copy bridge script, paste it over the old code, then Deploy → Manage deployments → ✎ → Version: New version → Deploy (Google asks once to allow Drive access)";
+const bridgeErr=r=>new Error(/missing (\?)?id/.test(r.error||"")?OLD_BRIDGE:(r.error||"bridge error"));
+let onlineShows=null,onlineErr=""; // the bridge's show list [{id,name,savedAt}]; null = not loaded
+let loadedOnline=null; // {id,savedAt} of the online show this page last loaded or saved
+const useOnline=()=>!IS_ARTIFACT&&!!bridgeUrl();
+function renderShows(){
+  if(IS_ARTIFACT)return; // the artifact's cloud list renders from its db snapshot
+  const cur=slugShow(state.show.name.trim());
+  const local=Object.entries(lsShows()).map(([id,s])=>({id,name:s.show?.name,savedAt:s.savedAt})).sort(byNewest);
+  let html="";
+  if(useOnline()){
+    html+='<div class="menusub">Online — Google Drive</div>';
+    if(onlineShows)html+=onlineShows.slice().sort(byNewest).map(s=>showRow(s.id,s.name,s.savedAt,cur,"online")).join("")
+      ||'<div class="menuempty">none yet — name the show, then “Save current show”</div>';
+    else html+=`<div class="menuempty${onlineErr?" err":""}">${esc(onlineErr||"loading…")}</div>`;
+    const ids=new Set((onlineShows||[]).map(s=>s.id));
+    const only=local.filter(s=>!ids.has(s.id));
+    if(only.length)html+=`<div class="menusub">${onlineShows?"Only on this computer":"On this computer"}</div>`+
+      only.map(s=>showRow(s.id,s.name,s.savedAt,cur,"local",!!onlineShows)).join("");
+  }else{
+    html+='<div class="menusub">On this computer</div>'+
+      (local.map(s=>showRow(s.id,s.name,s.savedAt,cur,"local")).join("")
+       ||'<div class="menuempty">none yet — name the show, then “Save current show”</div>')+
+      '<div class="menuempty">To keep shows online — on any computer, shared with your team — set up the Google bridge: Google Sheet → Setup….</div>';
+  }
+  $("#savedshows").innerHTML=html;
 }
-$("#btnShows").onclick=()=>{const m=$("#showsMenu");m.hidden=!m.hidden;};
+async function refreshOnline(){
+  if(!useOnline())return renderShows();
+  onlineErr="";renderShows();
+  try{
+    const r=await gsGet(`${bridgeUrl()}?shows=list`);
+    if(!r.ok)throw bridgeErr(r);
+    onlineShows=r.shows||[];
+  }catch(err){onlineShows=null;onlineErr="Online library unavailable: "+(err.message||err);}
+  renderShows();
+}
+async function saveOnline(id,doc){
+  const r=await gsPost(bridgeUrl(),JSON.stringify({op:"saveShow",id,doc}),"Saving online…");
+  if(!r.ok)throw bridgeErr(r);
+  const row={id,name:doc.show?.name||id,savedAt:doc.savedAt};
+  if(onlineShows)onlineShows=[...onlineShows.filter(s=>s.id!==id),row];
+  loadedOnline={id,savedAt:doc.savedAt};
+}
+$("#btnShows").onclick=()=>{const m=$("#showsMenu");m.hidden=!m.hidden;if(!m.hidden)refreshOnline();};
 document.addEventListener("click",e=>{ // click outside closes the menu
-  if(!e.target.closest("#showsWrap"))$("#showsMenu").hidden=true;
+  if(!e.target.closest("#showsWrap")&&!e.target.closest("#cfm"))$("#showsMenu").hidden=true;
 });
 (async()=>{
   db=IS_ARTIFACT?await (window.claude.use("db")??null):null;
   if(IS_ARTIFACT&&!db){$("#showsWrap").hidden=true;return;}
-  $("#menuHead").textContent=db?"Saved shows — cloud":"Saved shows — this computer";
+  $("#menuHead").textContent=db?"Saved shows — cloud":"Saved shows";
   if(db){
     try{
       db.collection("shows").orderBy("savedAt","desc").limit(50).onSnapshot(snap=>{
-        $("#savedshows").innerHTML=snap.docs.map(d=>showRow(d.id,d.data(),slugShow(state.show.name.trim())))
+        $("#savedshows").innerHTML=snap.docs.map(d=>showRow(d.id,d.data().show?.name,d.data().savedAt,slugShow(state.show.name.trim()),"db"))
           .join("")||'<div class="menuempty">none yet</div>';
       },()=>{ $("#showsWrap").hidden=true; });
     }catch(_){ $("#showsWrap").hidden=true; }
   }else{
-    renderLocalShows();
+    renderShows();
   }
 })();
 document.addEventListener("click",async e=>{
+  const upBtn=e.target.closest("[data-up]");
+  if(upBtn){
+    const id=upBtn.dataset.up,doc=lsShows()[id];
+    if(!doc)return;
+    upBtn.disabled=true;
+    try{await saveOnline(id,doc);renderShows();setStatus("Uploaded “"+(doc.show?.name||id)+"” to the online library.");}
+    catch(err){upBtn.disabled=false;setStatus("Upload failed: "+(err.message||err),true);}
+    return;
+  }
   const rmBtn=e.target.closest("[data-rm]");
   if(rmBtn){
-    const rm=rmBtn.dataset.rm;
+    const rm=rmBtn.dataset.rm,src=rmBtn.closest(".showrow").dataset.src;
     if(db){await db.doc("shows/"+rm).delete();setStatus("Deleted.");}
-    else if(!IS_ARTIFACT){const o=lsShows();delete o[rm];lsSetShows(o);renderLocalShows();setStatus("Deleted.");}
+    else if(src==="online"){
+      const name=(onlineShows||[]).find(s=>s.id===rm)?.name||rm;
+      if(!(await askConfirm(`Delete “${name}” from the online library? It disappears for everyone using this bridge (it stays restorable from the Google Drive trash).`,"OK — delete")))return;
+      try{
+        const r=await gsPost(bridgeUrl(),JSON.stringify({op:"deleteShow",id:rm}),"Deleting…");
+        if(!r.ok)throw bridgeErr(r);
+        const o=lsShows();delete o[rm];lsSetShows(o);
+        if(onlineShows)onlineShows=onlineShows.filter(s=>s.id!==rm);
+        if(loadedOnline?.id===rm)loadedOnline=null;
+        renderShows();setStatus("Deleted “"+name+"” from the online library.");
+      }catch(err){setStatus("Delete failed: "+(err.message||err),true);}
+    }
+    else{const o=lsShows();delete o[rm];lsSetShows(o);renderShows();setStatus("Deleted.");}
     return;
   }
   const row=e.target.closest("[data-load]");
   if(!row)return;
   const load=row.dataset.load;
   if(!(await confirmDiscard("loading another show")))return;
-  if(db){const snap=await db.doc("shows/"+load).get();
-    if(snap.exists){try{loadSpec(snap.data().spec);markClean();setStatus("Loaded “"+(snap.data().show?.name||load)+"”.");}catch(err){setStatus(err.message,true);}}}
-  else if(!IS_ARTIFACT){const doc=lsShows()[load];
-    if(doc){try{loadSpec(doc.spec);markClean();setStatus("Loaded “"+(doc.show?.name||load)+"”.");}catch(err){setStatus(err.message,true);}}}
+  let doc=null;
+  if(db){const snap=await db.doc("shows/"+load).get();if(snap.exists)doc=snap.data();}
+  else if(row.dataset.src==="online"){
+    setStatus("Loading from the online library…");
+    try{const r=await gsGet(`${bridgeUrl()}?shows=get&sid=${encodeURIComponent(load)}`);
+      if(!r.ok)throw bridgeErr(r);doc=r.doc;loadedOnline={id:load,savedAt:doc.savedAt};}
+    catch(err){setStatus("Load failed: "+(err.message||err),true);return;}
+  }
+  else doc=lsShows()[load];
+  if(doc){try{loadSpec(doc.spec);markClean();setStatus("Loaded “"+(doc.show?.name||load)+"”.");}catch(err){setStatus(err.message,true);}}
   $("#showsMenu").hidden=true;
 });
 $("#btnSave").onclick=async()=>{
@@ -3735,10 +3914,19 @@ $("#btnSave").onclick=async()=>{
   if(db){
     try{ await db.doc("shows/"+id).set(doc); markClean(); setStatus("Saved to cloud as “"+name+"”."); }
     catch(err){ setStatus("Save failed: "+(err.message||err.code||"unknown"),true); }
-  }else if(!IS_ARTIFACT){
-    const o=lsShows();o[id]=doc;lsSetShows(o);renderLocalShows();markClean();
-    setStatus("Show saved on this computer as “"+name+"” (incl. its Google Sheet link).");
+    return;
   }
+  if(IS_ARTIFACT)return;
+  // The online library is shared: replacing a show this page didn't load (or
+  // one someone re-saved since) needs a confirmation.
+  const there=useOnline()&&(onlineShows||[]).find(s=>s.id===id);
+  if(there&&!(loadedOnline?.id===id&&loadedOnline.savedAt===there.savedAt)&&
+     !(await askConfirm(`“${there.name}” is already in the online library (saved ${(there.savedAt||"").slice(0,16).replace("T"," ")}). Replace it with this show?`,"OK — replace")))return;
+  const o=lsShows();o[id]=doc;lsSetShows(o);markClean();
+  if(!useOnline()){renderShows();setStatus("Show saved on this computer as “"+name+"” (incl. its Google Sheet link).");return;}
+  setStatus("Saving online…");
+  try{await saveOnline(id,doc);renderShows();setStatus("Saved “"+name+"” online (Google Drive) and on this computer.");}
+  catch(err){renderShows();setStatus("Online save failed — "+(err.message||err)+". Saved on this computer only.",true);}
 };
 
 /* ---------- vendor PDF ---------- */
