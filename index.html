@@ -539,6 +539,13 @@ td .dup{outline:2px solid var(--mtx);}
 td input::placeholder{color:var(--dim);opacity:.55;font-style:italic;}
 .stbtn{font-family:var(--font-num);font-size:11px;font-weight:500;min-width:34px;}
 .stbtn.st{color:var(--seccolor,var(--accent));border-color:var(--seccolor,var(--accent));}
+.stbtn:disabled{opacity:.55;cursor:default;}
+/* Digital split rows (operating-only copies of an input) */
+.dstag{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.06em;padding:1px 4px;border-radius:4px;background:var(--brand);color:#fff;vertical-align:1px;margin-left:3px;}
+tr[data-ds] td.dscell{white-space:nowrap;font-size:12px;color:var(--dim);}
+tr[data-ds] td.dscell select{margin:0 6px;max-width:170px;}
+tr[data-ds] td.dscell .dsnote{font-size:11px;}
+.dsbtn{font-family:var(--font-num);font-size:10.5px;font-weight:700;letter-spacing:.04em;margin-right:4px;}
 .pfbtn{font-family:var(--font-num);font-size:11px;min-width:44px;}
 .pfbtn.post{color:var(--grp);border-color:var(--grp);}
 .chips{display:flex;flex-wrap:wrap;gap:4px;}
@@ -830,7 +837,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 
 <section style="--seccolor:var(--ch)" data-tab="in">
   <div class="sechead"><h2>Inputs</h2><span class="count" id="chCount"></span>
-    <span class="hint">MGB ports patch to named inputs top-down (stereo takes two). Click a row's # to select (Shift = range, Ctrl = add/remove, Esc = clear) · drag the # to move rows.</span></div>
+    <span class="hint">MGB ports patch to named inputs top-down (stereo takes two). <b>DS</b> on a row adds a digital split — the same input on another strip, off the master, for monitors (.emo only: never on the PDF, sheet or stage). Click a row's # to select (Shift = range, Ctrl = add/remove, Esc = clear) · drag the # to move rows.</span></div>
   <div class="tblwrap"><table id="chTable">
     <thead><tr><th>#</th><th>Patch</th><th>Name</th><th>M/ST</th><th>Color</th><th>Group</th><th>Link</th><th>Mute</th><th>Matrix</th><th>Mic</th><th>Stand</th><th>Stage position</th><th>Notes</th><th>Rack</th><th></th><th class="iocol"></th><th class="iocol"></th></tr></thead>
     <tbody></tbody>
@@ -1054,7 +1061,10 @@ function colorCell(kind,i,val){
 /* ---------- state ---------- */
 /* Strip defaults mirror LV1's: channels/FX/auxes/matrixes are mono, groups
    are stereo; default (unnamed) strips are not exported. */
-const defCh=()=>({name:"",stereo:false,group:"",link:"",mute:"",matrix:"",mic:"",stand:"",pos:"",notes:"",rack:null,color:null});
+const defCh=()=>({name:"",stereo:false,group:"",link:"",mute:"",matrix:"",mic:"",stand:"",pos:"",notes:"",rack:null,color:null,ds:""});
+/* Channel group value for "not routed": no LR / group assignment at all
+   (how LV1 stores a strip taken off the master). Digital splits default to it. */
+const NO_MAIN="(none)";
 const defGrp=()=>({name:"",stereo:true,dest:"MASTER",postFx:false,matrix:[],rack:null,color:null,link:"",mute:""});
 const defFx=()=>({name:"",stereo:true,dest:"MASTER",rack:null,color:null,link:"",mute:""}); // fresh LV1 FX strips are stereo
 const defAux=()=>({name:"",stereo:false,dest:"",pos:"",notes:"",color:null,link:"",mute:""});
@@ -1157,10 +1167,23 @@ function exampleShow(){
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
 function ports(){ // 1-based port list per NAMED channel (unnamed strips get null)
-  let p=1; return state.channels.map(ch=>{
-    if(!ch.name.trim())return null;
+  let p=1; const out=state.channels.map(ch=>{
+    if(!ch.name.trim()||ch.ds)return null;
     const r=ch.stereo?[p,p+1]:[p]; p+=ch.stereo?2:1; return r;});
+  // A digital split (DS) is patched to its source's input: no port of its own.
+  state.channels.forEach((ch,i)=>{if(ch.name.trim()&&ch.ds){const s=splitSource(ch);
+    out[i]=s>=0&&out[s]?[...out[s]]:null;}});
+  return out;
 }
+/* Digital split: a second input strip on the SAME MGB input as its source
+   (e.g. the lead vocal again, for monitors — independent processing, low
+   latency). Operating-only: never on the PDF, the Google Sheet or the stage;
+   it exists for the .emo session. */
+function splitSource(ch){ // row index of a split's source (a named, non-split channel), else -1
+  return state.channels.findIndex(c=>!c.ds&&c.name.trim()&&c.name.trim()===ch.ds);
+}
+const portsUsed=pts=>Math.max(0,...pts.filter((p,i)=>p&&!state.channels[i].ds).flat());
+const patchHtml=(pts,i)=>(pts[i]?pts[i].join("–"):"—")+(state.channels[i].ds&&state.channels[i].name.trim()?' <span class="dstag">DS</span>':"");
 const named=list=>list.filter(it=>it.name.trim());
 function setStatus(msg,err){const el=$("#status");el.textContent=msg||"";el.classList.toggle("err",!!err);
   if(msg){clearTimeout(setStatus._t);setStatus._t=setTimeout(()=>{el.textContent="";},6000);}}
@@ -1190,6 +1213,7 @@ function healDefaultRefs(){
 }
 function render(){
   healDefaultRefs();
+  for(const c of state.channels)if(c.ds){const s=splitSource(c);if(s>=0)c.stereo=state.channels[s].stereo;}
   $("#showName").value=state.show.name; $("#showDate").value=state.show.date; $("#showVenue").value=state.show.venue;
   $("#shFohC").value=state.show.fohContact||"";$("#shMonC").value=state.show.monContact||"";$("#shPmC").value=state.show.pmContact||"";
   $("#shFoh").value=state.show.fohDesk||"";$("#shMon").value=state.show.monDesk||"";$("#shPa").value=state.show.pa||"";$("#shNotes").value=state.show.notes||"";
@@ -1298,8 +1322,8 @@ function nameCell(kind,i,val,dupSet){
 function stCell(kind,i,stereo){
   return `<td><button class="stbtn small ${stereo?"st":""}" data-k="${kind}" data-i="${i}" data-f="stereo" id="${kind}-${i}-st">${stereo?"ST":"M"}</button></td>`;
 }
-function opsCell(kind,i){ // reorder lives in drag (the # cell) and the ▲/▼ Selected bar
-  return `<td class="rowops iocol">
+function opsCell(kind,i,extra){ // reorder lives in drag (the # cell) and the ▲/▼ Selected bar
+  return `<td class="rowops iocol">${extra||""}
     <button class="small danger" data-k="${kind}" data-i="${i}" data-f="reset" title="Reset strip to defaults (incl. name)">⟲</button></td>`;
 }
 function dupNames(list){const seen=new Set(),dup=new Set();
@@ -1334,8 +1358,9 @@ const linkLabels=()=>Array.from({length:LINK_COUNT},(_,i)=>linkLabel(i));
 
 function renderChannels(){
   const tb=$("#chTable tbody"); const pts=ports(); const dups=dupNames(state.channels);
-  const grpOpts=stripOpts("grp");
+  const grpOpts=[NO_MAIN,...stripOpts("grp")];
   const mtxOpts=stripOpts("mtx");
+  const srcOpts=state.channels.filter(c=>!c.ds&&c.name.trim()).map(c=>c.name.trim());
   tb.innerHTML=state.channels.map((ch,i)=>{
     const s=(f,cur,opts,none)=>{
       // A value that is not in the bank (deleted / misspelt strip) stays
@@ -1343,27 +1368,37 @@ function renderChannels(){
       const miss=cur&&!opts.includes(cur)&&f!=="stand";
       const all=cur&&!opts.includes(cur)?[cur,...opts]:opts;
       return `<select id="ch-${i}-${f}" class="asg${miss?" missing":""}" data-k="ch" data-i="${i}" data-f="${f}">
-      <option value=""${cur===""?" selected":""}>${none}</option>${all.map(o=>`<option value="${esc(o)}"${o===cur?" selected":""}>${miss&&o===cur?"⚠ ":""}${esc(o)}</option>`).join("")}</select>`;};
-    return `<tr${rowCls("ch",i)}>
+      <option value=""${cur===""?" selected":""}>${none}</option>${all.map(o=>`<option value="${esc(o)}"${o===cur?" selected":""}>${miss&&o===cur?"⚠ ":""}${o===NO_MAIN?"No master":esc(o)}</option>`).join("")}</select>`;};
+    const isDs=!!ch.ds;
+    // A split row: no mic / stand / position / notes (operating only) — its
+    // source picker instead; the format follows the source.
+    const ioCells=isDs?`<td colspan="4" class="dscell"><span>Digital split of</span>
+        <select id="ch-${i}-ds" class="asg${splitSource(ch)<0?" missing":""}" data-k="ch" data-i="${i}" data-f="ds">${
+          (splitSource(ch)<0?[ch.ds]:[]).concat(srcOpts.filter(n=>n!==ch.name.trim())).map(o=>`<option value="${esc(o)}"${o===ch.ds?" selected":""}>${splitSource(ch)<0&&o===ch.ds?"⚠ ":""}${esc(o)}</option>`).join("")}</select>
+        <span class="dsnote">same input · .emo only</span></td>`
+      :`<td><input id="ch-${i}-mic" value="${esc(ch.mic)}" data-k="ch" data-i="${i}" data-f="mic" placeholder="e.g. B91A"></td>
+      <td>${s("stand",ch.stand,STANDS,"—")}</td>
+      <td><input id="ch-${i}-pos" value="${esc(ch.pos)}" data-k="ch" data-i="${i}" data-f="pos" list="posList" placeholder="position"></td>
+      <td><input id="ch-${i}-notes" value="${esc(ch.notes)}" data-k="ch" data-i="${i}" data-f="notes"></td>`;
+    return `<tr${rowCls("ch",i)}${isDs?' data-ds="1"':""}>
       <td class="num"><span class="rgrip">⋮⋮</span>${i+1}</td>
-      <td class="num">${pts[i]?pts[i].join("–"):"—"}</td>
+      <td class="num">${patchHtml(pts,i)}</td>
       ${nameCell("ch",i,ch.name,dups)}
-      ${stCell("ch",i,ch.stereo)}
+      ${isDs?`<td><button class="stbtn small ${ch.stereo?"st":""}" disabled title="A split has its source's format">${ch.stereo?"ST":"M"}</button></td>`:stCell("ch",i,ch.stereo)}
       ${colorCell("ch",i,ch.color)}
       <td>${s("group",ch.group,grpOpts,"MASTER")}</td>
       <td>${s("link",ch.link,linkLabels(),"None")}</td>
       ${muteCell("ch",i,ch.mute)}
       <td>${s("matrix",ch.matrix,mtxOpts,"None")}</td>
-      <td><input id="ch-${i}-mic" value="${esc(ch.mic)}" data-k="ch" data-i="${i}" data-f="mic" placeholder="e.g. B91A"></td>
-      <td>${s("stand",ch.stand,STANDS,"—")}</td>
-      <td><input id="ch-${i}-pos" value="${esc(ch.pos)}" data-k="ch" data-i="${i}" data-f="pos" list="posList" placeholder="position"></td>
-      <td><input id="ch-${i}-notes" value="${esc(ch.notes)}" data-k="ch" data-i="${i}" data-f="notes"></td>
+      ${ioCells}
       ${rackCell("ch",i,ch.rack)}
-      ${opsCell("ch",i,state.channels.length)}${ioOpsCell("ch",i)}</tr>`+rackRow("ch",i,ch.rack,17,ch.stereo);
+      ${opsCell("ch",i,!isDs&&ch.name.trim()?`<button class="small dsbtn" data-k="ch" data-i="${i}" data-f="split" title="Digital split: add a copy of this input on the next free strip — same MGB input, its own processing, not routed to master (for monitors)">DS</button>`:"")}${ioOpsCell("ch",i)}</tr>`+rackRow("ch",i,ch.rack,17,ch.stereo);
   }).join("");
-  const lastPts=[...pts].reverse().find(Boolean);
-  const used=lastPts?lastPts[lastPts.length-1]:0;
-  $("#chCount").textContent=`${named(state.channels).length} named / ${cfg().ch} strips · ${used}/${MGB_PORTS} ports`;
+  $("#chCount").textContent=chCountText(pts);
+}
+function chCountText(pts){
+  const n=named(state.channels),ds=n.filter(c=>c.ds).length;
+  return `${n.length} named${ds?` (${ds} DS)`:""} / ${cfg().ch} strips · ${portsUsed(pts)}/${MGB_PORTS} ports`;
 }
 function renderGroups(){
   const tb=$("#grpTable tbody"); const dups=dupNames(state.groups);
@@ -1382,7 +1417,7 @@ function renderGroups(){
       <td><button class="pfbtn small ${g.postFx?"post":""}" id="grp-${i}-pf" data-k="grp" data-i="${i}" data-f="postFx">${g.postFx?"POST":"PRE"}</button></td>
       <td><div class="chips">${mtxOpts.length?mtxOpts.map(m=>`<label class="${g.matrix.includes(m)?"on":""}"><input type="checkbox" id="grp-${i}-mx-${esc(m)}" data-k="grp" data-i="${i}" data-f="mx" data-m="${esc(m)}" ${g.matrix.includes(m)?"checked":""}>${esc(m)}</label>`).join(""):'<span style="color:var(--dim);font-size:11px">no matrix strips in this configuration</span>'}</div></td>
       ${rackCell("grp",i,g.rack)}
-      ${opsCell("grp",i,state.groups.length)}${ioOpsCell("grp",i)}</tr>`+rackRow("grp",i,g.rack,13,g.stereo);
+      ${opsCell("grp",i)}${ioOpsCell("grp",i)}</tr>`+rackRow("grp",i,g.rack,13,g.stereo);
   }).join("")||emptyRow(13,"This mixer configuration has no group strips.");
   $("#grpCount").textContent=state.groups.length?`${named(state.groups).length} named / ${cfg().grp} strips`:"";
 }
@@ -1396,7 +1431,7 @@ function renderFx(){
       <td><select id="fx-${i}-dest" data-k="fx" data-i="${i}" data-f="dest">${destOpts.map(o=>`<option${o===f.dest?" selected":""}>${esc(o)}</option>`).join("")}</select></td>
       ${linkCell("fx",i,f.link)}${muteCell("fx",i,f.mute)}
       ${rackCell("fx",i,f.rack)}
-      ${opsCell("fx",i,state.fx.length)}${ioOpsCell("fx",i)}</tr>`+rackRow("fx",i,f.rack,11,f.stereo);
+      ${opsCell("fx",i)}${ioOpsCell("fx",i)}</tr>`+rackRow("fx",i,f.rack,11,f.stereo);
   }).join("");
   $("#fxCount").textContent=`${named(state.fx).length} named / ${FX_COUNT} strips`;
 }
@@ -1419,7 +1454,7 @@ function renderAux(){
       ${linkCell("aux",i,a.link)}${muteCell("aux",i,a.mute)}
       <td><input id="aux-${i}-pos" value="${esc(a.pos||"")}" data-k="aux" data-i="${i}" data-f="pos" list="posList" placeholder="position"></td>
       <td><input id="aux-${i}-notes" value="${esc(a.notes||"")}" data-k="aux" data-i="${i}" data-f="notes"></td>
-      ${opsCell("aux",i,state.auxes.length)}${ioOpsCell("aux",i)}</tr>`).join("")
+      ${opsCell("aux",i)}${ioOpsCell("aux",i)}</tr>`).join("")
     ||emptyRow(13,"This mixer configuration has no aux strips.");
   $("#auxCount").textContent=cfg().mon?`${named(state.auxes).length} named / ${cfg().mon} strips`:"";
 }
@@ -1575,7 +1610,7 @@ $("#laySec").addEventListener("dragend",()=>{
 });
 function renderSimple(kind,list,tableSel){
   const tb=$(tableSel+" tbody"); const dups=dupNames(list);
-  tb.innerHTML=list.map((it,i)=>`<tr${rowCls(kind,i)}><td class="num"><span class="rgrip">⋮⋮</span>${i+1}</td>${nameCell(kind,i,it.name,dups)}${stCell(kind,i,it.stereo)}${colorCell(kind,i,it.color)}${linkCell(kind,i,it.link)}${muteCell(kind,i,it.mute)}${opsCell(kind,i,list.length)}${ioOpsCell(kind,i)}</tr>`).join("")
+  tb.innerHTML=list.map((it,i)=>`<tr${rowCls(kind,i)}><td class="num"><span class="rgrip">⋮⋮</span>${i+1}</td>${nameCell(kind,i,it.name,dups)}${stCell(kind,i,it.stereo)}${colorCell(kind,i,it.color)}${linkCell(kind,i,it.link)}${muteCell(kind,i,it.mute)}${opsCell(kind,i)}${ioOpsCell(kind,i)}</tr>`).join("")
     ||emptyRow(9,kind==="aux"?"This mixer configuration has no aux strips.":"No matrix strips in this configuration.");
   const total=kind==="aux"?cfg().mon:MTX_COUNT;
   $(kind==="aux"?"#auxCount":"#mtxCount").textContent=total?`${named(list).length} named / ${total} strips`:"";
@@ -1585,8 +1620,7 @@ function emptyRow(colspan,hint){
 }
 function renderWarnings(){
   const w=[]; const pts=ports();
-  const lastPts=[...pts].reverse().find(Boolean);
-  const used=lastPts?lastPts[lastPts.length-1]:0;
+  const used=portsUsed(pts);
   if(used>MGB_PORTS)w.push(`MGB has ${MGB_PORTS} inputs — the patch needs ${used}.`);
   {
     const gN=new Set(state.groups.map(g=>g.name.trim()).filter(Boolean));
@@ -1594,7 +1628,7 @@ function renderWarnings(){
     const lN=new Set(linkLabels());
     const bad=new Set();
     for(const c of state.channels){if(!c.name.trim())continue;
-      if(c.group&&!gN.has(c.group))bad.add(c.group);
+      if(c.group&&c.group!==NO_MAIN&&!gN.has(c.group))bad.add(c.group);
       if(c.matrix&&!mN.has(c.matrix))bad.add(c.matrix);}
     for(const l of [state.channels,state.groups,state.fx,state.auxes,state.matrixes])
       for(const x of l)if(x.name.trim()&&x.link&&!lN.has(x.link))bad.add(x.link);
@@ -1604,8 +1638,10 @@ function renderWarnings(){
     const d=dupNames(list); if(d.size)w.push(`Duplicate ${label} names: ${[...d].join(", ")} — LV1 strips should be unique.`);
   }
   const grpNames=new Set(state.groups.map(g=>g.name.trim()).filter(Boolean));
-  const orphans=state.channels.filter(c=>c.group&&!grpNames.has(c.group)).map(c=>c.name.trim()||"(unnamed)");
+  const orphans=state.channels.filter(c=>c.group&&c.group!==NO_MAIN&&!grpNames.has(c.group)).map(c=>c.name.trim()||"(unnamed)");
   if(orphans.length)w.push(`Channels pointing at a group that is no longer named: ${orphans.join(", ")} (they will route to MASTER).`);
+  const lostDs=state.channels.filter(c=>c.ds&&c.name.trim()&&splitSource(c)<0).map(c=>`${c.name.trim()} (← ${c.ds})`);
+  if(lostDs.length)w.push(`Digital splits whose source input no longer exists: ${lostDs.join(", ")} — re-pick the source (⚠), or they are built with no input patch.`);
   // Gaps: named strips below unnamed ones still build — but packed top-down,
   // so LV1 strip numbers will differ from the row numbers shown here.
   const chNames=state.channels.map(c=>!!c.name.trim());
@@ -1716,6 +1752,7 @@ document.addEventListener("input",e=>{
     if(touched.size){for(const it of touched)syncItemPosToRows(it);renderStage();}
     return;
   }
+  if(f==="ds"){it.ds=t.value;render();return;} // a split's source: format + patch follow
   if(f==="mx"){const m=t.dataset.m;it.matrix=t.checked?[...it.matrix,m]:it.matrix.filter(x=>x!==m);
     if(t.checked&&autoName("mtx",m)){render();setStatus(`Matrix strip “${m}” named automatically so the feed is built.`);}
     else renderGroups();
@@ -1778,10 +1815,8 @@ function refreshNameHighlights(k){const list=listFor[k]();const d=dupNames(list)
 function refreshPorts(){ // live-update the MGB column + count without a full re-render
   const pts=ports();
   const rows=$("#chTable tbody").querySelectorAll("tr:not(.rackrow)");
-  rows.forEach((tr,i)=>{const td=tr.children[1];if(td)td.textContent=pts[i]?pts[i].join("–"):"—";});
-  const lastPts=[...pts].reverse().find(Boolean);
-  const used=lastPts?lastPts[lastPts.length-1]:0;
-  $("#chCount").textContent=`${named(state.channels).length} named / ${cfg().ch} strips · ${used}/${MGB_PORTS} ports`;
+  rows.forEach((tr,i)=>{const td=tr.children[1];if(td)td.innerHTML=patchHtml(pts,i);});
+  $("#chCount").textContent=chCountText(pts);
 }
 function focusBack(k,i,f){const el=document.getElementById(`${k}-${i}-${f}`);if(el){el.focus();const v=el.value;el.value="";el.value=v;}}
 document.addEventListener("click",e=>{
@@ -1845,7 +1880,23 @@ document.addEventListener("click",e=>{
   if(f==="reset"){resetStrip(k,i);return;}
   if(f==="del"){resetStrip(k,i,"delete");return;}
   if(f==="ins"){insertStrip(k,i);return;}
+  if(f==="split"){addSplit(i);return;}
 });
+/* Digital split of input row i: the first free strip BELOW the last named
+   input (so no existing channel moves), same input, own processing, off
+   the master. The packed LV1 channel number is reported. */
+function addSplit(i){
+  const src=state.channels[i],n=src.name.trim();
+  if(!n||src.ds)return;
+  const last=state.channels.map(c=>!!c.name.trim()).lastIndexOf(true);
+  const j=state.channels.findIndex((c,x)=>x>last&&!c.name.trim());
+  if(j<0){setStatus(`No free input strip below the last named input for a split of “${n}” — the ${cfg().ch}-strip bank is full.`,true);return;}
+  const taken=new Set(named(state.channels).map(c=>c.name.trim().toUpperCase()));
+  const name=dedupeName(n+" DS",taken);
+  state.channels[j]={...defCh(),name,ds:n,stereo:src.stereo,group:NO_MAIN,color:src.color};
+  render();
+  setStatus(`Digital split “${name}” added as LV1 channel ${named(state.channels).length} — patched to “${n}”'s input (${ports()[i].join("–")}), not routed to master.`);
+}
 /* Resetting a strip that a stage instrument is linked to keeps the stage
    and the list in sync: the instrument is removed from the stage (or, when
    it has other linked inputs — a drum kit — just unlinked), after an
@@ -2112,8 +2163,10 @@ function buildSpec(){
     show:{...state.show},
     config:{id:c.id,inputs:c.ch,groups:c.grp,aux:c.mon,fx:FX_COUNT,matrix:MTX_COUNT,mains:c.mains},
     channels:state.channels.map((ch,i)=>ch.name.trim()?withRack({
-      name:ch.name.trim(),stereo:ch.stereo,ports:pts[i],
-      group:ch.group||null,
+      name:ch.name.trim(),stereo:ch.stereo,ports:pts[i]||[],
+      group:ch.group&&ch.group!==NO_MAIN?ch.group:null,
+      ...(ch.group===NO_MAIN?{unassigned:true}:{}), // no LR / group assignment
+      ...(ch.ds?{split:ch.ds}:{}), // digital split of that input (.emo only)
       matrix:ch.matrix?[ch.matrix]:[],
       mic:ch.mic.trim(),stand:ch.stand.trim(),position:ch.pos.trim(),notes:(ch.notes||"").trim(),
       ...(ch.color!==null&&ch.color!==undefined?{color:ch.color}:{}),
@@ -2174,7 +2227,7 @@ function loadSpec(spec){
   state={
     show:{name:spec.show?.name||"",date:spec.show?.date||"",venue:spec.show?.venue||"",sheetUrl:spec.show?.sheetUrl||"",fohContact:spec.show?.fohContact||"",monContact:spec.show?.monContact||"",pmContact:spec.show?.pmContact||"",fohDesk:spec.show?.fohDesk||"",monDesk:spec.show?.monDesk||"",pa:spec.show?.pa||"",notes:spec.show?.notes||""},
     configId:id,
-    channels:(spec.channels||[]).map(c=>({...defCh(),name:c.name||"",stereo:!!c.stereo,group:grpName(c.group),
+    channels:(spec.channels||[]).map(c=>({...defCh(),name:c.name||"",stereo:!!c.stereo,group:c.unassigned?NO_MAIN:grpName(c.group),ds:typeof c.split==="string"?c.split:"",
       link:(spec.version||0)<6&&c.link===c.group?"":linkIn(c),
       matrix:(c.matrix&&c.matrix[0])||"",mic:c.mic||"",stand:c.stand||"",pos:c.position||"",notes:c.notes||"",rack:rackIn(c.rack),color:colIn(c),mute:muteIn(c)})),
     groups:(spec.groups||[]).map(g=>({...defGrp(),name:g.name||"",stereo:g.stereo!==false,dest:g.dest||"MASTER",postFx:!!g.postFx,matrix:g.matrix||[],rack:rackIn(g.rack),color:colIn(g),link:linkIn(g),mute:muteIn(g)})),
@@ -2600,6 +2653,7 @@ function renameRefs(kind,oldName,newName){
     for(const c of state.channels)if(c.matrix===o)c.matrix=v;
     for(const g of state.groups)g.matrix=(g.matrix||[]).map(m=>m===o?v:m);
   }else if(kind==="ch"||kind==="aux"){
+    if(kind==="ch")for(const c of state.channels)if(c.ds===o)c.ds=v;
     const oldUC=o.toUpperCase();
     stg().items.forEach(it=>{
       if(kind==="ch"&&Array.isArray(it.ins))it.ins=it.ins.map(n=>n.trim().toUpperCase()===oldUC?v:n);
@@ -2957,7 +3011,7 @@ document.addEventListener("keydown",e=>{if(!$("#cfm").hidden&&e.key==="Escape"){
 /* Stage item -> linked list rows (same resolution rule as the color share:
    a name matching it.auxl is an aux link, everything else is an input). */
 function linkedRowsFor(indices){
-  const chBy=new Map(state.channels.map(c=>[c.name.trim().toUpperCase(),c]));
+  const chBy=new Map(state.channels.filter(c=>!c.ds).map(c=>[c.name.trim().toUpperCase(),c])); // splits never link to the stage
   const axBy=new Map(state.auxes.map(a=>[a.name.trim().toUpperCase(),a]));
   const chs=new Map(),axs=new Map(); // nameUC -> row
   for(const i of indices){
@@ -3067,7 +3121,7 @@ function zoneCoords(text){
 $("#inputsToStage").onclick=()=>{
   const have=new Set(stg().items.flatMap(it=>[it.label.trim(),...(it.ins||[])])
     .map(s=>s.trim().toUpperCase()).filter(Boolean));
-  const missing=state.channels.filter(c=>c.name.trim()&&!have.has(c.name.trim().toUpperCase()));
+  const missing=state.channels.filter(c=>c.name.trim()&&!c.ds&&!have.has(c.name.trim().toUpperCase()));
   if(!missing.length){setStatus("Every named input already has a stage item.");return;}
   const mic=STAGELIB.find(e=>/boom57/.test(e.id))||STAGELIB.find(e=>e.cat==="Vocal Stands")||STAGELIB[0];
   if(!mic){setStatus("The image library hasn't loaded yet.",true);return;}
@@ -3678,7 +3732,7 @@ async function gsPost(br,body,label){ // POST; where POST is blocked -> chunked 
 function sheetRows(){ // builder channels -> sheet rows (stereo = L row + R row)
   const pts=ports();const out=[];
   state.channels.forEach((c,i)=>{
-    if(!c.name.trim())return;
+    if(!c.name.trim()||c.ds)return; // digital splits are operating-only
     const f={mic:c.mic.trim(),stand:c.stand.trim(),pos:c.pos.trim(),notes:(c.notes||"").trim()};
     if(c.stereo){out.push({num:pts[i][0],name:c.name.trim(),cfg:"L",...f});
                  out.push({num:pts[i][1],name:c.name.trim(),cfg:"R",...f});}
@@ -3727,9 +3781,15 @@ function applySheet(data){ // sheet rows -> builder channels (keeps routing/rack
     return {...(prev||defCh()),name,stereo,
       mic:r.mic||"",stand:r.stand||"",pos:r.pos||"",notes:r.notes||""};
   });
+  // Digital splits aren't on the sheet: keep them (below the pulled inputs)
+  // while their source input is still there.
+  const have=new Set(chans.map(c=>c.name));
+  const splits=state.channels.filter(c=>c.ds&&c.name.trim()&&!have.has(c.name.trim()));
+  const lost=splits.filter(c=>!have.has(c.ds));
+  if(lost.length)warn.push(`digital split(s) dropped — their source is no longer on the sheet: ${lost.map(c=>c.name.trim()).join(", ")}`);
   const nPulled=chans.length;
   const dropped=Math.max(0,nPulled-cfg().ch);
-  state.channels=chans;
+  state.channels=[...chans,...splits.filter(c=>have.has(c.ds))];
   let nAux=-1;
   if(Array.isArray(data.auxes)){
     const auxes=foldLR(data.auxes,warn,(name,stereo,r)=>(
@@ -4006,7 +4066,7 @@ $("#btnPdf").onclick=async()=>{
   label("INPUTS",y+3);
   doc.autoTable({...tbl,startY:y+5.5,
     head:[["CH","NAME","M/ST","MIC / DI","STAND","STAGE POSITION","NOTES"]],
-    body:state.channels.map((c,i)=>c.name.trim()?[pts[i].join("–"),c.name.trim(),c.stereo?"ST":"M",c.mic,c.stand,c.pos,c.notes||""]:null).filter(Boolean),
+    body:state.channels.map((c,i)=>c.name.trim()&&!c.ds?[pts[i].join("–"),c.name.trim(),c.stereo?"ST":"M",c.mic,c.stand,c.pos,c.notes||""]:null).filter(Boolean),
   });
   // Auxes / monitors: output port, mix name, format, destination (wedge / IEM…), position, notes.
   const aps=auxPorts();
@@ -4247,7 +4307,7 @@ async function emoExport(spec){
     erun(db,"DELETE FROM snapshot_assignment");
     const assignments=[];
     chans.forEach((c,i)=>{
-      assignments.push([1+i,grpId[c.group]??LR]);
+      if(!c.unassigned)assignments.push([1+i,grpId[c.group]??LR]); // unassigned (e.g. a digital split): no LR / group row
       for(const m of (c.matrix||[]))if(m in mtxId)assignments.push([1+i,mtxId[m]]);
     });
     for(let i=chans.length;i<nCh;i++)assignments.push([1+i,LR]);
@@ -4457,6 +4517,16 @@ async function emoImport(bytes,fileStemName){
     }
 
     const chRe=/^Channel \d+$/;
+    // Input patch per channel (leg -> physical source). A channel with exactly
+    // its earlier neighbour's input AND no LR / group routing is a digital
+    // split of it; a shared input on a routed channel stays an ordinary input.
+    const patchOf={};
+    for(const [ct,ci,st,si,ch,dch,leg] of eq(db,
+      "SELECT src_cluster_type, src_cluster_type_index, src_section_type, src_section_index, src_channel_index, "+
+      "dst_cluster_type_index, dst_channel_index FROM routes WHERE dst_cluster_type = 0"))
+      (patchOf[dch]=patchOf[dch]||[]).push(leg+":"+[ct,ci,st,si,ch].join("."));
+    const patchKey=i=>patchOf[i]?patchOf[i].sort().join("|"):"";
+    const firstByPatch={},chByIdx={};
     const channels=[];let port=1;
     for(let i=0;i<nCh;i++){
       const cid=1+i,nm=(nameOf[cid]||"").trim();
@@ -4466,15 +4536,17 @@ async function emoImport(bytes,fileStemName){
       const st=!!stereoOf[cid];
       const d=dests[cid],lk=links[cid];
       const grp=(d!==undefined&&d!==LR&&grpLabel[d])?grpLabel[d]:null;
+      const pk=patchKey(i),src=pk&&d===undefined?chByIdx[firstByPatch[pk]]:undefined;
       const c={name:nm&&!isDef(nm,chRe)?nm:"Channel "+(i+1),
-        stereo:st,ports:st?[port,port+1]:[port],
-        group:grp,
+        stereo:src?src.stereo:st,ports:src?[...src.ports]:st?[port,port+1]:[port],
+        group:grp,...(d===undefined?{unassigned:true}:{}),...(src?{split:src.name}:{}),
         matrix:(mtxFeeds[cid]||[]).map(m=>mtxLabel[m]).filter(Boolean),
         mic:"",stand:"",position:"",notes:"",
         ...(colorOf[cid]!=null?{color:colorOf[cid]}:{}),
         ...lmOf(cid),
         ...(rackOf(cid)?{rack:rackOf(cid)}:{})};
-      channels.push(c);port+=st?2:1;refOf[`0:${i}`]=["ch",c.name];
+      channels.push(c);refOf[`0:${i}`]=["ch",c.name];
+      if(!src){port+=st?2:1;chByIdx[i]=c;if(pk&&!(pk in firstByPatch))firstByPatch[pk]=i;}
     }
     const fxRe=/^Fx \d+$/,monRe=/^Mon \d+$/;
     const fxs=[],auxes=[];
