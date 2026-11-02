@@ -3588,16 +3588,32 @@ $("#btnPdf").onclick=async()=>{
     const lines=doc.splitTextToSize(state.show.notes.trim(),144);
     doc.text(lines,52,y);y+=4.6*lines.length;
   }
-  doc.autoTable({
-    startY:y+1,
-    head:[["CH","NAME","M/ST","MIC / DI","STAND","STAGE POSITION","NOTES"]],
-    body:state.channels.map((c,i)=>c.name.trim()?[pts[i].join("–"),c.name.trim(),c.stereo?"ST":"M",c.mic,c.stand,c.pos,c.notes||""]:null).filter(Boolean),
+  const tbl={
     styles:{font:"helvetica",fontSize:8.5,cellPadding:1.6,lineColor:[226,226,226],textColor:[29,29,29]},
     headStyles:{fillColor:[17,17,17],textColor:255,fontStyle:"bold"},
     columnStyles:{0:{cellWidth:14,halign:"right"},2:{cellWidth:12,halign:"center"}},
     alternateRowStyles:{fillColor:[245,245,245]},
     margin:{left:14,right:14,bottom:16},
+  };
+  const label=(t,ly)=>{doc.setFont("helvetica","bold");doc.setFontSize(8);doc.setTextColor(110);
+    doc.text(t,14,ly,{charSpace:0.8});doc.setTextColor(0);};
+  label("INPUTS",y+3);
+  doc.autoTable({...tbl,startY:y+5.5,
+    head:[["CH","NAME","M/ST","MIC / DI","STAND","STAGE POSITION","NOTES"]],
+    body:state.channels.map((c,i)=>c.name.trim()?[pts[i].join("–"),c.name.trim(),c.stereo?"ST":"M",c.mic,c.stand,c.pos,c.notes||""]:null).filter(Boolean),
   });
+  // Auxes / monitors: output port, mix name, format, destination (wedge / IEM…), position, notes.
+  const aps=auxPorts();
+  const auxRows=state.auxes.map((a,i)=>a.name.trim()?[aps[i].join("–"),a.name.trim(),a.stereo?"ST":"M",a.dest||"",(a.pos||"").trim(),(a.notes||"").trim()]:null).filter(Boolean);
+  if(auxRows.length){
+    let ay=doc.lastAutoTable.finalY+9;
+    if(ay+22>doc.internal.pageSize.getHeight()-16){doc.addPage("a4","portrait");ay=18;} // keep the heading with its table
+    label("AUXES / MONITORS",ay);
+    doc.autoTable({...tbl,startY:ay+2.5,
+      head:[["OUT","NAME","M/ST","DESTINATION","STAGE POSITION","NOTES"]],
+      body:auxRows,
+    });
+  }
   // Stage plot as a landscape page of the same rider. A failure here must
   // never pass silently — the vendor PDF is expected to carry the plot.
   let stageNote="";
