@@ -988,7 +988,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 (the show name becomes the file name) — only named strips are built, packed top-down. <b>Import .emo…</b> loads any LV1 session back
 into the builder (patch, mic/stand/position and notes are not stored in .emo and start empty). The vendor PDF carries the input list
 (#, name, format, mic, stand, stage position for named inputs — no routing or racks) plus the stage plot as a landscape page.
-<b>Racks</b>: each strip's rack is 8 slots (0–7), exactly like LV1. The default EMO-F2 / EMO-D5 / EMO-Q4 are ordinary rack plugins —
+<b>Racks</b>: each strip's rack is 8 slots (1–8), exactly like LV1. The default EMO-F2 / EMO-D5 / EMO-Q4 are ordinary rack plugins —
 delete, reorder (drag or ↑↓) or re-add them like anything else. The searchable picker lists only <b>SoundGrid-compatible</b> plugins
 (those shipping SoundGrid-server process code) scanned off this machine's Plug-Ins V16/V17 bundles — the same set LV1's own menus
 show. Plugins load with their factory default preset. “Stock” racks (F2 → D5 → Q4) export no rack field.
@@ -1241,10 +1241,10 @@ function rackRow(kind,i,r,colspan,stereo){
   const avail=PLUGINS.filter(([,f])=>need.test(f));
   const cats=[...new Set(avail.map(p=>p[2]||"Other"))].sort();
   const plugRow=(x)=>`<div class="slotrow ins" draggable="true" data-k="${kind}" data-i="${i}" data-x="${x}" title="Drag to reorder">
-      <span class="sno">${x}</span><span class="grip">⋮⋮</span><span class="sname">${esc(r.slots[x])}</span>
+      <span class="sno">${x+1}</span><span class="grip">⋮⋮</span><span class="sname">${esc(r.slots[x])}</span>
       <button class="small nudge danger" data-k="${kind}" data-i="${i}" data-f="rkDel" data-n="${x}" title="Remove plugin">✕</button></div>`;
   const addRow=(slot)=>`<div class="slotrow add" data-k="${kind}" data-i="${i}">
-      <span class="sno">${slot}</span>
+      <span class="sno">${slot+1}</span>
       <div class="addwrap"><select class="rkcat" data-k="${kind}" data-i="${i}" data-f="rkCat" title="Plugin category (LV1 groups)" tabindex="-1">
           <option value="">All</option>${cats.map(c=>`<option>${esc(c)}</option>`).join("")}</select>
         <input placeholder="＋ search plugin…" data-k="${kind}" data-i="${i}" data-f="rkSearch" autocomplete="off">
@@ -1254,7 +1254,7 @@ function rackRow(kind,i,r,colspan,stereo){
   for(let s=0;s<RACK_SIZE;s++){
     if(s<r.slots.length)rows.push(plugRow(s));
     else if(s===r.slots.length)rows.push(addRow(s));
-    else rows.push(`<div class="slotrow empty"><span class="sno">${s}</span><span class="sname">—</span></div>`);
+    else rows.push(`<div class="slotrow empty"><span class="sno">${s+1}</span><span class="sname">—</span></div>`);
   }
   return `<tr class="rackrow"><td colspan="${colspan}"><div class="rackv">
     <div class="rackhead"><span class="rlab">${esc(rackLabel(kind,i))} · ${stereo?"stereo":"mono"} rack</span>
@@ -4223,7 +4223,7 @@ async function emoExport(spec){
     for(const [cid,rack,st] of racked){
       const slots=rack.slots;
       if(!slots)throw new Error("legacy v3 racks are not supported by the in-app export");
-      if(slots.length>8)throw new Error("an LV1 rack has 8 slots (0-7)");
+      if(slots.length>8)throw new Error("an LV1 rack has 8 slots");
       erun(db,"DELETE FROM snapshot_plugin WHERE plug_id IN "+
         "(SELECT id FROM plug WHERE chainer_id = ? AND plug_role IN (1, 2, 4))",[cid]);
       erun(db,"DELETE FROM plug WHERE chainer_id = ? AND plug_role IN (1, 2, 4)",[cid]);
