@@ -4186,17 +4186,31 @@ function emoSetStripFormat(db,objId,stereo){
 const emoRename=(db,objId,name)=>erun(db,
   "UPDATE snapshot_chainer SET name = ? WHERE chainer_id = ? AND snapshot_id = -1",[name,objId]);
 
-function emoResolvePresetText(db,cc,pack){
+function emoResolvePresetText(cc,pack,tplTexts){
   const src=pack.presets[cc];
   if(src===undefined)throw new Error("no preset source for 4cc "+cc);
   if(typeof src==="string")return src;
-  // template-resolved (the EMO fixed modules): any template preset row of
-  // that subcomp, with the subcomp swapped to the requested cc.
-  const row=eq(db,"SELECT preset FROM plugin_preset WHERE preset LIKE ? LIMIT 1",
-    ["%<PluginSubComp>"+src.template+"</PluginSubComp>%"]);
-  if(!row.length)throw new Error("template has no preset for "+cc);
-  return row[0][0].replace(/<PluginSubComp>\w{4}<\/PluginSubComp>/,
-    "<PluginSubComp>"+cc+"</PluginSubComp>");
+  if(!(cc in tplTexts))throw new Error("template has no preset for "+cc);
+  return tplTexts[cc];
+}
+/* Template-resolved presets (the EMO fixed modules), read from the template
+   BEFORE any strip is reformatted: the NEWEST <PluginVersion> row of that
+   subcomp, lowest id on a tie, subcomp swapped to the requested cc. Factory
+   templates mix EMO versions (80-16: 17.1.42.50 + 17.3.45.130, with different
+   EMO-Q4 defaults) — same rule as make_lv1_session (keep in sync). */
+function emoTemplatePresets(db,pack){
+  const ver=t=>(((/<PluginVersion>([\d.]*)</.exec(t))||[])[1]||"").split(".").filter(Boolean).map(Number);
+  const newer=(a,b)=>{for(let i=0;i<Math.max(a.length,b.length);i++){const d=(a[i]??-1)-(b[i]??-1);if(d)return d>0;}return false;};
+  const out={};
+  for(const [cc,src] of Object.entries(pack.presets)){
+    if(!src||typeof src!=="object"||!src.template)continue;
+    const rows=eq(db,"SELECT id, preset FROM plugin_preset WHERE preset LIKE ? ORDER BY id",
+      ["%<PluginSubComp>"+src.template+"</PluginSubComp>%"]);
+    if(!rows.length)continue;
+    let best=rows[0];for(const r of rows)if(newer(ver(r[1]),ver(best[1])))best=r;
+    out[cc]=best[1].replace(/<PluginSubComp>\w{4}<\/PluginSubComp>/,"<PluginSubComp>"+cc+"</PluginSubComp>");
+  }
+  return out;
 }
 
 async function emoExport(spec){
@@ -4204,6 +4218,7 @@ async function emoExport(spec){
   const cfgId=(spec.config&&spec.config.id)||"80-16";
   const db=new SQL.Database(await emoTemplateBytes(cfgId));
   try{
+    const tplTexts=emoTemplatePresets(db,pack); // before any strip changes
     // layout from the template itself
     const first=Object.fromEntries(eq(db,"SELECT obj_type, MIN(id) FROM object GROUP BY obj_type"));
     const alloc=Object.fromEntries(eq(db,
@@ -4292,7 +4307,7 @@ async function emoExport(spec){
     if(plugsToAdd.length){
       const texts={};
       for(const cc of [...new Set(plugsToAdd.map(p=>p[2]))].sort())
-        texts[cc]=emoResolvePresetText(db,cc,pack);
+        texts[cc]=emoResolvePresetText(cc,pack,tplTexts);
       let nextId=eq(db,"SELECT MAX((SELECT MAX(id) FROM plug), (SELECT MAX(id) FROM snapshot_plugin))")[0][0]+1;
       for(const [cid,nm,cc,slot] of plugsToAdd){
         erun(db,"INSERT INTO plug VALUES (?, ?, ?, ?, ?, '', 0, 0, 0, -1, 'Waves', 0, 0)",
