@@ -888,7 +888,11 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
   <div class="laycard">
     <div class="layhead">
       <label class="layname">Layer name <input id="layName" maxlength="16" spellcheck="false"></label>
-      <span class="headops"><button class="small" id="layClear">Clear layer</button></span>
+      <span class="headops">
+        <select id="layFill" title="Add a group's members (inputs, FX and groups routed to it), then the group itself, into the free slots"></select>
+        <button class="small" id="layCopy" title="Copy this layer's strips">Copy layer</button>
+        <button class="small" id="layPaste" title="Replace this layer's strips with the copied ones (the name stays)">Paste</button>
+        <button class="small" id="layClear">Clear layer</button></span>
     </div>
     <div class="layslots" id="laySlots"></div>
   </div>
@@ -1435,6 +1439,7 @@ const KIND_TAG={ch:"IN",grp:"GRP",fx:"FX",aux:"AUX",mtx:"MTX",main:"LR",link:"LN
 const KIND_VAR={ch:"--ch",grp:"--grp",fx:"--fx",aux:"--aux",mtx:"--mtx",main:"--accent",link:"--dim"};
 const LAYER_LIST={ch:()=>state.channels,grp:()=>state.groups,fx:()=>state.fx,aux:()=>state.auxes,mtx:()=>state.matrixes};
 let layerSel=0,layPal="in";
+let layClip=null; // copied layer: {strips:[...16], from:"DRUMS"}
 const layerKey=(k,n)=>k+"\u0001"+n;
 function layerRow(k,n){ // what a slot points to, or null when it no longer exists
   if(k==="main")return {name:"MASTER"};
@@ -1456,6 +1461,11 @@ function renderLayers(){
   if(document.activeElement!==$("#layName"))$("#layName").value=cur.name;
   $("#layName").placeholder=`Page-${layerSel+1} (LV1 default)`;
   $("#layCount").textContent=`${L.filter(l=>l.name.trim()||used(l)).length} in use / ${LAYER_COUNT}`;
+  const grps=named(state.groups).map(g=>g.name.trim());
+  $("#layFill").innerHTML=`<option value="" selected hidden>Fill from group…</option>`+
+    (grps.map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join("")||`<option value="" disabled>no named groups</option>`);
+  $("#layPaste").disabled=!layClip;
+  $("#layPaste").textContent=layClip?`Paste “${layClip.from}”`:"Paste";
   $("#laySlots").innerHTML=cur.strips.map((s,i)=>{
     let cell=`<div class="lcell" data-si="${i}"></div>`;
     if(s){
@@ -1497,12 +1507,44 @@ $("#laySec").addEventListener("click",async e=>{
   else if(t.dataset.lx!==undefined){s[+t.dataset.lx]=null;render();}
   else if(t.dataset.lk!==undefined)layerPlace(t.dataset.lk,t.dataset.ln);
   else if(t.dataset.p!==undefined){layPal=t.dataset.p;renderLayers();}
+  else if(t.id==="layCopy"){
+    const l=state.layers[layerSel];
+    layClip={strips:l.strips.map(x=>x&&[...x]),from:l.name.trim()||`Layer ${layerSel+1}`};
+    renderLayers();setStatus(`Copied “${layClip.from}” (${s.filter(Boolean).length} strips) — pick another layer and Paste.`);
+  }
+  else if(t.id==="layPaste"&&layClip){
+    const name=state.layers[layerSel].name.trim()||`Layer ${layerSel+1}`;
+    if(s.some(Boolean)&&!await askConfirm(`Replace the ${s.filter(Boolean).length} strips on “${name}” with “${layClip.from}”?`,"Replace","Cancel"))return;
+    state.layers[layerSel].strips=layClip.strips.map(x=>x&&[...x]);
+    render();setStatus(`Pasted “${layClip.from}” onto “${name}”.`);
+  }
   else if(t.id==="layClear"&&s.some(Boolean)){
     if(await askConfirm(`Remove all ${s.filter(Boolean).length} strips from “${state.layers[layerSel].name.trim()||`Layer ${layerSel+1}`}”?`,"Clear layer","Cancel")){
       state.layers[layerSel].strips=Array(LAYER_SLOTS).fill(null);render();}
   }
 });
 $("#layName").addEventListener("input",e=>{state.layers[layerSel].name=e.target.value;renderLayers();});
+/* Fill from group: the strips routed to the group (inputs, then FX, then
+   sub-groups, in list order) followed by the group itself, into the free
+   slots; strips already on the layer are left where they are. */
+$("#layFill").addEventListener("change",e=>{
+  const g=e.target.value;e.target.value="";if(!g)return;
+  const want=[
+    ...named(state.channels).filter(c=>c.group===g).map(c=>["ch",c.name.trim()]),
+    ...named(state.fx).filter(f=>f.dest===g).map(f=>["fx",f.name.trim()]),
+    ...named(state.groups).filter(x=>x.dest===g&&x.name.trim()!==g).map(x=>["grp",x.name.trim()]),
+    ["grp",g]];
+  const s=state.layers[layerSel].strips,have=new Set(s.filter(Boolean).map(x=>layerKey(x[0],x[1])));
+  const todo=want.filter(([k,n])=>!have.has(layerKey(k,n)));
+  const wasEmpty=!have.size;
+  let added=0;
+  for(const ref of todo){const at=s.indexOf(null);if(at<0)break;s[at]=ref;added++;}
+  if(wasEmpty&&!state.layers[layerSel].name.trim())state.layers[layerSel].name=g; // an empty, unnamed layer takes the group's name
+  render();
+  const left=todo.length-added;
+  setStatus(`${g}: added ${added} strip${added===1?"":"s"}`+(want.length>todo.length?`, ${want.length-todo.length} already on the layer`:"")+
+    (left?` — layer full, ${left} not added.`:"."),left>0);
+});
 let layDrag=null; // {si} from a slot | {k,n} from the picker
 $("#laySec").addEventListener("dragstart",e=>{
   const c=e.target.closest(".lcell.full,.lpchip");if(!c)return;
