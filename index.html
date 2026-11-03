@@ -772,8 +772,10 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
   <button id="btnNew">New empty show</button>
   <button class="primary" id="btnEmoExp" title="Build a ready-to-load LV1 session file in the browser">Export .emo</button>
   <button id="btnEmoImp" title="Load an LV1 session (.emo) into the builder">Import .emo…</button>
+  <button id="btnSesExp" title="DiGiCo SD10 session: input names, mono/stereo, Rack 1 patch and Insert A sends to the LV1 MADI port. Shift-click to pick a different SD10 default session.">Export DiGiCo SD10</button>
   <button id="btnPdf" title="Input list + stage plot for the venue / vendor">Vendor input list (.pdf)</button>
   <input type="file" id="fileEmo" accept=".emo" hidden>
+  <input type="file" id="fileSes" accept=".ses" hidden>
   <span id="status" role="status"></span>
 </div>
 
@@ -995,6 +997,10 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 (the show name becomes the file name) — only named strips are built, packed top-down. <b>Import .emo…</b> loads any LV1 session back
 into the builder (patch, mic/stand/position and notes are not stored in .emo and start empty). The vendor PDF carries the input list
 (#, name, format, mic, stand, stage position for named inputs — no routing or racks) plus the stage plot as a landscape page.
+<b>Export DiGiCo SD10</b> (beta) writes the inputs only — names, mono/stereo, port N on Rack 1 Mic N and the Insert A send on
+MADI N (the MADI port is renamed “LV1”), packed top-down, digital splits left out. It edits your own SD10 default session: the first
+export asks for it (SD10 offline editor: new session, Save As) and keeps it in this browser; Shift-click to pick another. Open the
+result in the SD10 offline editor and Save As before it goes near a console.
 <b>Racks</b>: each strip's rack is 8 slots (1–8), exactly like LV1. The default EMO-F2 / EMO-D5 / EMO-Q4 are ordinary rack plugins —
 delete, reorder (drag or ↑↓) or re-add them like anything else. The searchable picker lists only <b>SoundGrid-compatible</b> plugins
 (those shipping SoundGrid-server process code) scanned off this machine's Plug-Ins V16/V17 bundles — the same set LV1's own menus
@@ -4633,6 +4639,136 @@ $("#fileEmo").addEventListener("change",async e=>{
     }catch(err){setStatus(".emo import failed: "+(err.message||err),true);}
   }
   e.target.value="";
+});
+
+/* ---------- DiGiCo SD10 export (.ses) ----------
+   Mirrors src/make_digico_session.py (keep the two in sync). A DiGiCo session
+   can't be written from nothing, so this patches the user's own SD10 default
+   session (offline editor: new session, Save As) in place, inputs only: names,
+   mono / stereo, port N -> Rack 1 Mic N, Insert A send -> MADI N with the MADI
+   port renamed "LV1" (symmetrical with the .emo patch). Inputs past the list go
+   back to "Ch N", mono, unpatched; digital splits stay LV1-only. Same size out. */
+const SES={RACK:0x1d,MADI_IN:0x1e,MADI_OUT:0x50,INPUT:1,TB:0x0c,BUS:[5,0x10],MADI_NAME:"LV1"};
+function sesFind(d,pat,from,to){
+  outer:for(let i=from;i<=to-pat.length;i++){for(let k=0;k<pat.length;k++)if(d[i+k]!==pat[k])continue outer;return i;}
+  return -1;
+}
+function sesSections(d){
+  const v=new DataView(d.buffer,d.byteOffset),out={};
+  for(let k=0;k<39;k++){const nx=v.getUint32(0x104+4*k,true);out[d[0x1a0+k]]=[v.getUint32(0x100+4*k,true),nx||d.length];if(!nx)break;}
+  return out;
+}
+function sesLabels(d,sec){ // section 201: cb 00 LL 00 [slot][kind][num u16][name 32B] … width +41, engine +84
+  const v=new DataView(d.buffer,d.byteOffset),[s,e]=sec[0xc9],out=[];
+  for(let i=s;(i=sesFind(d,[0xcb,0],i,e))>=0;){
+    if(d[i+3]===0&&(d[i+2]===0x58||d[i+2]===0x79)){out.push({off:i,slot:d[i+4],kind:d[i+5],num:v.getUint16(i+6,true)});i+=d[i+2]+4;}
+    else i++;
+  }
+  return out;
+}
+function sesObjects(d,sec){ // section 211: d5 00 01 00, flag, u32 modules, modules (62 B + 8/slot + 12), 41-B trailer
+  const v=new DataView(d.buffer,d.byteOffset),[s,e]=sec[0xd3],out=[];
+  for(let i=s;(i=sesFind(d,[0xd5,0,1,0],i,e))>=0;){
+    let p=i+9;const mods={};
+    for(let m=v.getUint32(i+5,true);m>0;m--){
+      if(d[p]!==0xda||d[p+1]!==0||d[p+2]!==0x3a||d[p+3]!==0)throw new Error("unexpected module record at 0x"+p.toString(16));
+      const cnt=v.getUint16(p+48,true),slots={};
+      for(let k=0;k<cnt;k++){const o=p+62+8*k;slots[d[o]+","+d[o+1]+","+d[o+2]]=o+4;}
+      mods[v.getUint16(p+4,true)]={off:p,slots};p+=62+8*cnt+12;
+    }
+    if(v.getUint16(p,true)!==39)throw new Error("unexpected object trailer at 0x"+p.toString(16));
+    out.push({slot:d[p+2],kind:d[p+3],named:d[p+4]>0,mods,trailer:p});i=p+41;
+  }
+  return out;
+}
+function sesExport(base,spec){
+  const ascii=s=>new TextDecoder("latin1").decode(s);
+  if(ascii(base.subarray(0,11))!=="DiGiCo     "||ascii(base.subarray(11,15))!=="SD8 ")
+    throw new Error("that file is not an SD10 session");
+  const d=new Uint8Array(base),sec=sesSections(base),objs=sesObjects(base,sec),labels=sesLabels(base,sec);
+  const inputs={};objs.forEach(o=>{if(o.kind===SES.INPUT)inputs[o.slot]=o;});
+  const inLabels=labels.filter(l=>l.kind===SES.INPUT).sort((a,b)=>a.num-b.num);
+  const rack=objs.filter(o=>o.kind===SES.RACK&&o.named).length; // unnamed sockets don't exist on the rack
+  const madiOut={};objs.forEach(o=>{if(o.kind===SES.MADI_OUT)madiOut[o.slot]=o;});
+  const nMadi=Object.keys(madiOut).length;
+  if(!rack||!nMadi)throw new Error("the SD10 session has no I/O rack on port 1 or no MADI on port 2");
+  const chans=spec.channels.filter(c=>!c.split);
+  if(chans.length>inLabels.length)throw new Error(chans.length+" inputs but the SD10 session has "+inLabels.length);
+  const set=(o,b)=>d.set(b,o),f32=x=>{const b=new Uint8Array(4);new DataView(b.buffer).setFloat32(0,x,true);return b;};
+  const put=(obj,key,b)=>{for(const m of Object.values(obj.mods))if(key in m.slots){set(m.slots[key],b);return;}throw new Error("slot "+key+" missing");};
+  const nameField=(o,n)=>{d.fill(0,o,o+32);d[o]=n.length;d.set(n,o+1);};
+  for(const o of Object.values(madiOut)){ // drop every MADI feed taken from an input insert
+    const off=o.mods[0x12].slots["0,18,0"];
+    if(d[off]===7&&d[off+3]===SES.INPUT)d.fill(0,off,off+4);
+  }
+  const sum={inputs:chans.length,stereo:[],unpatched:[],noInsert:[],splits:spec.channels.length-chans.length};
+  inLabels.forEach((lab,n)=>{
+    const obj=inputs[lab.slot],c=chans[n],ports=c?(c.ports||[]).map(p=>p-1):[],stereo=ports.length===2;
+    const name=Uint8Array.from(Array.from(c?c.name:"Ch "+lab.num,ch=>{const x=ch.codePointAt(0);return x>255?63:x;}).slice(0,31));
+    for(const m of Object.values(obj.mods))nameField(m.off+8,name);
+    nameField(obj.trailer+4,name);nameField(lab.off+8,name);
+    const w=stereo?2:1;
+    put(obj,"232,8,0",f32(w));put(obj,"232,8,1",f32(w));put(obj,"232,14,0",f32(w));put(obj,"20,5,0",f32(stereo?1:0));
+    d[obj.trailer+40]=d[lab.off+41]=w;
+    if(stereo)sum.stereo.push(c.name);
+    // A stereo input names its left socket; the right side is the next one.
+    const port=ports.length?ports[0]:null,patched=port!==null&&port+ports.length<=rack;
+    put(obj,"0,1,0",patched?[0,0,port,SES.RACK]:[0,0,0,0]);put(obj,"0,1,1",[0,0,0,0]);
+    if(c&&!patched)sum.unpatched.push(c.name);
+    const sends=patched&&port+ports.length<=nMadi;
+    put(obj,"254,8,0",sends?[0,0,port,SES.MADI_OUT]:[0,0,0,0]);put(obj,"254,8,1",[0,0,0,0]);
+    if(sends)ports.forEach((_,side)=>set(madiOut[port+side].mods[0x12].slots["0,18,0"],[7,side,lab.slot,SES.INPUT]));
+    else if(c)sum.noInsert.push(c.name);
+  });
+  // DSP pool: inputs run contiguous (a stereo input takes two paths), talkback right after.
+  let eng=Math.min(...inLabels.map(l=>base[l.off+84]));
+  [...inLabels].sort((a,b)=>a.slot-b.slot).forEach(l=>{d[l.off+84]=eng;eng+=d[l.off+41];});
+  labels.forEach(l=>{if(l.kind===SES.TB)d[l.off+84]=eng;});
+  const top=Math.min(256,...labels.filter(l=>SES.BUS.includes(l.kind)).map(l=>base[l.off+84]));
+  if(eng>=top)throw new Error("too many stereo inputs for the SD10 DSP pool");
+  // Port 2's patch-bay group name, inputs and outputs (ca 00 6c 00 [kind][len][name]).
+  const [s,e]=sec[0xc9];
+  for(let i=s;(i=sesFind(base,[0xca,0,0x6c,0],i,e))>=0;i+=4)
+    if(base[i+4]===SES.MADI_IN||base[i+4]===SES.MADI_OUT){d[i+5]=SES.MADI_NAME.length;d.set(Array.from(SES.MADI_NAME,ch=>ch.charCodeAt(0)),i+6);}
+  return {bytes:d,sum};
+}
+/* The user's SD10 default session stays in this browser (IndexedDB), never uploaded. */
+function sesStore(mode,fn){
+  return new Promise((res,rej)=>{
+    const rq=indexedDB.open("lv1-show-builder",1);
+    rq.onupgradeneeded=()=>rq.result.createObjectStore("files");
+    rq.onerror=()=>rej(rq.error);
+    rq.onsuccess=()=>{const tx=rq.result.transaction("files",mode),r=fn(tx.objectStore("files"));
+      tx.oncomplete=()=>res(r&&r.result);tx.onerror=()=>rej(tx.error);};
+  });
+}
+const sesBaseGet=()=>sesStore("readonly",s=>s.get("sd10")).catch(()=>null);
+const sesBasePut=rec=>sesStore("readwrite",s=>s.put(rec,"sd10")).catch(()=>null);
+async function sesExportRun(base){
+  const {bytes,sum}=sesExport(base,buildSpec());
+  if(dl)await dl.save({filename:fileStem()+" SD10.ses",data:new Blob([bytes],{type:"application/octet-stream"})});
+  const notes=[sum.inputs+" inputs"+(sum.stereo.length?" ("+sum.stereo.length+" stereo)":"")];
+  if(sum.unpatched.length)notes.push("not patched (past Rack 1's mics): "+sum.unpatched.join(", "));
+  else if(sum.noInsert.length)notes.push("no LV1 insert send (past the MADI): "+sum.noInsert.join(", "));
+  if(sum.splits)notes.push(sum.splits+" digital split"+(sum.splits>1?"s":"")+" left out (LV1 only)");
+  setStatus("SD10 session exported — "+notes.join(" · ")+". Open it in the SD10 offline editor and Save As before loading it on a console.");
+}
+$("#btnSesExp").onclick=async e=>{
+  try{
+    const rec=e.shiftKey?null:await sesBaseGet();
+    if(rec&&rec.bytes){await sesExportRun(new Uint8Array(rec.bytes));return;}
+    setStatus("Pick your SD10 default session (offline editor: new session, Save As) — it stays in this browser.");
+    $("#fileSes").click();
+  }catch(err){if(err&&err.code==="declined")return;setStatus("SD10 export failed: "+(err.message||err),true);}
+};
+$("#fileSes").addEventListener("change",async e=>{
+  const f=e.target.files[0];e.target.value="";if(!f)return;
+  try{
+    const base=new Uint8Array(await f.arrayBuffer());
+    sesExport(base,{channels:[]}); // validates the file before keeping it
+    await sesBasePut({name:f.name,bytes:base.buffer});
+    await sesExportRun(base);
+  }catch(err){if(err&&err.code==="declined")return;setStatus("SD10 export failed: "+(err.message||err),true);}
 });
 
 /* ---- skin switch: Auto (system) -> Light -> Dark, persisted locally ---- */
