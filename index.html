@@ -595,7 +595,8 @@ td input::placeholder{color:var(--dim);opacity:.55;font-style:italic;}
 .pw-hc.hot,.pw-rr.hot>div{background:#5d5d5d;}
 .pw-kn{flex-direction:column;justify-content:center;gap:1px;padding-top:2px;}
 .pw-kn .knob{width:calc(min(26px, 100% - 4px));height:auto;aspect-ratio:1;}
-.pw-gv{font-size:10px;font-weight:700;line-height:1;color:#e7e7e7;}
+.pw-gv{width:calc(100% - 4px);min-width:0;height:16px;box-sizing:border-box;padding:0 1px;margin-top:2px;font:700 10px/1 inherit;font-family:inherit;text-align:center;color:#e7e7e7;background:#1b1b1b;border:1px solid #5c5c5c;border-radius:3px;}
+.pw-gv:focus{outline:none;border-color:#38C9FF;background:#111;}
 .pw-hc .p48{min-width:0;width:calc(100% - 4px);padding:1px 0;font-size:9px;}
 .pw-vn{align-items:flex-end;padding-bottom:4px;}
 .pw-vn[data-pwcname]{cursor:text;}
@@ -2239,8 +2240,21 @@ function setGain(k,c,v){ // clamp, store, and sync the knob + its value
   if(kn){kn.querySelector(".val").setAttribute("stroke-dasharray",`${KNOB_ARC*f} ${KNOB_C}`);
     kn.querySelector(".ptr").setAttribute("transform",`rotate(${-135+270*f} 14 14)`);kn.setAttribute("aria-valuenow",g);
     kn.dispatchEvent(new Event("input",{bubbles:true}));}
-  if(val)val.textContent=g;
+  if(val&&val!==document.activeElement)val.value=g;
 }
+// typed gain (the field under each knob): Enter / Tab / leaving the field commits, Esc cancels
+$("#pw").addEventListener("change",e=>{
+  const t=e.target;if(!t.dataset||!t.dataset.iogv)return;
+  const [k,c]=t.dataset.iogv.split(":").map(Number),d=state.io[k];if(!d)return;
+  const v=parseFloat(String(t.value).replace(",","."));
+  setGain(k,c,Number.isFinite(v)?v:d.gain[c]);t.value=d.gain[c];
+});
+$("#pw").addEventListener("keydown",e=>{
+  const t=e.target;if(!t.dataset||!t.dataset.iogv)return;
+  if(e.key==="Enter"){e.preventDefault();t.blur();}
+  else if(e.key==="Escape"){e.preventDefault();const [k,c]=t.dataset.iogv.split(":").map(Number);t.value=state.io[k].gain[c];t.blur();}
+});
+$("#pw").addEventListener("focusin",e=>{if(e.target.dataset&&e.target.dataset.iogv)e.target.select();});
 const knobAt=t=>{const kn=t.closest&&t.closest("[data-knob]");return kn?kn.dataset.knob.split(":").map(Number):null;};
 let knobDrag=null;
 $("#pw").addEventListener("pointerdown",e=>{
@@ -2516,7 +2530,7 @@ function pwRender(){
     :(PW.main==="input"?["inputA","inputB"]:["direct","busses"]).map(s=>`<button data-pwsub="${s}" class="${(PW.main==="input"?PW.sub.input:PW.sub.output)===s?"on":""}">${esc(PW_VIEWS[s].label)}</button>`).join("");
   // header geometry: device / [gain / 48V in the Input views] / type / channel number;
   // Internal: strip type / name (vertical) / number
-  const knobs=v.rows==="in"&&cell>=25, H=isAsg?{dev:22,gain:0,p48:0,type:Math.max(60,cell*2.6),num:22}:{dev:22,gain:knobs?42:0,p48:knobs?22:0,type:20,num:22};
+  const knobs=v.rows==="in"&&cell>=25, H=isAsg?{dev:22,gain:0,p48:0,type:Math.max(60,cell*2.6),num:22}:{dev:22,gain:knobs?54:0,p48:knobs?22:0,type:20,num:22};
   const chh=H.dev+H.gain+H.p48+H.type+H.num;
   const RL=isAsg?[["color",14],["name",220]]:v.rows==="in"?[["color",14],["name",186],["ms",34]]:v.rows==="devin"?[["dev",140],["type",70],["num",40]]:[["color",14],["name",150],["ipf",42],["ms",34]];
   const rhw=RL.reduce((a,[,w])=>a+w,0),font=Math.round(Math.min(13,Math.max(9,cell*.4)));
@@ -2536,7 +2550,8 @@ function pwRender(){
   }else span("dev",H.dev,c=>c.k,c=>c.dev," dv");
   if(knobs){
     PW.cols.forEach((c,j)=>{const d=state.io[c.k],m=IO_MODELS[d.model],pre=m.chunk&&c.x.type==="Mic/Line";
-      hc.push(`<div class="pw-hc pw-kn" style="left:${j*cell}px;top:${y}px;width:${cell}px;height:${H.gain}px">${pre?knobHtml(c.k,c.pin.c,d.gain[c.pin.c],m.gain[0],m.gain[1])+`<span class="pw-gv" data-iogv="${c.k}:${c.pin.c}">${d.gain[c.pin.c]}</span>`:""}</div>`);
+      hc.push(`<div class="pw-hc pw-kn" style="left:${j*cell}px;top:${y}px;width:${cell}px;height:${H.gain}px">${pre?knobHtml(c.k,c.pin.c,d.gain[c.pin.c],m.gain[0],m.gain[1])+
+        `<input class="pw-gv" data-iogv="${c.k}:${c.pin.c}" value="${d.gain[c.pin.c]}" inputmode="numeric" maxlength="3" title="Gain, dB (${m.gain[0]} to ${m.gain[1]}): type a value, Enter" spellcheck="false">`:""}</div>`);
       hc.push(`<div class="pw-hc" style="left:${j*cell}px;top:${y+H.gain}px;width:${cell}px;height:${H.p48}px">${pre?`<button type="button" class="p48${d.phantom[c.pin.c]?" on":""}" data-io48="${c.k}:${c.pin.c}" aria-pressed="${!!d.phantom[c.pin.c]}" title="48V phantom power">48V</button>`:""}</div>`);});
     y+=H.gain+H.p48;
   }
