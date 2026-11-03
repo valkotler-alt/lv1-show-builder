@@ -877,7 +877,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 
 <section style="--seccolor:var(--ch)" data-tab="io">
   <div class="sechead"><h2>Inventory IO</h2><span class="count" id="ioCount"></span>
-    <span class="hint">The show's SoundGrid I/O devices, in order (LV1 slots A1–A8, then B1–B8). The Inputs patch runs through their inputs in this order: an MGB gives 128 MADI inputs; a Waves Classic, IONIC or DSPRO gives its mic/line preamps, each with Gain and 48V (its AES inputs are not patched). Drag a device's ⋮⋮ to change the order; turn a gain knob by dragging up/down, the wheel or the arrow keys (double-click = +20 dB); 48V is red when on. Every device output (MGB 128, Classic / IONIC 16 18, IONIC 24 26, SG1000 10, SG4000 28) can take an aux — pick it in the Auxes Patch column on OUTPUTS. All of it goes into the .emo session.</span></div>
+    <span class="hint">The show's SoundGrid I/O devices, in order (LV1 slots A1–A8, then B1–B8). The Inputs patch runs through their inputs in this order: an MGB gives 128 MADI inputs; a Waves Classic, IONIC or DSPRO gives its mic/line preamps, each with Gain and 48V (its AES inputs are not patched). Drag a device's ⋮⋮ to change the order; turn a gain knob by dragging up/down, the wheel or the arrow keys (double-click = +20 dB); 48V is red when on. Every device output (MGB 128, Classic / IONIC 16 18, IONIC 24 26, SG1000 10, SG4000 28) can take an aux, Master L/R or a matrix — pick it in the Patch column on OUTPUTS. All of it goes into the .emo session.</span></div>
   <div class="ioadd" id="ioAdd"></div>
   <div class="iodevs" id="ioDevs"></div>
 </section>
@@ -902,7 +902,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 
 <section style="--seccolor:var(--aux)" data-tab="out">
   <div class="sechead"><h2>Auxes / Monitors</h2><span class="count" id="auxCount"></span>
-    <span class="hint">LV1 aux strips ("Mon" bank). Patch = the aux's output on any INVENTORY IO device: Auto runs top-down after the previous aux (stereo takes two), or pick an output / Not patched. It goes into the .emo. Destination / notes go to the Google Sheet.</span></div>
+    <span class="hint">LV1 aux strips ("Mon" bank). Patch = the aux's output on any INVENTORY IO device: Auto runs top-down after the previous patched strip (stereo takes two), or pick an output / Not patched. The Auto chain runs Auxes → Master L/R → Matrixes. It goes into the .emo. Destination / notes go to the Google Sheet.</span></div>
   <div class="tblwrap"><table id="auxTable">
     <thead><tr><th>#</th><th>Patch</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>Link</th><th>Mute</th><th>Position</th><th>Notes</th><th></th><th class="iocol"></th><th class="iocol"></th></tr></thead>
     <tbody></tbody>
@@ -911,18 +911,18 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 
 <section style="--seccolor:var(--accent)" data-tab="out">
   <div class="sechead"><h2>Master (LR)</h2>
-    <span class="hint">Plugin rack on the stereo master strip. “Stock” = LV1’s default F2 + Dynamics + EQ.</span></div>
+    <span class="hint">Patch = the L/R output pair (Auto continues after the auxes). Plugin rack on the stereo master strip. “Stock” = LV1’s default F2 + Dynamics + EQ.</span></div>
   <div class="tblwrap"><table id="mstTable">
-    <thead><tr><th>Strip</th><th>Rack</th></tr></thead>
+    <thead><tr><th>Strip</th><th>Patch</th><th>Rack</th></tr></thead>
     <tbody></tbody>
   </table></div>
 </section>
 
 <section style="--seccolor:var(--mtx)" data-tab="out">
   <div class="sechead"><h2>Matrixes</h2><span class="count" id="mtxCount"></span>
-    <span class="hint">LV1 matrix strips 1–8. Feed them from inputs or groups above.</span></div>
+    <span class="hint">LV1 matrix strips 1–8. Feed them from inputs or groups above. Patch = the matrix's output (Auto continues after Master L/R).</span></div>
   <div class="tblwrap"><table id="mtxTable">
-    <thead><tr><th>#</th><th>Name</th><th>M/ST</th><th>Color</th><th>Link</th><th>Mute</th><th></th><th class="iocol"></th><th class="iocol"></th></tr></thead>
+    <thead><tr><th>#</th><th>Patch</th><th>Name</th><th>M/ST</th><th>Color</th><th>Link</th><th>Mute</th><th></th><th class="iocol"></th><th class="iocol"></th></tr></thead>
     <tbody></tbody>
   </table></div>
 </section>
@@ -1180,7 +1180,7 @@ const defFx=()=>({name:"",stereo:true,dest:"MASTER",rack:null,color:null,link:""
 const defAux=()=>({name:"",stereo:false,dest:"",pos:"",notes:"",color:null,link:"",mute:"",out:null}); // out: null = auto, 0 = not patched, n = first output port
 const AUX_DESTS=["Wedge","Wireless IEM","Wired IEM","Mixer"];
 const STANDS=["Clip","Baby","Tall","Magnet","Clamp"];
-const defMtx=()=>({name:"",stereo:false,color:null,link:"",mute:""});
+const defMtx=()=>({name:"",stereo:false,color:null,link:"",mute:"",out:null}); // out: as defAux
 const DEF={ch:defCh,grp:defGrp,fx:defFx,aux:defAux,mtx:defMtx};
 const STRIP_NOUN={ch:"input",aux:"aux",grp:"group",fx:"FX",mtx:"matrix"};
 const STRIP_PLURAL={ch:"inputs",aux:"auxes",grp:"groups",fx:"FX returns",mtx:"matrixes"};
@@ -1423,8 +1423,8 @@ function rackLabel(kind,i){
 function renderMaster(){
   const r=state.master.rack;
   $("#mstTable tbody").innerHTML=
-    `<tr><td style="font-family:var(--font-num);font-size:12px;white-space:nowrap">MASTER L/R</td>${rackCell("mst",0,r)}</tr>`+
-    rackRow("mst",0,r,2,true);
+    `<tr><td style="font-family:var(--font-num);font-size:12px;white-space:nowrap">MASTER L/R</td>${outCell("mst",0,state.master,outPorts().mst,true,true)}${rackCell("mst",0,r)}</tr>`+
+    rackRow("mst",0,r,3,true);
 }
 
 /* ---------- strip tables ---------- */
@@ -1547,18 +1547,25 @@ function renderFx(){
   }).join("");
   $("#fxCount").textContent=`${named(state.fx).length} named / ${FX_COUNT} strips`;
 }
-function auxPorts(){ // 1-based output ports per NAMED aux (unnamed -> null, not patched -> [])
-  // Auto auxes take the next outputs after the previous aux; a picked output
-  // (aux.out) moves that point, so later auto auxes continue after it.
-  let p=1; return state.auxes.map(a=>{
-    if(!a.name.trim())return null;
-    if(a.out===0)return [];
-    const s=a.out>0?a.out:p; p=s+(a.stereo?2:1); return a.stereo?[s,s+1]:[s];});
+function outPorts(){ // 1-based output ports per strip: {aux:[], mst, mtx:[]} (unnamed -> null, not patched -> [])
+  // One chain in OUTPUTS-tab order: auxes, Master L/R, matrixes. An Auto strip
+  // takes the next outputs after the previous one; a picked output (.out)
+  // moves that point, so later Auto strips continue after it.
+  let p=1;
+  const take=(o,named,stereo)=>{
+    if(!named)return null;
+    if(o.out===0)return [];
+    const s=o.out>0?o.out:p; p=s+(stereo?2:1); return stereo?[s,s+1]:[s];};
+  const aux=state.auxes.map(a=>take(a,!!a.name.trim(),a.stereo));
+  const mst=take(state.master,true,true);
+  const mtx=state.matrixes.map(m=>take(m,!!m.name.trim(),m.stereo));
+  return {aux,mst,mtx};
 }
+const auxPorts=()=>outPorts().aux;
 const portText=(pp,out)=>portLabel(pp,out).replace(/<\/span>/g," ").replace(/<[^>]+>/g,"");
-function auxOutCell(a,i,pp){ // Patch menu: Auto / Not patched / any output of the inventory
-  if(!a.name.trim())return `<td class="num">—</td>`;
-  const w=a.stereo?2:1,map=ioPortMap(true);
+function outCell(kind,i,a,pp,named=!!a.name.trim(),stereo=a.stereo){ // Patch menu: Auto / Not patched / any output of the inventory
+  if(!named)return `<td class="num">—</td>`;
+  const w=stereo?2:1,map=ioPortMap(true);
   const auto=a.out===null||a.out===undefined;
   let opts=`<option value=""${auto?" selected":""}>Auto${auto?" · "+esc(portText(pp,true)):""}</option><option value="0"${a.out===0?" selected":""}>Not patched</option>`;
   state.io.forEach((d,k)=>{
@@ -1571,13 +1578,13 @@ function auxOutCell(a,i,pp){ // Patch menu: Auto / Not patched / any output of t
   });
   const bad=pp.some(p=>p>map.length);
   if(a.out>map.length)opts+=`<option value="${a.out}" selected>⚠ output ${a.out} (not in the inventory)</option>`;
-  return `<td><select id="aux-${i}-out" class="outsel${bad?" missing":""}" data-k="aux" data-i="${i}" data-f="out" title="Output patch: Auto = top-down after the previous aux">${opts}</select></td>`;
+  return `<td><select id="${kind}-${i}-out" class="outsel${bad?" missing":""}" data-k="${kind}" data-i="${i}" data-f="out" title="Output patch: Auto = the next outputs after the previous patched strip">${opts}</select></td>`;
 }
 function renderAux(){
   const tb=$("#auxTable tbody"); const dups=dupNames(state.auxes); const pts=auxPorts();
   tb.innerHTML=state.auxes.map((a,i)=>`<tr${rowCls("aux",i)}>
       <td class="num"><span class="rgrip">⋮⋮</span>${i+1}</td>
-      ${auxOutCell(a,i,pts[i]||[])}
+      ${outCell("aux",i,a,pts[i]||[])}
       ${nameCell("aux",i,a.name,dups)}
       ${stCell("aux",i,a.stereo)}
       ${colorCell("aux",i,a.color)}
@@ -1742,9 +1749,9 @@ $("#laySec").addEventListener("dragend",()=>{
   document.querySelectorAll(".lcell.dragover,.lcell.dragging").forEach(x=>x.classList.remove("dragover","dragging"));
 });
 function renderSimple(kind,list,tableSel){
-  const tb=$(tableSel+" tbody"); const dups=dupNames(list);
-  tb.innerHTML=list.map((it,i)=>`<tr${rowCls(kind,i)}><td class="num"><span class="rgrip">⋮⋮</span>${i+1}</td>${nameCell(kind,i,it.name,dups)}${stCell(kind,i,it.stereo)}${colorCell(kind,i,it.color)}${linkCell(kind,i,it.link)}${muteCell(kind,i,it.mute)}${opsCell(kind,i)}${ioOpsCell(kind,i)}</tr>`).join("")
-    ||emptyRow(9,kind==="aux"?"This mixer configuration has no aux strips.":"No matrix strips in this configuration.");
+  const tb=$(tableSel+" tbody"); const dups=dupNames(list); const op=kind==="mtx"?outPorts().mtx:null;
+  tb.innerHTML=list.map((it,i)=>`<tr${rowCls(kind,i)}><td class="num"><span class="rgrip">⋮⋮</span>${i+1}</td>${op?outCell(kind,i,it,op[i]||[]):""}${nameCell(kind,i,it.name,dups)}${stCell(kind,i,it.stereo)}${colorCell(kind,i,it.color)}${linkCell(kind,i,it.link)}${muteCell(kind,i,it.mute)}${opsCell(kind,i)}${ioOpsCell(kind,i)}</tr>`).join("")
+    ||emptyRow(kind==="mtx"?10:9,kind==="aux"?"This mixer configuration has no aux strips.":"No matrix strips in this configuration.");
   const total=kind==="aux"?cfg().mon:MTX_COUNT;
   $(kind==="aux"?"#auxCount":"#mtxCount").textContent=total?`${named(list).length} named / ${total} strips`:"";
 }
@@ -1756,10 +1763,10 @@ function renderWarnings(){
   const used=portsUsed(pts);
   if(used>ioTotal())w.push(`The I/O inventory has ${ioTotal()} inputs — the patch needs ${used}. Add a device on the INVENTORY IO tab.`);
   {
-    const ap=auxPorts().flatMap(p=>p||[]),outN=ioTotal(true),seen=new Set(),twice=new Set();
+    const op=outPorts(),ap=[...op.aux,op.mst,...op.mtx].flatMap(p=>p||[]),outN=ioTotal(true),seen=new Set(),twice=new Set();
     for(const p of ap){if(seen.has(p))twice.add(p);seen.add(p);}
-    if(ap.some(p=>p>outN))w.push(`An aux output patch is past the I/O inventory's ${outN} outputs — it stays unpatched (⚠ in the Patch menu).`);
-    if(twice.size)w.push(`Two auxes patch to the same output: ${[...twice].sort((a,b)=>a-b).map(p=>portText([p],true)).join(", ")} — an output takes one source.`);
+    if(ap.some(p=>p>outN))w.push(`An output patch is past the I/O inventory's ${outN} outputs — it stays unpatched (⚠ in the Patch menu).`);
+    if(twice.size)w.push(`Two strips patch to the same output: ${[...twice].sort((a,b)=>a-b).map(p=>portText([p],true)).join(", ")} — an output takes one source.`);
   }
   {
     const gN=new Set(state.groups.map(g=>g.name.trim()).filter(Boolean));
@@ -1855,6 +1862,7 @@ document.addEventListener("input",e=>{
       b.style.display=(!q||b.dataset.n.toLowerCase().includes(q))&&(!c||b.dataset.c===c)?"":"none";});
     return;
   }
+  if(f==="out"&&k==="mst"){state.master.out=t.value===""?null:+t.value;render();return;} // master L/R output patch
   const list=listFor[k]();const it=list[+t.dataset.i];if(!it)return;
   // Editing a SELECTED row's color or stage position applies to every selected row.
   const multiTargets=()=>{const i=+t.dataset.i;return sel[k].has(i)&&sel[k].size>1?[...sel[k]]:[i];};
@@ -1892,7 +1900,7 @@ document.addEventListener("input",e=>{
     return;
   }
   if(f==="ds"){it.ds=t.value;render();return;} // a split's source: format + patch follow
-  if(f==="out"){it.out=t.value===""?null:+t.value;render();return;} // aux output patch
+  if(f==="out"){it.out=t.value===""?null:+t.value;render();return;} // aux / matrix output patch
   if(f==="mx"){const m=t.dataset.m;it.matrix=t.checked?[...it.matrix,m]:it.matrix.filter(x=>x!==m);
     if(t.checked&&autoName("mtx",m)){render();setStatus(`Matrix strip “${m}” named automatically so the feed is built.`);}
     else renderGroups();
@@ -2433,7 +2441,8 @@ $("#btnNew").onclick=async()=>{
 
 /* ---------- spec export / import ---------- */
 function buildSpec(){
-  const pts=ports(),aps=auxPorts(); const c=cfg();
+  const pts=ports(),op=outPorts(),aps=op.aux; const c=cfg();
+  const outKeys=(o,pp)=>({ports:pp,...(o.out!==null&&o.out!==undefined?{out:o.out}:{})});
   // A stock rack exports as no rack field at all (the converter leaves the
   // template's default rack untouched). Unnamed strips don't export.
   const rackOut=r=>isStock(r)?undefined:{slots:[...r.slots]};
@@ -2458,20 +2467,21 @@ function buildSpec(){
       ...(g.color!==null&&g.color!==undefined?{color:g.color}:{}),...lm(g)},g.rack)),
     fx:named(state.fx).map(f=>withRack({name:f.name.trim(),stereo:f.stereo,dest:f.dest==="MASTER"?null:f.dest,
       ...(f.color!==null&&f.color!==undefined?{color:f.color}:{}),...lm(f)},f.rack)),
-    // v8: ports = the aux's output patch (1-based, numbering the inventory's outputs); out = the
-    // builder's pick (absent = auto top-down, 0 = not patched, n = first output).
-    auxes:state.auxes.map((a,i)=>a.name.trim()?{name:a.name.trim(),stereo:a.stereo,ports:aps[i],
-      ...(a.out!==null&&a.out!==undefined?{out:a.out}:{}),dest:a.dest||"",position:(a.pos||"").trim(),notes:(a.notes||"").trim(),
+    // v8: ports = the strip's output patch (1-based, numbering the inventory's outputs) on auxes,
+    // master and matrixes; out = the builder's pick (absent = auto, 0 = not patched, n = first output).
+    auxes:state.auxes.map((a,i)=>a.name.trim()?{name:a.name.trim(),stereo:a.stereo,...outKeys(a,aps[i]),
+      dest:a.dest||"",position:(a.pos||"").trim(),notes:(a.notes||"").trim(),
       ...(a.color!==null&&a.color!==undefined?{color:a.color}:{}),...lm(a)}:null).filter(Boolean),
-    matrixes:named(state.matrixes).map(m=>({name:m.name.trim(),stereo:m.stereo,
-      ...(m.color!==null&&m.color!==undefined?{color:m.color}:{}),...lm(m)})),
+    matrixes:state.matrixes.map((m,i)=>m.name.trim()?{name:m.name.trim(),stereo:m.stereo,...outKeys(m,op.mtx[i]),
+      ...(m.color!==null&&m.color!==undefined?{color:m.color}:{}),...lm(m)}:null).filter(Boolean),
+    master:outKeys(state.master,op.mst),
   };
   if((state.links||[]).some(n=>n.trim()))spec.links=state.links.map(n=>n.trim());
   const lays=state.layers.map(l=>({name:l.name.trim(),
     strips:l.strips.map(s=>s?(s[0]==="main"?{type:"main"}:{type:s[0],name:s[1]}):null)}));
   if(lays.some(l=>l.name||l.strips.some(Boolean)))spec.layers=lays;
   const mr=rackOut(state.master.rack);
-  if(mr)spec.master={rack:mr};
+  if(mr)spec.master.rack=mr;
   const sitems=(state.stage&&state.stage.items)||[];
   if(sitems.length){
     const usedCustom={};
@@ -2509,6 +2519,7 @@ function loadSpec(spec){
   const id=spec.config&&CONFIGS.some(c=>c.id===spec.config.id)?spec.config.id:inferConfig(spec);
   const muteIn=o=>{const v=o.mute;return (typeof v==="number"&&v>=1&&v<=8)?String(Math.round(v)):"";};
   const linkIn=o=>typeof o.link==="string"?o.link:"";
+  const outIn=o=>Number.isInteger(o.out)&&o.out>=0?o.out:null; // v8 output pick (absent = auto)
   state={
     show:{name:spec.show?.name||"",date:spec.show?.date||"",venue:spec.show?.venue||"",sheetUrl:spec.show?.sheetUrl||"",fohContact:spec.show?.fohContact||"",monContact:spec.show?.monContact||"",pmContact:spec.show?.pmContact||"",fohDesk:spec.show?.fohDesk||"",monDesk:spec.show?.monDesk||"",pa:spec.show?.pa||"",notes:spec.show?.notes||""},
     configId:id,
@@ -2518,12 +2529,12 @@ function loadSpec(spec){
     groups:(spec.groups||[]).map(g=>({...defGrp(),name:g.name||"",stereo:g.stereo!==false,dest:g.dest||"MASTER",postFx:!!g.postFx,matrix:g.matrix||[],rack:rackIn(g.rack),color:colIn(g),link:linkIn(g),mute:muteIn(g)})),
     fx:(spec.fx||[]).map(f=>({...defFx(),name:f.name||"",stereo:f.stereo!==false,dest:f.dest||"MASTER",rack:rackIn(f.rack),color:colIn(f),link:linkIn(f),mute:muteIn(f)})),
     auxes:(spec.auxes||[]).map(a=>({...defAux(),name:a.name||"",stereo:!!a.stereo,
-      out:Number.isInteger(a.out)&&a.out>=0?a.out:null,dest:a.dest||"",pos:a.position||"",notes:a.notes||"",color:colIn(a),link:linkIn(a),mute:muteIn(a)})),
-    matrixes:(spec.matrixes||[]).map(m=>({...defMtx(),name:m.name||"",stereo:!!m.stereo,color:colIn(m),link:linkIn(m),mute:muteIn(m)})),
+      out:outIn(a),dest:a.dest||"",pos:a.position||"",notes:a.notes||"",color:colIn(a),link:linkIn(a),mute:muteIn(a)})),
+    matrixes:(spec.matrixes||[]).map(m=>({...defMtx(),name:m.name||"",stereo:!!m.stereo,out:outIn(m),color:colIn(m),link:linkIn(m),mute:muteIn(m)})),
     links:Array.from({length:LINK_COUNT},(_,i)=>String((spec.links||[])[i]||"")),
     layers:(spec.layers||[]).slice(0,LAYER_COUNT).map(l=>({name:String((l&&l.name)||""),
       strips:((l&&l.strips)||[]).slice(0,LAYER_SLOTS).map(s=>s&&LAYER_KINDS.includes(s.type)?[s.type,s.type==="main"?"":String(s.name||"")]:null)})),
-    master:{rack:rackIn(spec.master?.rack)},
+    master:{rack:rackIn(spec.master?.rack),out:outIn(spec.master||{})},
     io:Array.isArray(spec.io)?spec.io:[{model:"MGB"}], // normalized by applyConfig()
     stage:{
       items:((spec.stage&&spec.stage.items)||[]).map(it=>{
@@ -4748,13 +4759,17 @@ async function emoExport(spec){
       erun(db,"INSERT INTO routes VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         [++nRoutes,10,portMap[port][0],-1,-1,portMap[port][1],-1,-1,0,i,0,0,leg,-1,0,0]);
     }));
-    // Aux output patch (spec v8 ports, 1-based over the inventory's outputs):
-    // src = aux-bank strip 8+i / leg, dst = Outputs cluster 11, device slot / output.
-    auxes.forEach((a,i)=>(a.ports||[]).forEach((port,leg)=>{
+    // Output patch (spec v8 ports, 1-based over the inventory's outputs): src =
+    // aux-bank strip 8+i (cluster 2), LR (3, 0) or matrix i (6) / leg, dst =
+    // Outputs cluster 11, device slot / output.
+    const outRoute=(ct,ci,pp)=>(pp||[]).forEach((port,leg)=>{
       const o=outMap[port-1];if(!o)return; // past the inventory: unpatched (warned in the builder)
       erun(db,"INSERT INTO routes VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        [++nRoutes,2,8+i,-1,-1,leg,-1,-1,11,o[0],0,-1,o[1],-1,0,0]);
-    }));
+        [++nRoutes,ct,ci,-1,-1,leg,-1,-1,11,o[0],0,-1,o[1],-1,0,0]);
+    });
+    auxes.forEach((a,i)=>outRoute(2,8+i,a.ports));
+    outRoute(3,0,spec.master&&spec.master.ports);
+    mtxs.forEach((m,i)=>outRoute(6,i,m.ports));
 
     // 7. preset ref_count bookkeeping
     erun(db,"UPDATE plugin_preset SET ref_count = "+
@@ -4836,7 +4851,7 @@ async function emoImport(bytes,fileStemName){
     const refOf={}; // "type:index" -> builder layer ref, for imported strips only
     const referenced=new Set(Object.values(dests));
     for(const f of Object.values(mtxFeeds))f.forEach(d=>referenced.add(d));
-    const groups=[],matrixes=[];
+    const groups=[],matrixes=[],mtxBank=[]; // mtxBank: each imported matrix's bank index (for its output patch)
     for(let i=0;i<nGrp;i++){
       const cid=GRP0+i,nm=(nameOf[cid]||"").trim();
       const used=referenced.has(cid)||!isDef(nm,grpRe)||hasPlugs(cid)||colorOf[cid]!=null;
@@ -4851,6 +4866,7 @@ async function emoImport(bytes,fileStemName){
       const used=referenced.has(cid)||!isDef(nm,mtxRe)||colorOf[cid]!=null;
       mtxLabel[cid]=nm&&!isDef(nm,mtxRe)?nm:"MTX "+(i+1);
       if(used)refOf[`6:${i}`]=["mtx",mtxLabel[cid]];
+      if(used)mtxBank.push(i);
       if(used)matrixes.push({name:mtxLabel[cid],stereo:stereoOf[cid]!==false,
         ...(colorOf[cid]!=null?{color:colorOf[cid]}:{}),...lmOf(cid)});
     }
@@ -4947,14 +4963,16 @@ async function emoImport(bytes,fileStemName){
       const lr=IO_MODELS[model].chunk==="liverack";
       io.push({model,gain:map(lr?"control_gain_map":"mic_gain_map"),phantom:map(lr?"line_in_phantom_map":"mic_phantom_map")});
     }
-    // Aux output patch: the left / mono leg's route to an inventory output
-    // (an aux without one imports as not patched).
-    const auxOut={};
-    for(const [ci,slot,ch] of eq(db,"SELECT src_cluster_type_index, dst_cluster_type_index, dst_channel_index FROM routes "+
-        "WHERE src_cluster_type = 2 AND src_channel_index = 0 AND dst_cluster_type = 11 AND dst_section_type = 0")){
-      const b=outBase[slot],pos=b?b[1].outCh.indexOf(ch):-1;if(pos>=0&&!(ci in auxOut))auxOut[ci]=b[0]+pos+1;
+    // Output patch (auxes, LR, matrixes): the left / mono leg's route to an
+    // inventory output; a strip without one imports as not patched.
+    const outOf={}; // "cluster:index" -> 1-based global output port
+    for(const [ct,ci,slot,ch] of eq(db,"SELECT src_cluster_type, src_cluster_type_index, dst_cluster_type_index, dst_channel_index FROM routes "+
+        "WHERE src_cluster_type IN (2, 3, 6) AND src_channel_index = 0 AND dst_cluster_type = 11 AND dst_section_type = 0")){
+      const b=outBase[slot],pos=b?b[1].outCh.indexOf(ch):-1,key=ct+":"+ci;
+      if(pos>=0&&!(key in outOf))outOf[key]=b[0]+pos+1;
     }
-    auxes.forEach((a,j)=>{a.out=auxOut[auxBank[j]]||0;});
+    auxes.forEach((a,j)=>{a.out=outOf["2:"+auxBank[j]]||0;});
+    matrixes.forEach((m,j)=>{m.out=outOf["6:"+mtxBank[j]]||0;});
     return {
       format:"lv1-input-list",version:8,
       io,
@@ -4963,7 +4981,7 @@ async function emoImport(bytes,fileStemName){
       show:{name:fileStemName||"Imported show",date:"",venue:""},
       channels,groups,fx:fxs,auxes,matrixes,
       ...(layers.some(l=>l.name||l.strips.some(Boolean))?{layers}:{}),
-      ...(mRack?{master:{rack:mRack}}:{}),
+      master:{out:outOf["3:0"]||0,...(mRack?{rack:mRack}:{})},
     };
   }finally{db.close();}
 }
