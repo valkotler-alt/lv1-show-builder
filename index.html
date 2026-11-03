@@ -550,7 +550,20 @@ td input::placeholder{color:var(--dim);opacity:.55;font-style:italic;}
 .iodev header{display:flex;align-items:center;gap:6px;padding:8px 10px;background:var(--panel2);border-bottom:1px solid var(--line);}
 .iodev header b{flex:1;font-size:13px;}
 .iodev table{min-width:0;}
-.iodev td input[type=number]{min-width:0;width:68px;}
+.iodev td input[type=number]{min-width:0;width:52px;}
+.iodev header .grip{color:var(--dim);font-size:12px;letter-spacing:-2px;cursor:grab;padding:0 2px;}
+.iodev.dragging{opacity:.45;}
+.iodev.dropbefore{box-shadow:-4px 0 0 var(--accent);}
+.iodev.dropafter{box-shadow:4px 0 0 var(--accent);}
+.iodevs.vert .iodev.dropbefore{box-shadow:0 -4px 0 var(--accent);}
+.iodevs.vert .iodev.dropafter{box-shadow:0 4px 0 var(--accent);}
+.gaincell{display:flex;align-items:center;gap:6px;}
+.knob{width:28px;height:28px;flex:none;cursor:ns-resize;touch-action:none;border-radius:50%;}
+.knob:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+.knob .trk{stroke:var(--line2);}
+.knob .val{stroke:var(--accent);}
+.knob .cap{fill:var(--panel2);stroke:var(--line);}
+.knob .ptr{stroke:var(--fg);}
 .iodev td input[type=checkbox],.iodev th input[type=checkbox]{width:auto;min-width:0;margin:0;}
 .iodev .chn{font-size:12px;color:var(--dim);}
 .iodev .iomadi{padding:10px 12px;font-size:12px;color:var(--dim);}
@@ -862,7 +875,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 
 <section style="--seccolor:var(--ch)" data-tab="io">
   <div class="sechead"><h2>Inventory IO</h2><span class="count" id="ioCount"></span>
-    <span class="hint">The show's SoundGrid I/O devices, in order (LV1 slots A1–A8, then B1–B8). The Inputs patch runs through their inputs in this order: an MGB gives 128 MADI inputs; a Waves Classic, IONIC or DSPRO gives its mic/line preamps, each with Gain and 48V (its AES inputs are not patched). All of it goes into the .emo session.</span></div>
+    <span class="hint">The show's SoundGrid I/O devices, in order (LV1 slots A1–A8, then B1–B8). The Inputs patch runs through their inputs in this order: an MGB gives 128 MADI inputs; a Waves Classic, IONIC or DSPRO gives its mic/line preamps, each with Gain and 48V (its AES inputs are not patched). Drag a device's ⋮⋮ to change the order; turn a gain knob by dragging up/down, the wheel or the arrow keys (double-click = +20 dB). All of it goes into the .emo session.</span></div>
   <div class="ioadd" id="ioAdd"></div>
   <div class="iodevs" id="ioDevs"></div>
 </section>
@@ -1904,20 +1917,20 @@ function renderIO(){
   let first=1;
   $("#ioDevs").innerHTML=state.io.length?state.io.map((d,k)=>{
     const m=IO_MODELS[d.model],from=first;first+=m.ports;
-    const head=`<header><span class="iotag">${ioTag(k)}</span><b>${esc(m.label)}</b>
+    const head=`<header><span class="grip" data-iogrip title="Drag to change the order (and the patch)">⋮⋮</span><span class="iotag">${ioTag(k)}</span><b>${esc(m.label)}</b>
       <span class="chn">slot ${k<8?"A":"B"}${k%8+1} · inputs ${from}–${from+m.ports-1}</span>
       <button class="small" data-io="up" data-dev="${k}"${k?"":" disabled"} title="Move up (earlier in the patch)">↑</button>
       <button class="small" data-io="down" data-dev="${k}"${k<state.io.length-1?"":" disabled"} title="Move down (later in the patch)">↓</button>
       <button class="small" data-io="del" data-dev="${k}" title="Remove this device">✕</button></header>`;
     if(!m.chunk){
       let used=0;for(let p=from;p<first;p++)if(byPort[p])used++;
-      return `<div class="iodev">${head}<div class="iomadi">${m.ports} MADI inputs · ${used} patched. No preamps here — gain and 48V live on the device feeding the MADI.</div></div>`;
+      return `<div class="iodev" data-iocard="${k}">${head}<div class="iomadi">${m.ports} MADI inputs · ${used} patched. No preamps here — gain and 48V live on the device feeding the MADI.</div></div>`;
     }
     const [lo,hi]=m.gain,allOn=d.phantom.every(Boolean);
     const rows=d.gain.map((g,c)=>`<tr><td class="num">${c+1}</td><td class="chn">${esc(byPort[from+c]||"")}</td>
-      <td><input type="number" min="${lo}" max="${hi}" step="1" value="${g}" data-iog="${k}:${c}" title="Gain, dB (${lo} to ${hi})"></td>
+      <td><div class="gaincell">${knobHtml(k,c,g,lo,hi)}<input type="number" min="${lo}" max="${hi}" step="1" value="${g}" data-iog="${k}:${c}" title="Gain, dB (${lo} to ${hi})"></div></td>
       <td><input type="checkbox" data-io48="${k}:${c}"${d.phantom[c]?" checked":""} title="48V phantom"></td></tr>`).join("");
-    return `<div class="iodev">${head}<table><thead><tr><th>In</th><th>Channel</th><th>Gain dB</th>
+    return `<div class="iodev" data-iocard="${k}">${head}<table><thead><tr><th>In</th><th>Channel</th><th>Gain dB</th>
       <th><label title="48V on every input of this device"><input type="checkbox" data-io48all="${k}"${allOn?" checked":""}> 48V</label></th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;
   }).join(""):`<div class="hint">No I/O devices: nothing is patched. Add one above.</div>`;
@@ -1936,12 +1949,96 @@ $("#ioDevs").addEventListener("click",e=>{
 });
 $("#ioDevs").addEventListener("change",e=>{
   const t=e.target,[k,c]=(t.dataset.iog||t.dataset.io48||"").split(":").map(Number);
-  if(t.dataset.iog){const [lo,hi]=IO_MODELS[state.io[k].model].gain,v=Math.round(+t.value);
-    state.io[k].gain[c]=Number.isFinite(v)?Math.min(hi,Math.max(lo,v)):IO_GAIN_DEF;t.value=state.io[k].gain[c];}
+  if(t.dataset.iog){const v=Math.round(+t.value);setGain(k,c,t.value!==""&&Number.isFinite(v)?v:IO_GAIN_DEF,false);}
   else if(t.dataset.io48){state.io[k].phantom[c]=t.checked?1:0;
     const all=t.closest(".iodev").querySelector("[data-io48all]");if(all)all.checked=state.io[k].phantom.every(Boolean);}
   else if(t.dataset.io48all){const d=state.io[+t.dataset.io48all];d.phantom.fill(t.checked?1:0);
     t.closest(".iodev").querySelectorAll("[data-io48]").forEach(x=>{x.checked=t.checked;});}
+});
+/* Gain knobs: a 270° rotary per preamp, next to its dB field. Drag up/down
+   (2 px per dB), wheel or arrow keys step 1 dB, PgUp/PgDn 6 dB, Home/End =
+   min/max, double-click = the default. They update in place (no render) and
+   fire "input" on the dB field so the autosave picks the change up. */
+const KNOB_C=2*Math.PI*11, KNOB_ARC=.75*KNOB_C;
+const knobPos=(v,lo,hi)=>(v-lo)/(hi-lo);
+function knobHtml(k,c,v,lo,hi){
+  const f=knobPos(v,lo,hi);
+  return `<svg class="knob" viewBox="0 0 28 28" tabindex="0" role="slider" aria-label="Gain, input ${c+1}" aria-valuemin="${lo}" aria-valuemax="${hi}" aria-valuenow="${v}" data-knob="${k}:${c}">
+    <title>Gain: drag up/down, wheel or arrow keys · double-click = +${IO_GAIN_DEF} dB</title>
+    <circle class="trk" cx="14" cy="14" r="11" fill="none" stroke-width="3" stroke-linecap="round" stroke-dasharray="${KNOB_ARC} ${KNOB_C}" transform="rotate(135 14 14)"/>
+    <circle class="val" cx="14" cy="14" r="11" fill="none" stroke-width="3" stroke-linecap="round" stroke-dasharray="${KNOB_ARC*f} ${KNOB_C}" transform="rotate(135 14 14)"/>
+    <circle class="cap" cx="14" cy="14" r="7.5"/>
+    <line class="ptr" x1="14" y1="14" x2="14" y2="7.5" stroke-width="2" stroke-linecap="round" transform="rotate(${-135+270*f} 14 14)"/></svg>`;
+}
+function setGain(k,c,v,notify=true){ // clamp, store, and sync the knob + dB field
+  const [lo,hi]=IO_MODELS[state.io[k].model].gain,g=Math.min(hi,Math.max(lo,Math.round(v)));
+  state.io[k].gain[c]=g;
+  const kn=$(`#ioDevs [data-knob="${k}:${c}"]`),f=knobPos(g,lo,hi),inp=$(`#ioDevs [data-iog="${k}:${c}"]`);
+  if(kn){kn.querySelector(".val").setAttribute("stroke-dasharray",`${KNOB_ARC*f} ${KNOB_C}`);
+    kn.querySelector(".ptr").setAttribute("transform",`rotate(${-135+270*f} 14 14)`);kn.setAttribute("aria-valuenow",g);}
+  if(inp){inp.value=g;if(notify)inp.dispatchEvent(new Event("input",{bubbles:true}));}
+}
+const knobAt=t=>{const kn=t.closest&&t.closest("[data-knob]");return kn?kn.dataset.knob.split(":").map(Number):null;};
+let knobDrag=null;
+$("#ioDevs").addEventListener("pointerdown",e=>{
+  const kc=knobAt(e.target);if(!kc||e.button)return;
+  e.preventDefault();const kn=e.target.closest("[data-knob]");kn.focus();kn.setPointerCapture(e.pointerId);
+  knobDrag={k:kc[0],c:kc[1],y:e.clientY,v:state.io[kc[0]].gain[kc[1]]};
+});
+$("#ioDevs").addEventListener("pointermove",e=>{
+  if(knobDrag)setGain(knobDrag.k,knobDrag.c,knobDrag.v+(knobDrag.y-e.clientY)/2);
+});
+const knobEnd=()=>{knobDrag=null;};
+$("#ioDevs").addEventListener("pointerup",knobEnd);$("#ioDevs").addEventListener("pointercancel",knobEnd);
+$("#ioDevs").addEventListener("wheel",e=>{
+  const kc=knobAt(e.target);if(!kc)return;
+  e.preventDefault();setGain(kc[0],kc[1],state.io[kc[0]].gain[kc[1]]+(e.deltaY<0?1:-1));
+},{passive:false});
+$("#ioDevs").addEventListener("dblclick",e=>{const kc=knobAt(e.target);if(kc)setGain(kc[0],kc[1],IO_GAIN_DEF);});
+$("#ioDevs").addEventListener("keydown",e=>{
+  const kc=knobAt(e.target);if(!kc)return;
+  const [lo,hi]=IO_MODELS[state.io[kc[0]].model].gain,g=state.io[kc[0]].gain[kc[1]];
+  const to={ArrowUp:g+1,ArrowRight:g+1,ArrowDown:g-1,ArrowLeft:g-1,PageUp:g+6,PageDown:g-6,Home:lo,End:hi}[e.key];
+  if(to===undefined)return;
+  e.preventDefault();setGain(kc[0],kc[1],to);
+});
+/* Device cards reorder by dragging their ⋮⋮ grip (the patch follows the
+   order). Drop marks: left/right of a card in the grid, above/below in a
+   single column. */
+let ioDrag=null;
+const ioVert=()=>getComputedStyle($("#ioDevs")).gridTemplateColumns.split(" ").length===1;
+const ioAfter=(e,card)=>{const r=card.getBoundingClientRect();
+  return ioVert()?e.clientY>r.top+r.height/2:e.clientX>r.left+r.width/2;};
+const ioClearMarks=()=>document.querySelectorAll(".iodev.dropbefore,.iodev.dropafter,.iodev.dragging")
+  .forEach(el=>el.classList.remove("dropbefore","dropafter","dragging"));
+$("#ioDevs").addEventListener("mousedown",e=>{
+  if(e.target.closest("[data-iogrip]"))e.target.closest("[data-iocard]").draggable=true;
+});
+document.addEventListener("mouseup",()=>{document.querySelectorAll('.iodev[draggable="true"]').forEach(el=>el.draggable=false);});
+$("#ioDevs").addEventListener("dragstart",e=>{
+  const card=e.target.closest&&e.target.closest("[data-iocard]");if(!card||!card.draggable)return;
+  ioDrag=+card.dataset.iocard;card.classList.add("dragging");$("#ioDevs").classList.toggle("vert",ioVert());
+  e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain","io-device");
+});
+$("#ioDevs").addEventListener("dragover",e=>{
+  const card=ioDrag!==null&&e.target.closest("[data-iocard]");if(!card)return;
+  e.preventDefault();e.dataTransfer.dropEffect="move";
+  const after=ioAfter(e,card);
+  document.querySelectorAll(".iodev.dropbefore,.iodev.dropafter").forEach(el=>{if(el!==card)el.classList.remove("dropbefore","dropafter");});
+  card.classList.toggle("dropafter",after);card.classList.toggle("dropbefore",!after);
+});
+$("#ioDevs").addEventListener("drop",e=>{
+  const card=ioDrag!==null&&e.target.closest("[data-iocard]");if(!card)return;
+  e.preventDefault();
+  const from=ioDrag,to=+card.dataset.iocard+(ioAfter(e,card)?1:0);
+  ioDrag=null;ioClearMarks();
+  const j=from<to?to-1:to;if(j===from)return;
+  const [d]=state.io.splice(from,1);state.io.splice(j,0,d);render();
+  setStatus(`${IO_MODELS[d.model].label} moved to slot ${j<8?"A":"B"}${j%8+1} — the patch follows.`);
+});
+$("#ioDevs").addEventListener("dragend",e=>{
+  const card=e.target.closest&&e.target.closest("[data-iocard]");if(card)card.draggable=false;
+  ioDrag=null;ioClearMarks();
 });
 function focusBack(k,i,f){const el=document.getElementById(`${k}-${i}-${f}`);if(el){el.focus();const v=el.value;el.value="";el.value=v;}}
 document.addEventListener("click",e=>{
