@@ -4260,15 +4260,19 @@ const GS_SCRIPT=`/**
  *   Rows 1-10 = show meta, label in A, value in C: show name / date / venue /
  *     FOH, MON and production-manager name & contact / FOH desk / MON desk /
  *     PA / show notes
- *   Row 12 = headers:  # | CH NAME | M/L/R | MIC | STAND | POSITION | NOTES
+ *   Row 12 = headers:  PATCH | I/O | CH NAME | M/L/R | MIC | STAND | POSITION | NOTES
  *     (sheets from older bridge versions have it on row 9 -- still read)
- *   Rows 13+ = one row per MGB input; a stereo channel is two rows (L then R).
- *   Column C has an M / L / R dropdown.
+ *   Rows 13+ = one row per input; a stereo channel is two rows (L then R).
+ *   I/O = the device and channel the builder's patch puts there (written by the
+ *   builder, e.g. "IONIC 24-1 Mic/Line 3"; not read back). Column D has an
+ *   M / L / R dropdown. The aux table starts at column J, the same way.
+ *   Reading finds every column by its header, so sheets written by older
+ *   bridge versions (no I/O columns, aux table at column I) still read.
  */
 
-var HEADERS = ["PATCH", "CH NAME", "M/L/R", "MIC", "STAND", "POSITION", "NOTES"];
-var AUX_HEADERS = ["PATCH", "AUX NAME", "M/L/R", "DESTINATION", "POSITION", "NOTES"];
-var AUX_COL = 9; // aux table starts at column I
+var HEADERS = ["PATCH", "I/O", "CH NAME", "M/L/R", "MIC", "STAND", "POSITION", "NOTES"];
+var AUX_HEADERS = ["PATCH", "I/O", "AUX NAME", "M/L/R", "DESTINATION", "POSITION", "NOTES"];
+var AUX_COL = 10; // aux table starts at column J
 var AUX_DESTS = ["Wedge", "Wireless IEM", "Wired IEM", "Mixer"];
 var META_ROWS = 10; // show meta block: rows 1-10
 var HEADER_ROW = 12; // table header row
@@ -4343,36 +4347,47 @@ function doGet(e) {
     var rows = [];
     var auxes = [];
     var first = hdr + 1;
-    if (last >= first) {
-      var vals = sh.getRange(first, 1, last - first + 1, 7).getValues();
+    // Columns by header: the input table first, the aux table from its AUX NAME on.
+    var head = sh.getRange(hdr, 1, 1, 24).getValues()[0].map(function (h) { return _str(h).toUpperCase(); });
+    var colOf = function (name, from, to) {
+      for (var c = from || 0; c < (to === undefined ? head.length : to); c++) if (head[c] === name) return c;
+      return -1;
+    };
+    var ax = colOf("AUX NAME");
+    var inEnd = ax >= 0 ? ax : head.length;
+    var IN = { num: colOf("PATCH", 0, inEnd), name: colOf("CH NAME", 0, inEnd), cfg: colOf("M/L/R", 0, inEnd),
+      mic: colOf("MIC", 0, inEnd), stand: colOf("STAND", 0, inEnd), pos: colOf("POSITION", 0, inEnd), notes: colOf("NOTES", 0, inEnd) };
+    var axNum = -1;
+    for (var c0 = ax - 1; c0 >= 0; c0--) if (head[c0] === "PATCH") { axNum = c0; break; }
+    var AX = { out: axNum, name: ax, cfg: colOf("M/L/R", ax + 1), dest: colOf("DESTINATION", ax + 1),
+      pos: colOf("POSITION", ax + 1), notes: colOf("NOTES", ax + 1) };
+    var at = function (v, c) { return c >= 0 ? _str(v[c]) : ""; };
+    if (last >= first && IN.name >= 0) {
+      var vals = sh.getRange(first, 1, last - first + 1, head.length).getValues();
       for (var i = 0; i < vals.length; i++) {
         var v = vals[i];
-        var name = _str(v[1]);
-        var cfg = _str(v[2]).toUpperCase();
-        if (!name && !cfg) continue; // skip blank rows
-        rows.push({
-          num: _str(v[0]),
+        var name = at(v, IN.name);
+        var cfg = at(v, IN.cfg).toUpperCase();
+        if (name || cfg) rows.push({ // blank rows are skipped
+          num: at(v, IN.num),
           name: name,
           cfg: cfg === "L" || cfg === "R" ? cfg : "M",
-          mic: _str(v[3]),
-          stand: _str(v[4]),
-          pos: _str(v[5]),
-          notes: _str(v[6]),
+          mic: at(v, IN.mic),
+          stand: at(v, IN.stand),
+          pos: at(v, IN.pos),
+          notes: at(v, IN.notes),
         });
-      }
-      var avals = sh.getRange(first, AUX_COL, last - first + 1, 6).getValues();
-      for (var a = 0; a < avals.length; a++) {
-        var w = avals[a];
-        var aname = _str(w[1]);
-        var acfg = _str(w[2]).toUpperCase();
+        if (ax < 0) continue;
+        var aname = at(v, AX.name);
+        var acfg = at(v, AX.cfg).toUpperCase();
         if (!aname && !acfg) continue;
         auxes.push({
-          out: _str(w[0]),
+          out: at(v, AX.out),
           name: aname,
           cfg: acfg === "L" || acfg === "R" ? acfg : "M",
-          dest: _str(w[3]),
-          pos: _str(w[4]),
-          notes: _str(w[5]),
+          dest: at(v, AX.dest),
+          pos: at(v, AX.pos),
+          notes: at(v, AX.notes),
         });
       }
     }
@@ -4519,7 +4534,7 @@ function _write(d) {
     sh.getRange("C8").setNote("Monitor console and software version.");
     sh.getRange("C9").setNote("PA system.");
     sh.getRange("E1")
-      .setValue("<- fill in the yellow cells. Inputs below: one row per MGB input; a stereo channel is an L row + an R row.")
+      .setValue("<- fill in the yellow cells. Inputs below: one row per input; a stereo channel is an L row + an R row. I/O = the patched device input / output.")
       .setFontStyle("italic")
       .setFontColor("#888888");
 
@@ -4541,12 +4556,12 @@ function _write(d) {
     sh.getRange(DATA_ROW, 1, prefill, 1).setValues(nums).setFontColor("#888888");
     if (rows.length) {
       var vals = rows.map(function (r) {
-        return [r.name || "", r.cfg || "M", r.mic || "", r.stand || "", r.pos || "", r.notes || ""];
+        return [r.io || "", r.name || "", r.cfg || "M", r.mic || "", r.stand || "", r.pos || "", r.notes || ""];
       });
-      sh.getRange(DATA_ROW, 2, vals.length, 6).setValues(vals);
+      sh.getRange(DATA_ROW, 2, vals.length, 7).setValues(vals);
     }
 
-    // AUX / monitor-outputs table at columns I..N: OUT | AUX NAME | M/L/R |
+    // AUX / monitor-outputs table at columns J..P: OUT | I/O | AUX NAME | M/L/R |
     // DESTINATION | POSITION | NOTES, with a pre-numbered OUT column and dropdowns.
     sh.getRange(HEADER_ROW, AUX_COL, 1, AUX_HEADERS.length)
       .setValues([AUX_HEADERS])
@@ -4561,37 +4576,41 @@ function _write(d) {
     sh.getRange(DATA_ROW, AUX_COL, auxPrefill, 1).setValues(anums).setFontColor("#888888");
     if (auxes.length) {
       var avals = auxes.map(function (r) {
-        return [r.name || "", r.cfg || "M", r.dest || "", r.pos || "", r.notes || ""];
+        return [r.io || "", r.name || "", r.cfg || "M", r.dest || "", r.pos || "", r.notes || ""];
       });
-      sh.getRange(DATA_ROW, AUX_COL + 1, avals.length, 5).setValues(avals);
+      sh.getRange(DATA_ROW, AUX_COL + 1, avals.length, 6).setValues(avals);
     }
 
-    // M/L/R dropdowns (inputs col C, auxes col K) and the aux DESTINATION
+    // M/L/R dropdowns (inputs col D, auxes col M) and the aux DESTINATION
     // dropdown, down to MAX_ROWS so rows can be added by hand.
     var rule = SpreadsheetApp.newDataValidation()
       .requireValueInList(["M", "L", "R"], true)
       .setAllowInvalid(false)
       .build();
-    sh.getRange(DATA_ROW, 3, MAX_ROWS, 1).setDataValidation(rule);
-    sh.getRange(DATA_ROW, AUX_COL + 2, MAX_ROWS, 1).setDataValidation(rule);
+    sh.getRange(DATA_ROW, 4, MAX_ROWS, 1).setDataValidation(rule);
+    sh.getRange(DATA_ROW, AUX_COL + 3, MAX_ROWS, 1).setDataValidation(rule);
     var destRule = SpreadsheetApp.newDataValidation()
       .requireValueInList(AUX_DESTS, true)
       .setAllowInvalid(true)
       .build();
-    sh.getRange(DATA_ROW, AUX_COL + 3, MAX_ROWS, 1).setDataValidation(destRule);
+    sh.getRange(DATA_ROW, AUX_COL + 4, MAX_ROWS, 1).setDataValidation(destRule);
 
     sh.setColumnWidth(1, 56);
-    sh.setColumnWidth(2, 160);
-    sh.setColumnWidth(3, 64);
-    sh.setColumnWidths(4, 3, 130);
-    sh.setColumnWidth(7, 220);
-    sh.setColumnWidth(8, 30); // spacer between the two tables
+    sh.setColumnWidth(2, 150); // I/O
+    sh.setColumnWidth(3, 160);
+    sh.setColumnWidth(4, 64);
+    sh.setColumnWidths(5, 3, 130);
+    sh.setColumnWidth(8, 220);
+    sh.setColumnWidth(9, 30); // spacer between the two tables
     sh.setColumnWidth(AUX_COL, 56);
-    sh.setColumnWidth(AUX_COL + 1, 160);
-    sh.setColumnWidth(AUX_COL + 2, 64);
-    sh.setColumnWidth(AUX_COL + 3, 120);
-    sh.setColumnWidth(AUX_COL + 4, 130);
-    sh.setColumnWidth(AUX_COL + 5, 220);
+    sh.setColumnWidth(AUX_COL + 1, 150); // I/O
+    sh.setColumnWidth(AUX_COL + 2, 160);
+    sh.setColumnWidth(AUX_COL + 3, 64);
+    sh.setColumnWidth(AUX_COL + 4, 120);
+    sh.setColumnWidth(AUX_COL + 5, 130);
+    sh.setColumnWidth(AUX_COL + 6, 220);
+    sh.getRange(DATA_ROW, 2, MAX_ROWS, 1).setFontColor("#555555");
+    sh.getRange(DATA_ROW, AUX_COL + 1, MAX_ROWS, 1).setFontColor("#555555");
     sh.getRange(DATA_ROW, 1, MAX_ROWS, 1).setHorizontalAlignment("right");
     sh.getRange(DATA_ROW, AUX_COL, MAX_ROWS, 1).setHorizontalAlignment("right");
 
@@ -4735,25 +4754,35 @@ async function gsPost(br,body,label){ // POST; where POST is blocked -> chunked 
   }
   return gsPushChunked(br,body,label);
 }
+function ioText(legs,out){ // pins -> "IONIC 24-1 Mic/Line 3–4" (the I/O column of the Google Sheet / vendor PDF)
+  const ps=(legs||[]).filter(Boolean).map(p=>{const k=devK(p.d);
+    return {k,x:IO_MODELS[state.io[k].model][out?"outChs":"inChs"].find(z=>z.c===p.c)};});
+  const one=a=>`${a.x.type==="Out"?"Out":a.x.type} ${a.x.lbl}`;
+  if(!ps.length)return "";
+  if(ps.length===2&&ps[0].k===ps[1].k&&ps[0].x.type===ps[1].x.type)return `${ioName(ps[0].k)} ${one(ps[0])}–${ps[1].x.lbl}`;
+  return ps.map(a=>`${ioName(a.k)} ${one(a)}`).join(" / ");
+}
 function sheetRows(){ // builder channels -> sheet rows (stereo = L row + R row)
-  const pts=ports();const out=[];
+  const pts=ports(),A=resolveIn().A;const out=[];
   state.channels.forEach((c,i)=>{
     if(!c.name.trim()||c.ds)return; // digital splits are operating-only
     const f={mic:c.mic.trim(),stand:c.stand.trim(),pos:c.pos.trim(),notes:(c.notes||"").trim()};
-    if(c.stereo){out.push({num:pts[i][0],name:c.name.trim(),cfg:"L",...f});
-                 out.push({num:pts[i][1],name:c.name.trim(),cfg:"R",...f});}
-    else out.push({num:pts[i][0],name:c.name.trim(),cfg:"M",...f});
+    const io=l=>ioText([(A[i]||[])[l]]);
+    if(c.stereo){out.push({num:pts[i][0],io:io(0),name:c.name.trim(),cfg:"L",...f});
+                 out.push({num:pts[i][1],io:io(1),name:c.name.trim(),cfg:"R",...f});}
+    else out.push({num:pts[i][0],io:io(0),name:c.name.trim(),cfg:"M",...f});
   });
   return out;
 }
 function auxSheetRows(){ // builder auxes -> sheet rows (stereo = L row + R row)
-  const pts=auxPorts();const out=[];
+  const pts=auxPorts(),R=resolveOut();const out=[];
   state.auxes.forEach((a,i)=>{
     if(!a.name.trim())return;
     const f={dest:a.dest||"",pos:(a.pos||"").trim(),notes:(a.notes||"").trim()};
-    if(a.stereo){out.push({out:pts[i][0]??"",name:a.name.trim(),cfg:"L",...f});
-                 out.push({out:pts[i][1]??"",name:a.name.trim(),cfg:"R",...f});}
-    else out.push({out:pts[i][0]??"",name:a.name.trim(),cfg:"M",...f});
+    const io=l=>ioText(((R.legs.get(a)||[])[l]||[]),true);
+    if(a.stereo){out.push({out:pts[i][0]??"",io:io(0),name:a.name.trim(),cfg:"L",...f});
+                 out.push({out:pts[i][1]??"",io:io(1),name:a.name.trim(),cfg:"R",...f});}
+    else out.push({out:pts[i][0]??"",io:io(0),name:a.name.trim(),cfg:"M",...f});
   });
   return out;
 }
@@ -5070,19 +5099,21 @@ $("#btnPdf").onclick=async()=>{
   const label=(t,ly)=>{doc.setFont("helvetica","bold");doc.setFontSize(8);doc.setTextColor(110);
     doc.text(t,14,ly,{charSpace:0.8});doc.setTextColor(0);};
   label("INPUTS",y+3);
-  doc.autoTable({...tbl,startY:y+5.5,
-    head:[["CH","NAME","M/ST","MIC / DI","STAND","STAGE POSITION","NOTES"]],
-    body:state.channels.map((c,i)=>c.name.trim()&&!c.ds?[pts[i].join("–")||pinText(inA[i]||[]).replace("—",""),c.name.trim(),c.stereo?"ST":"M",c.mic,c.stand,c.pos,c.notes||""]:null).filter(Boolean),
+  // I/O = the device and channel the patch (PATCH tab) puts there, e.g. "IONIC 24-1 Mic/Line 3"
+  const ioCols={0:{cellWidth:14,halign:"right"},1:{cellWidth:42},3:{cellWidth:12,halign:"center"}};
+  doc.autoTable({...tbl,startY:y+5.5,columnStyles:ioCols,
+    head:[["CH","I/O","NAME","M/ST","MIC / DI","STAND","STAGE POSITION","NOTES"]],
+    body:state.channels.map((c,i)=>c.name.trim()&&!c.ds?[pts[i].join("–")||"—",ioText(inA[i]),c.name.trim(),c.stereo?"ST":"M",c.mic,c.stand,c.pos,c.notes||""]:null).filter(Boolean),
   });
-  // Auxes / monitors: output port, mix name, format, destination (wedge / IEM…), position, notes.
-  const aps=auxPorts();
-  const auxRows=state.auxes.map((a,i)=>a.name.trim()?[aps[i].join("–")||"—",a.name.trim(),a.stereo?"ST":"M",a.dest||"",(a.pos||"").trim(),(a.notes||"").trim()]:null).filter(Boolean);
+  // Auxes / monitors: output port, I/O, mix name, format, destination (wedge / IEM…), position, notes.
+  const aps=auxPorts(),RO=resolveOut();
+  const auxRows=state.auxes.map((a,i)=>a.name.trim()?[aps[i].join("–")||"—",ioText((RO.legs.get(a)||[]).flat(),true),a.name.trim(),a.stereo?"ST":"M",a.dest||"",(a.pos||"").trim(),(a.notes||"").trim()]:null).filter(Boolean);
   if(auxRows.length){
     let ay=doc.lastAutoTable.finalY+9;
     if(ay+22>doc.internal.pageSize.getHeight()-16){doc.addPage("a4","portrait");ay=18;} // keep the heading with its table
     label("AUXES / MONITORS",ay);
-    doc.autoTable({...tbl,startY:ay+2.5,
-      head:[["OUT","NAME","M/ST","DESTINATION","STAGE POSITION","NOTES"]],
+    doc.autoTable({...tbl,startY:ay+2.5,columnStyles:ioCols,
+      head:[["OUT","I/O","NAME","M/ST","DESTINATION","STAGE POSITION","NOTES"]],
       body:auxRows,
     });
   }
