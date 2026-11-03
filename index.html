@@ -862,7 +862,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 
 <section style="--seccolor:var(--ch)" data-tab="io">
   <div class="sechead"><h2>Inventory IO</h2><span class="count" id="ioCount"></span>
-    <span class="hint">The show's SoundGrid I/O devices, in order (LV1 slots A1–A8, then B1–B8). The Inputs patch runs through their inputs in this order: an MGB gives 128 MADI inputs; an IONIC or DSPRO gives its mic/line preamps, each with Gain and 48V (its AES inputs are not patched). All of it goes into the .emo session.</span></div>
+    <span class="hint">The show's SoundGrid I/O devices, in order (LV1 slots A1–A8, then B1–B8). The Inputs patch runs through their inputs in this order: an MGB gives 128 MADI inputs; a Waves Classic, IONIC or DSPRO gives its mic/line preamps, each with Gain and 48V (its AES inputs are not patched). All of it goes into the .emo session.</span></div>
   <div class="ioadd" id="ioAdd"></div>
   <div class="iodevs" id="ioDevs"></div>
 </section>
@@ -1018,7 +1018,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 (the show name becomes the file name) — only named strips are built, packed top-down. <b>Import .emo…</b> loads any LV1 session back
 into the builder (patch, mic/stand/position and notes are not stored in .emo and start empty). The vendor PDF carries the input list
 (#, name, format, mic, stand, stage position for named inputs — no routing or racks) plus the stage plot as a landscape page.
-<b>Inventory IO</b> holds the show's SoundGrid I/O (MGB, IONIC 16 / 24, DSPRO SG1000 / SG4000; up to 16 devices). Their
+<b>Inventory IO</b> holds the show's SoundGrid I/O (MGB, Waves Classic, IONIC 16 / 24, DSPRO SG1000 / SG4000; up to 16 devices). Their
 order is the patch order, and the .emo session gets every device pre-assigned offline, with each preamp's Gain and 48V.
 <b>Export DiGiCo SD10</b> (beta) writes the inputs only — names, mono/stereo, port N on Rack 1 Mic N and the Insert A send on
 MADI N (the MADI port is renamed “LV1”), packed top-down, digital splits left out. It edits your own SD10 default session: the first
@@ -1067,13 +1067,15 @@ const FX_COUNT=8, MTX_COUNT=8;
    patch numbers the devices' patchable inputs (`ports`) in inventory order:
    the MGB's 128 MADI channels, or the mic/line preamps (AES inputs stay
    unpatched). Identity and channel counts are what LV1 writes for an offline
-   device; gain ranges from the spec sheets (1 dB steps, default 20). */
+   device; gain ranges from the spec sheets (1 dB steps, default 20). `name`
+   = LV1's default device name ("<name>-<n>"), written to device_name. */
 const IO_MODELS={
-  MGB:    {label:"MGB",          tag:"MGB",vendor:2, device:3,ins:128,outs:128,maxIn:128,maxOut:128,ports:128,chunk:null},
-  IONIC16:{label:"IONIC 16",     tag:"I16",vendor:21,device:1,ins:18, outs:18, maxIn:18, maxOut:18, ports:16, chunk:"liverack",lineOuts:12,gain:[-3,60]},
-  IONIC24:{label:"IONIC 24",     tag:"I24",vendor:21,device:8,ins:26, outs:26, maxIn:26, maxOut:26, ports:24, chunk:"liverack",lineOuts:18,gain:[-3,60]},
-  SG1000: {label:"DSPRO SG1000", tag:"SG1",vendor:19,device:1,ins:10, outs:10, maxIn:40, maxOut:28, ports:8,  chunk:"SG1000",gain:[-4,60]},
-  SG4000: {label:"DSPRO SG4000", tag:"SG4",vendor:19,device:0,ins:40, outs:28, maxIn:40, maxOut:28, ports:32, chunk:"SG4000",gain:[-4,60]},
+  MGB:    {label:"MGB",          tag:"MGB",name:"MGB",     vendor:2, device:3,ins:128,outs:128,maxIn:128,maxOut:128,ports:128,chunk:null},
+  CLASSIC:{label:"Waves Classic",tag:"CLS",name:"Classic", vendor:21,device:4,ins:18, outs:18, maxIn:18, maxOut:18, ports:16, chunk:"liverack",lineOuts:12,gain:[-3,60]},
+  IONIC16:{label:"IONIC 16",     tag:"I16",name:"IONIC 16",vendor:21,device:1,ins:18, outs:18, maxIn:18, maxOut:18, ports:16, chunk:"liverack",lineOuts:12,gain:[-3,60]},
+  IONIC24:{label:"IONIC 24",     tag:"I24",name:"IONIC 24",vendor:21,device:8,ins:26, outs:26, maxIn:26, maxOut:26, ports:24, chunk:"liverack",lineOuts:18,gain:[-3,60]},
+  SG1000: {label:"DSPRO SG1000", tag:"SG1",name:"SG1000",  vendor:19,device:1,ins:10, outs:10, maxIn:40, maxOut:28, ports:8,  chunk:"SG1000",gain:[-4,60]},
+  SG4000: {label:"DSPRO SG4000", tag:"SG4",name:"SG4000",  vendor:19,device:0,ins:40, outs:28, maxIn:40, maxOut:28, ports:32, chunk:"SG4000",gain:[-4,60]},
 };
 const IO_SLOTS=16, IO_GAIN_DEF=20;
 const ioDev=model=>{const m=IO_MODELS[model];return {model,gain:m.chunk?Array(m.ports).fill(IO_GAIN_DEF):[],phantom:m.chunk?Array(m.ports).fill(0):[]};};
@@ -4559,15 +4561,20 @@ async function emoExport(spec){
     // chunk on the slot's snapshot_iom rows (their triggers keep ref_count).
     erun(db,"DELETE FROM device");erun(db,"DELETE FROM device_iobox");erun(db,"DELETE FROM routes");
     erun(db,"UPDATE snapshot_iom SET iom_chunk_id = -1");
+    erun(db,"DELETE FROM device_name WHERE gender = 0 AND mac BETWEEN 1 AND ?",[IO_SLOTS]);
     let chunkId=eq(db,"SELECT MAX(COALESCE(MAX(id), 0), 0) FROM iom_chunks")[0][0]+1; // LV1's ids start at 1
     const portMap=[];
     const io=(Array.isArray(spec.io)?spec.io:[{model:"MGB"}]).filter(d=>d&&IO_MODELS[d.model]);
     if(io.length>IO_SLOTS)throw new Error(io.length+" I/O devices; LV1 has "+IO_SLOTS+" slots");
-    io.map(ioNorm).forEach((d,slot)=>{
+    io.map(ioNorm).forEach((d,slot,all)=>{
       const m=IO_MODELS[d.model],bank=Math.floor(slot/8),assign=slot%8;
       erun(db,"INSERT INTO device VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         [slot+1,0,slot+1,bank,assign,"","",m.ins,m.outs,m.maxIn,m.maxOut,"",0,0,0,0]);
       erun(db,"INSERT INTO device_iobox VALUES (?,?,?,?,?,?,?)",[slot+1,"",m.device,m.vendor,-1,0,0]);
+      // without a session name LV1 shows a stale one from its own table for the placeholder mac
+      const nSame=all.slice(0,slot+1).filter(x=>x.model===d.model).length;
+      const key=(slot+1).toString(16).padStart(12,"0").match(/../g).join(":")+"#0";
+      erun(db,"INSERT INTO device_name VALUES (?,?,?,?)",[slot+1,0,key,`${m.name}-${nSame}`]);
       if(m.chunk){
         erun(db,"INSERT INTO iom_chunks VALUES (?,?,?,?,?)",[chunkId,0,m.device,m.vendor,ioChunk(d.model,d.gain,d.phantom)]);
         erun(db,"UPDATE snapshot_iom SET iom_chunk_id = ? WHERE io_bank = ? AND io_slot = ?",[chunkId,bank,assign]);
@@ -4759,7 +4766,7 @@ async function emoImport(bytes,fileStemName){
     const mRack=rackOf(LR);
     // I/O inventory: the I/O boxes in slot order, known models only (older
     // firmware ids included), with gain / 48V from the current scene's chunk.
-    const IO_IDS={"2.3":"MGB","21.0":"IONIC16","21.1":"IONIC16","21.8":"IONIC24","19.1":"SG1000","19.3":"SG1000","19.0":"SG4000","19.2":"SG4000"};
+    const IO_IDS={"2.3":"MGB","21.4":"CLASSIC","21.0":"IONIC16","21.1":"IONIC16","21.8":"IONIC24","19.1":"SG1000","19.3":"SG1000","19.0":"SG4000","19.2":"SG4000"};
     const io=[];
     for(const [bank,slot,vid,did] of eq(db,"SELECT d.io_bank, d.assign, i.vendor_id, i.device_id FROM device d "+
         "JOIN device_iobox i ON i.id = d.id WHERE d.device_gender = 0 AND d.io_bank >= 0 ORDER BY d.io_bank, d.assign")){
