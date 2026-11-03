@@ -542,6 +542,18 @@ td input::placeholder{color:var(--dim);opacity:.55;font-style:italic;}
 .stbtn:disabled{opacity:.55;cursor:default;}
 /* Digital split rows (operating-only copies of an input) */
 .dstag{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.06em;padding:1px 4px;border-radius:4px;background:var(--brand);color:#fff;vertical-align:1px;margin-right:3px;}
+/* I/O inventory */
+.iotag{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.04em;padding:1px 4px;border-radius:4px;border:1px solid var(--line);background:var(--panel2);color:var(--dim);vertical-align:1px;margin-right:3px;}
+.ioadd{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px;}
+.iodevs{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;align-items:start;}
+.iodev{border:1px solid var(--line);border-radius:10px;background:var(--panel);box-shadow:var(--shadow);overflow:hidden;}
+.iodev header{display:flex;align-items:center;gap:6px;padding:8px 10px;background:var(--panel2);border-bottom:1px solid var(--line);}
+.iodev header b{flex:1;font-size:13px;}
+.iodev table{min-width:0;}
+.iodev td input[type=number]{min-width:0;width:68px;}
+.iodev td input[type=checkbox],.iodev th input[type=checkbox]{width:auto;min-width:0;margin:0;}
+.iodev .chn{font-size:12px;color:var(--dim);}
+.iodev .iomadi{padding:10px 12px;font-size:12px;color:var(--dim);}
 tr[data-ds] td.dscell{white-space:nowrap;font-size:12px;color:var(--dim);}
 tr[data-ds] td.dscell select{margin:0 6px;max-width:170px;}
 tr[data-ds] td.dscell .dsnote{font-size:11px;}
@@ -671,6 +683,7 @@ td .rgrip{color:var(--dim);font-size:11px;letter-spacing:-2px;margin-right:5px;}
 section[data-tab]{display:none;}
 body[data-tab="mixer"] section[data-tab="mixer"],
 body[data-tab="in"] section[data-tab="in"],
+body[data-tab="io"] section[data-tab="io"],
 body[data-tab="out"] section[data-tab="out"],
 body[data-tab="link"] section[data-tab="link"],
 body[data-tab="notes"] section[data-tab="notes"],
@@ -825,6 +838,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
   <button data-tab="mixer">MIXER</button>
   <button data-tab="stage" class="on">STAGE</button>
   <button data-tab="in">INPUTS</button>
+  <button data-tab="io">INVENTORY IO</button>
   <button data-tab="out">OUTPUTS</button>
   <button data-tab="link">LINKS</button>
   <button data-tab="layers">LAYERS</button>
@@ -839,11 +853,18 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 
 <section style="--seccolor:var(--ch)" data-tab="in">
   <div class="sechead"><h2>Inputs</h2><span class="count" id="chCount"></span>
-    <span class="hint">MGB ports patch to named inputs top-down (stereo takes two). <b>DS</b> on a row adds a digital split — the same input on another strip, off the master, for monitors (.emo only: never on the PDF, sheet or stage). Click a row's # to select (Shift = range, Ctrl = add/remove, Esc = clear) · drag the # to move rows.</span></div>
+    <span class="hint">The I/O inputs (INVENTORY IO tab, in device order) patch to named inputs top-down (stereo takes two). <b>DS</b> on a row adds a digital split — the same input on another strip, off the master, for monitors (.emo only: never on the PDF, sheet or stage). Click a row's # to select (Shift = range, Ctrl = add/remove, Esc = clear) · drag the # to move rows.</span></div>
   <div class="tblwrap"><table id="chTable">
     <thead><tr><th>#</th><th>Patch</th><th>Name</th><th>M/ST</th><th>Color</th><th>Group</th><th>Link</th><th>Mute</th><th>Matrix</th><th>Mic</th><th>Stand</th><th>Stage position</th><th>Notes</th><th>Rack</th><th></th><th class="iocol"></th><th class="iocol"></th></tr></thead>
     <tbody></tbody>
   </table></div>
+</section>
+
+<section style="--seccolor:var(--ch)" data-tab="io">
+  <div class="sechead"><h2>Inventory IO</h2><span class="count" id="ioCount"></span>
+    <span class="hint">The show's SoundGrid I/O devices, in order (LV1 slots A1–A8, then B1–B8). The Inputs patch runs through their inputs in this order: an MGB gives 128 MADI inputs; an IONIC or DSPRO gives its mic/line preamps, each with Gain and 48V (its AES inputs are not patched). All of it goes into the .emo session.</span></div>
+  <div class="ioadd" id="ioAdd"></div>
+  <div class="iodevs" id="ioDevs"></div>
 </section>
 
 <section style="--seccolor:var(--grp)" data-tab="out">
@@ -997,6 +1018,8 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 (the show name becomes the file name) — only named strips are built, packed top-down. <b>Import .emo…</b> loads any LV1 session back
 into the builder (patch, mic/stand/position and notes are not stored in .emo and start empty). The vendor PDF carries the input list
 (#, name, format, mic, stand, stage position for named inputs — no routing or racks) plus the stage plot as a landscape page.
+<b>Inventory IO</b> holds the show's SoundGrid I/O (MGB, IONIC 16 / 24, DSPRO SG1000 / SG4000; up to 16 devices). Their
+order is the patch order, and the .emo session gets every device pre-assigned offline, with each preamp's Gain and 48V.
 <b>Export DiGiCo SD10</b> (beta) writes the inputs only — names, mono/stereo, port N on Rack 1 Mic N and the Insert A send on
 MADI N (the MADI port is renamed “LV1”), packed top-down, digital splits left out. It edits your own SD10 default session: the first
 export asks for it (SD10 offline editor: new session, Save As) and keeps it in this browser; Shift-click to pick another. Open the
@@ -1038,7 +1061,45 @@ const CONFIGS=[
   {id:"80-16", ch:80, grp:16, mon:16, mains:3, label:"80 INPUT CHANNELS", sub:"16 GRP / 24 AUX / 3 MAIN / 8 MTX / CUE"},
   {id:"80-32", ch:80, grp:8,  mon:24, mains:3, label:"80 INPUT CHANNELS", sub:"8 GRP / 32 AUX / 3 MAIN / 8 MTX / CUE"},
 ];
-const FX_COUNT=8, MTX_COUNT=8, MGB_PORTS=128;
+const FX_COUNT=8, MTX_COUNT=8;
+/* SoundGrid I/O devices of the INVENTORY IO tab (mirrors IO_MODELS in
+   src/make_lv1_session.py — keep in sync). LV1 has 16 device slots; the
+   patch numbers the devices' patchable inputs (`ports`) in inventory order:
+   the MGB's 128 MADI channels, or the mic/line preamps (AES inputs stay
+   unpatched). Identity and channel counts are what LV1 writes for an offline
+   device; gain ranges from the spec sheets (1 dB steps, default 20). */
+const IO_MODELS={
+  MGB:    {label:"MGB",          tag:"MGB",vendor:2, device:3,ins:128,outs:128,maxIn:128,maxOut:128,ports:128,chunk:null},
+  IONIC16:{label:"IONIC 16",     tag:"I16",vendor:21,device:1,ins:18, outs:18, maxIn:18, maxOut:18, ports:16, chunk:"liverack",lineOuts:12,gain:[-3,60]},
+  IONIC24:{label:"IONIC 24",     tag:"I24",vendor:21,device:8,ins:26, outs:26, maxIn:26, maxOut:26, ports:24, chunk:"liverack",lineOuts:18,gain:[-3,60]},
+  SG1000: {label:"DSPRO SG1000", tag:"SG1",vendor:19,device:1,ins:10, outs:10, maxIn:40, maxOut:28, ports:8,  chunk:"SG1000",gain:[-4,60]},
+  SG4000: {label:"DSPRO SG4000", tag:"SG4",vendor:19,device:0,ins:40, outs:28, maxIn:40, maxOut:28, ports:32, chunk:"SG4000",gain:[-4,60]},
+};
+const IO_SLOTS=16, IO_GAIN_DEF=20;
+const ioDev=model=>{const m=IO_MODELS[model];return {model,gain:m.chunk?Array(m.ports).fill(IO_GAIN_DEF):[],phantom:m.chunk?Array(m.ports).fill(0):[]};};
+function ioNorm(d){ // a stored device -> {model, gain[], phantom[]} sized and clamped to its model
+  const m=IO_MODELS[d.model],o=ioDev(d.model);
+  if(m.chunk)for(let c=0;c<m.ports;c++){
+    const g=Math.round(+(d.gain||[])[c]);if(Number.isFinite(g))o.gain[c]=Math.min(m.gain[1],Math.max(m.gain[0],g));
+    o.phantom[c]=(d.phantom||[])[c]?1:0;}
+  return o;
+}
+function ioPortMap(){ // 0-based global port -> [device index, device input]
+  const out=[];state.io.forEach((d,k)=>{for(let c=0;c<IO_MODELS[d.model].ports;c++)out.push([k,c]);});return out;
+}
+const ioTotal=()=>state.io.reduce((n,d)=>n+IO_MODELS[d.model].ports,0);
+function ioTag(k){ // device label for the patch column: "I24", or "I24·2" when the model repeats
+  const d=state.io[k],m=IO_MODELS[d.model],same=state.io.filter(x=>x.model===d.model);
+  return m.tag+(same.length>1?"·"+(state.io.slice(0,k+1).filter(x=>x.model===d.model).length):"");
+}
+function portLabel(pp){ // 1-based global ports -> "I24 3–4" (plain numbers with a lone MGB)
+  if(state.io.length===1&&state.io[0].model==="MGB")return pp.join("–");
+  const map=ioPortMap(),at=pp.map(p=>map[p-1]);
+  if(at.some(a=>!a))return pp.join("–")+" ⚠";
+  const same=at.every(a=>a[0]===at[0][0]);
+  return same?`<span class="iotag">${ioTag(at[0][0])}</span>${at.map(a=>a[1]+1).join("–")}`
+    :at.map(a=>`<span class="iotag">${ioTag(a[0])}</span>${a[1]+1}`).join(" ");
+}
 const LAYER_COUNT=8, LAYER_SLOTS=16; // LV1 custom layers (main Overview surface)
 const LAYER_KINDS=["ch","grp","fx","aux","mtx","main","link"];
 const cfg=()=>CONFIGS.find(c=>c.id===state.configId)||CONFIGS[3];
@@ -1106,7 +1167,7 @@ document.addEventListener("keydown",e=>{ // Esc clears every list selection
 function defaultShow(){
   // Start empty: pick the mixer config, name strips, route, export.
   return {show:{name:"",date:"",venue:"",sheetUrl:"",fohContact:"",monContact:"",pmContact:"",fohDesk:"",monDesk:"",pa:"",notes:""},configId:"80-16",
-          channels:[],groups:[],fx:[],auxes:[],matrixes:[],master:{rack:null},
+          channels:[],groups:[],fx:[],auxes:[],matrixes:[],master:{rack:null},io:[ioDev("MGB")],
           stage:{items:[],custom:{},widthM:12}};
 }
 function applyConfig(){
@@ -1114,6 +1175,8 @@ function applyConfig(){
   const fit=(list,n,def)=>{while(list.length<n)list.push(def());list.length=n;};
   fit(state.channels,c.ch,defCh); fit(state.groups,c.grp,defGrp);
   fit(state.fx,FX_COUNT,defFx); fit(state.auxes,c.mon,defAux); fit(state.matrixes,MTX_COUNT,defMtx);
+  // I/O inventory: a show from before it had one MGB.
+  state.io=(Array.isArray(state.io)?state.io:[{model:"MGB"}]).filter(d=>d&&IO_MODELS[d.model]).slice(0,IO_SLOTS).map(ioNorm);
   if(!Array.isArray(state.links))state.links=[];
   while(state.links.length<LINK_COUNT)state.links.push("");state.links.length=LINK_COUNT;
   for(const ch of state.channels)if(ch.link==="None")ch.link="";
@@ -1181,7 +1244,7 @@ function ports(){ // 1-based port list per NAMED channel (unnamed strips get nul
     out[i]=s>=0&&out[s]?[...out[s]]:null;}});
   return out;
 }
-/* Digital split: a second input strip on the SAME MGB input as its source
+/* Digital split: a second input strip on the SAME physical input as its source
    (e.g. the lead vocal again, for monitors — independent processing, low
    latency). Operating-only: never on the PDF, the Google Sheet or the stage;
    it exists for the .emo session. */
@@ -1189,7 +1252,7 @@ function splitSource(ch){ // row index of a split's source (a named, non-split c
   return state.channels.findIndex(c=>!c.ds&&c.name.trim()&&c.name.trim()===ch.ds);
 }
 const portsUsed=pts=>Math.max(0,...pts.filter((p,i)=>p&&!state.channels[i].ds).flat());
-const patchHtml=(pts,i)=>(state.channels[i].ds&&state.channels[i].name.trim()?'<span class="dstag">DS</span> ':"")+(pts[i]?pts[i].join("–"):"—");
+const patchHtml=(pts,i)=>(state.channels[i].ds&&state.channels[i].name.trim()?'<span class="dstag">DS</span> ':"")+(pts[i]?portLabel(pts[i]):"—");
 const named=list=>list.filter(it=>it.name.trim());
 function setStatus(msg,err){const el=$("#status");el.textContent=msg||"";el.classList.toggle("err",!!err);
   if(msg){clearTimeout(setStatus._t);setStatus._t=setTimeout(()=>{el.textContent="";},6000);}}
@@ -1226,7 +1289,7 @@ function render(){
   $("#sheetUrl").value=state.show.sheetUrl||"";
   renderConfig(); renderChannels(); renderGroups(); renderFx();
   renderAux(); renderSimple("mtx",state.matrixes,"#mtxTable");
-  renderMaster(); renderLinks(); renderLayers(); renderWarnings();
+  renderMaster(); renderLinks(); renderLayers(); renderWarnings(); renderIO();
   renderStage();
   $("#posList").innerHTML=allPositions().map(p=>`<option value="${esc(p)}">`).join("");
   if(typeof renderShows==="function")renderShows();
@@ -1398,13 +1461,13 @@ function renderChannels(){
       <td>${s("matrix",ch.matrix,mtxOpts,"None")}</td>
       ${ioCells}
       ${rackCell("ch",i,ch.rack)}
-      ${opsCell("ch",i,!isDs&&ch.name.trim()?`<button class="small dsbtn" data-k="ch" data-i="${i}" data-f="split" title="Digital split: add a copy of this input on the next free strip — same MGB input, its own processing, not routed to master (for monitors)">DS</button>`:"")}${ioOpsCell("ch",i)}</tr>`+rackRow("ch",i,ch.rack,17,ch.stereo);
+      ${opsCell("ch",i,!isDs&&ch.name.trim()?`<button class="small dsbtn" data-k="ch" data-i="${i}" data-f="split" title="Digital split: add a copy of this input on the next free strip — same physical input, its own processing, not routed to master (for monitors)">DS</button>`:"")}${ioOpsCell("ch",i)}</tr>`+rackRow("ch",i,ch.rack,17,ch.stereo);
   }).join("");
   $("#chCount").textContent=chCountText(pts);
 }
 function chCountText(pts){
   const n=named(state.channels),ds=n.filter(c=>c.ds).length;
-  return `${n.length} named${ds?` (${ds} DS)`:""} / ${cfg().ch} strips · ${portsUsed(pts)}/${MGB_PORTS} ports`;
+  return `${n.length} named${ds?` (${ds} DS)`:""} / ${cfg().ch} strips · ${portsUsed(pts)}/${ioTotal()} ports`;
 }
 function renderGroups(){
   const tb=$("#grpTable tbody"); const dups=dupNames(state.groups);
@@ -1627,7 +1690,7 @@ function emptyRow(colspan,hint){
 function renderWarnings(){
   const w=[]; const pts=ports();
   const used=portsUsed(pts);
-  if(used>MGB_PORTS)w.push(`MGB has ${MGB_PORTS} inputs — the patch needs ${used}.`);
+  if(used>ioTotal())w.push(`The I/O inventory has ${ioTotal()} inputs — the patch needs ${used}. Add a device on the INVENTORY IO tab.`);
   {
     const gN=new Set(state.groups.map(g=>g.name.trim()).filter(Boolean));
     const mN=new Set(state.matrixes.map(m=>m.name.trim()).filter(Boolean));
@@ -1818,12 +1881,66 @@ document.addEventListener("change",e=>{
 function refreshNameHighlights(k){const list=listFor[k]();const d=dupNames(list);
   list.forEach((it,i)=>{const el=document.getElementById(`${k}-${i}-name`);
     if(el)el.classList.toggle("dup",!!it.name.trim()&&d.has(it.name.trim().toUpperCase()));});}
-function refreshPorts(){ // live-update the MGB column + count without a full re-render
+function refreshPorts(){ // live-update the patch column + count without a full re-render
   const pts=ports();
   const rows=$("#chTable tbody").querySelectorAll("tr:not(.rackrow)");
   rows.forEach((tr,i)=>{const td=tr.children[1];if(td)td.innerHTML=patchHtml(pts,i);});
   $("#chCount").textContent=chCountText(pts);
+  renderIO();
 }
+
+/* ---------- INVENTORY IO tab ---------- */
+function renderIO(){
+  const pts=ports(),byPort={}; // 1-based global port -> the channel patched there
+  state.channels.forEach((ch,i)=>{if(pts[i]&&!ch.ds)pts[i].forEach((p,leg)=>{
+    byPort[p]=ch.name.trim()+(pts[i].length>1?(leg?" R":" L"):"");});});
+  const full=state.io.length>=IO_SLOTS;
+  $("#ioAdd").innerHTML=Object.entries(IO_MODELS).map(([k,m])=>
+    `<button class="small" data-ioadd="${k}"${full?" disabled":""}>+ ${esc(m.label)}</button>`).join("")+
+    (full?`<span class="hint">All ${IO_SLOTS} LV1 device slots are in use.</span>`:"");
+  $("#ioCount").textContent=`${state.io.length} device${state.io.length===1?"":"s"} · ${ioTotal()} inputs`;
+  let first=1;
+  $("#ioDevs").innerHTML=state.io.length?state.io.map((d,k)=>{
+    const m=IO_MODELS[d.model],from=first;first+=m.ports;
+    const head=`<header><span class="iotag">${ioTag(k)}</span><b>${esc(m.label)}</b>
+      <span class="chn">slot ${k<8?"A":"B"}${k%8+1} · inputs ${from}–${from+m.ports-1}</span>
+      <button class="small" data-io="up" data-dev="${k}"${k?"":" disabled"} title="Move up (earlier in the patch)">↑</button>
+      <button class="small" data-io="down" data-dev="${k}"${k<state.io.length-1?"":" disabled"} title="Move down (later in the patch)">↓</button>
+      <button class="small" data-io="del" data-dev="${k}" title="Remove this device">✕</button></header>`;
+    if(!m.chunk){
+      let used=0;for(let p=from;p<first;p++)if(byPort[p])used++;
+      return `<div class="iodev">${head}<div class="iomadi">${m.ports} MADI inputs · ${used} patched. No preamps here — gain and 48V live on the device feeding the MADI.</div></div>`;
+    }
+    const [lo,hi]=m.gain,allOn=d.phantom.every(Boolean);
+    const rows=d.gain.map((g,c)=>`<tr><td class="num">${c+1}</td><td class="chn">${esc(byPort[from+c]||"")}</td>
+      <td><input type="number" min="${lo}" max="${hi}" step="1" value="${g}" data-iog="${k}:${c}" title="Gain, dB (${lo} to ${hi})"></td>
+      <td><input type="checkbox" data-io48="${k}:${c}"${d.phantom[c]?" checked":""} title="48V phantom"></td></tr>`).join("");
+    return `<div class="iodev">${head}<table><thead><tr><th>In</th><th>Channel</th><th>Gain dB</th>
+      <th><label title="48V on every input of this device"><input type="checkbox" data-io48all="${k}"${allOn?" checked":""}> 48V</label></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+  }).join(""):`<div class="hint">No I/O devices: nothing is patched. Add one above.</div>`;
+}
+$("#ioAdd").addEventListener("click",e=>{
+  const b=e.target.closest("[data-ioadd]");if(!b||state.io.length>=IO_SLOTS)return;
+  state.io.push(ioDev(b.dataset.ioadd));render();
+  setStatus(`${IO_MODELS[b.dataset.ioadd].label} added in slot ${state.io.length<=8?"A":"B"}${(state.io.length-1)%8+1}.`);
+});
+$("#ioDevs").addEventListener("click",e=>{
+  const b=e.target.closest("[data-io]");if(!b)return;
+  const k=+b.dataset.dev,io=state.io;
+  if(b.dataset.io==="del"){const [d]=io.splice(k,1);setStatus(`${IO_MODELS[d.model].label} removed — the patch moved up.`);}
+  else{const j=b.dataset.io==="up"?k-1:k+1;if(j<0||j>=io.length)return;[io[k],io[j]]=[io[j],io[k]];}
+  render();
+});
+$("#ioDevs").addEventListener("change",e=>{
+  const t=e.target,[k,c]=(t.dataset.iog||t.dataset.io48||"").split(":").map(Number);
+  if(t.dataset.iog){const [lo,hi]=IO_MODELS[state.io[k].model].gain,v=Math.round(+t.value);
+    state.io[k].gain[c]=Number.isFinite(v)?Math.min(hi,Math.max(lo,v)):IO_GAIN_DEF;t.value=state.io[k].gain[c];}
+  else if(t.dataset.io48){state.io[k].phantom[c]=t.checked?1:0;
+    const all=t.closest(".iodev").querySelector("[data-io48all]");if(all)all.checked=state.io[k].phantom.every(Boolean);}
+  else if(t.dataset.io48all){const d=state.io[+t.dataset.io48all];d.phantom.fill(t.checked?1:0);
+    t.closest(".iodev").querySelectorAll("[data-io48]").forEach(x=>{x.checked=t.checked;});}
+});
 function focusBack(k,i,f){const el=document.getElementById(`${k}-${i}-${f}`);if(el){el.focus();const v=el.value;el.value="";el.value=v;}}
 document.addEventListener("click",e=>{
   // Row selection: click a row (its # cell or any non-field space) selects
@@ -2165,9 +2282,11 @@ function buildSpec(){
   const rackOut=r=>isStock(r)?undefined:{slots:[...r.slots]};
   const withRack=(o,r)=>{const rr=rackOut(r);if(rr)o.rack=rr;return o;};
   const spec={
-    format:"lv1-input-list",version:6,
+    format:"lv1-input-list",version:7,
     show:{...state.show},
     config:{id:c.id,inputs:c.ch,groups:c.grp,aux:c.mon,fx:FX_COUNT,matrix:MTX_COUNT,mains:c.mains},
+    // v7: the I/O inventory in slot order; channel ports number its inputs in that order.
+    io:state.io.map(d=>IO_MODELS[d.model].chunk?{model:d.model,gain:[...d.gain],phantom:[...d.phantom]}:{model:d.model}),
     channels:state.channels.map((ch,i)=>ch.name.trim()?withRack({
       name:ch.name.trim(),stereo:ch.stereo,ports:pts[i]||[],
       group:ch.group&&ch.group!==NO_MAIN?ch.group:null,
@@ -2244,6 +2363,7 @@ function loadSpec(spec){
     layers:(spec.layers||[]).slice(0,LAYER_COUNT).map(l=>({name:String((l&&l.name)||""),
       strips:((l&&l.strips)||[]).slice(0,LAYER_SLOTS).map(s=>s&&LAYER_KINDS.includes(s.type)?[s.type,s.type==="main"?"":String(s.name||"")]:null)})),
     master:{rack:rackIn(spec.master?.rack)},
+    io:Array.isArray(spec.io)?spec.io:[{model:"MGB"}], // normalized by applyConfig()
     stage:{
       items:((spec.stage&&spec.stage.items)||[]).map(it=>{
         const o={img:String(it.img||""),x:+it.x||0.5,y:+it.y||0.5,rot:+it.rot||0,
@@ -2628,7 +2748,7 @@ function renderItemIO(it){
   const rows=[];
   for(const c of chs.values()){
     const x=state.channels.indexOf(c);
-    rows.push(`<span class="iorow">${pts[x]?pts[x].join("–"):"—"}<input data-iok="ch" data-ioi="${x}" value="${esc(c.name)}" spellcheck="false"></span>`);
+    rows.push(`<span class="iorow">${pts[x]?portLabel(pts[x]):"—"}<input data-iok="ch" data-ioi="${x}" value="${esc(c.name)}" spellcheck="false"></span>`);
   }
   for(const a of axs.values()){
     const x=state.auxes.indexOf(a);
@@ -4160,8 +4280,21 @@ const elast=db=>eq(db,"SELECT last_insert_rowid()")[0][0];
 
 /* ---- export: spec (buildSpec() JSON, v4) -> .emo bytes ---- */
 const EMO_RACK_VARIANTS=[[4,"CFLM","CFLS"],[1,"CDYM","CDYS"],[2,"MQ4M","MQ4S"]];
-const EMO_MGB_DEVICE=[1,0,1,0,0,"","",128,128,128,128,"",0,0,0,0];
-const EMO_MGB_IOBOX=[1,"",3,2,-1,0,0];
+/* The iom_chunks text LV1 stores for a preamp device (mirrors io_chunk() in
+   make_lv1_session.py; byte-checked against LV1-written chunks). */
+function ioChunk(model,gain,phantom){
+  const m=IO_MODELS[model],n=m.ports,L=["common:",`  vendor_id: ${m.vendor}`,`  device_id: ${m.device}`,
+    "  preferred_major_clock_source: 3","  preferred_minor_clock_source: 1","  sample_rate: 48000"];
+  const put=(name,vals,first=0)=>{L.push(`  ${name}:`);vals.forEach((v,k)=>L.push(`    ${first+k}: ${v}`));};
+  if(m.chunk==="liverack"){
+    L.push("liverack:","  clip_indication_threshold: 3");
+    put("line_in_phantom_map",phantom);put("line_in_line_map",Array(n).fill(0));
+    put("line_out_headroom_map",Array(m.lineOuts).fill(1),37);put("control_gain_map",gain);
+    put("thd_map",Array(n).fill(1));put("impedance_map",Array(n).fill(1));
+    L.push("  BIT:","    INPUTS: [line_in_line_map, thd_map, impedance_map]","    OUTPUTS: []");
+  }else{L.push(m.chunk+":","  clip_level: 3");put("mic_phantom_map",phantom);put("mic_gain_map",gain);}
+  return L.join("\n");
+}
 
 function emoPresetFindOrInsert(db,text){
   const digest=sha3_256(text);
@@ -4421,14 +4554,32 @@ async function emoExport(spec){
       "dst_channel_index, dst_control_id, dst_asgn_type, status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
       [x+1,...r]));
 
-    // 6. MGB inventory + input patch
+    // 6. I/O inventory + input patch (mirrors _write_io()): one offline
+    // device per slot (placeholder mac = slot + 1, as LV1 does), the preamp
+    // chunk on the slot's snapshot_iom rows (their triggers keep ref_count).
     erun(db,"DELETE FROM device");erun(db,"DELETE FROM device_iobox");erun(db,"DELETE FROM routes");
-    erun(db,"INSERT INTO device VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",EMO_MGB_DEVICE);
-    erun(db,"INSERT INTO device_iobox VALUES (?,?,?,?,?,?,?)",EMO_MGB_IOBOX);
+    erun(db,"UPDATE snapshot_iom SET iom_chunk_id = -1");
+    let chunkId=eq(db,"SELECT MAX(COALESCE(MAX(id), 0), 0) FROM iom_chunks")[0][0]+1; // LV1's ids start at 1
+    const portMap=[];
+    const io=(Array.isArray(spec.io)?spec.io:[{model:"MGB"}]).filter(d=>d&&IO_MODELS[d.model]);
+    if(io.length>IO_SLOTS)throw new Error(io.length+" I/O devices; LV1 has "+IO_SLOTS+" slots");
+    io.map(ioNorm).forEach((d,slot)=>{
+      const m=IO_MODELS[d.model],bank=Math.floor(slot/8),assign=slot%8;
+      erun(db,"INSERT INTO device VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        [slot+1,0,slot+1,bank,assign,"","",m.ins,m.outs,m.maxIn,m.maxOut,"",0,0,0,0]);
+      erun(db,"INSERT INTO device_iobox VALUES (?,?,?,?,?,?,?)",[slot+1,"",m.device,m.vendor,-1,0,0]);
+      if(m.chunk){
+        erun(db,"INSERT INTO iom_chunks VALUES (?,?,?,?,?)",[chunkId,0,m.device,m.vendor,ioChunk(d.model,d.gain,d.phantom)]);
+        erun(db,"UPDATE snapshot_iom SET iom_chunk_id = ? WHERE io_bank = ? AND io_slot = ?",[chunkId,bank,assign]);
+        chunkId++;
+      }
+      for(let c=0;c<m.ports;c++)portMap.push([slot,c]);
+    });
     let nRoutes=0;
     chans.forEach((c,i)=>c.ports.forEach((port,leg)=>{
+      if(port>=portMap.length)return; // past the inventory: left unpatched (warned in the builder)
       erun(db,"INSERT INTO routes VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        [++nRoutes,10,0,-1,-1,port,-1,-1,0,i,0,0,leg,-1,0,0]);
+        [++nRoutes,10,portMap[port][0],-1,-1,portMap[port][1],-1,-1,0,i,0,0,leg,-1,0,0]);
     }));
 
     // 7. preset ref_count bookkeeping
@@ -4606,8 +4757,23 @@ async function emoImport(bytes,fileStemName){
       return {name:/^Page-\d+$/.test(nm||"")?"":(nm||""),strips};
     });
     const mRack=rackOf(LR);
+    // I/O inventory: the I/O boxes in slot order, known models only (older
+    // firmware ids included), with gain / 48V from the current scene's chunk.
+    const IO_IDS={"2.3":"MGB","21.0":"IONIC16","21.1":"IONIC16","21.8":"IONIC24","19.1":"SG1000","19.3":"SG1000","19.0":"SG4000","19.2":"SG4000"};
+    const io=[];
+    for(const [bank,slot,vid,did] of eq(db,"SELECT d.io_bank, d.assign, i.vendor_id, i.device_id FROM device d "+
+        "JOIN device_iobox i ON i.id = d.id WHERE d.device_gender = 0 AND d.io_bank >= 0 ORDER BY d.io_bank, d.assign")){
+      const model=IO_IDS[vid+"."+did];if(!model)continue;
+      const txt=(eq(db,"SELECT k.iom_chunk FROM snapshot_iom s JOIN iom_chunks k ON k.id = s.iom_chunk_id "+
+        "WHERE s.snapshot_id = -1 AND s.io_bank = ? AND s.io_slot = ?",[bank,slot])[0]||[""])[0]||"";
+      const map=key=>{const m=new RegExp("\\n  "+key+":\\n((?:    \\d+: -?\\d+(?:\\n|$))+)").exec(txt);const o=[];
+        if(m)for(const [,k,v] of m[1].matchAll(/(\d+): (-?\d+)/g))o[+k]=+v;return o;};
+      const lr=IO_MODELS[model].chunk==="liverack";
+      io.push({model,gain:map(lr?"control_gain_map":"mic_gain_map"),phantom:map(lr?"line_in_phantom_map":"mic_phantom_map")});
+    }
     return {
-      format:"lv1-input-list",version:6,
+      format:"lv1-input-list",version:7,
+      io:io.slice(0,IO_SLOTS),
       ...(linkTable.some(Boolean)?{links:linkTable}:{}),
       config:{id:cfg.id,inputs:cfg.ch,groups:cfg.grp,aux:cfg.mon,fx:FX_COUNT,matrix:MTX_COUNT,mains:cfg.mains},
       show:{name:fileStemName||"Imported show",date:"",venue:""},
