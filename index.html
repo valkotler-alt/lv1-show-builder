@@ -606,6 +606,10 @@ td input::placeholder{color:var(--dim);opacity:.55;font-style:italic;}
 .pw-kn .knob{width:calc(min(26px, 100% - 4px));height:auto;aspect-ratio:1;}
 .pw-gv{font-size:10px;font-weight:700;line-height:1;color:#e7e7e7;}
 .pw-hc .p48{min-width:0;width:calc(100% - 4px);padding:1px 0;font-size:9px;}
+.pw-vn{align-items:flex-end;padding-bottom:4px;}
+.pw-vn span{writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-height:100%;}
+.pw-devs .pw-sbtn{width:92px;height:54px;min-width:0;background:#22b5d4;color:#08232b;border:1px solid #38C9FF;font-weight:700;font-size:12.5px;line-height:1.15;white-space:pre-line;border-radius:3px;}
+.xsn{display:inline-block;font-size:10px;font-weight:700;padding:1px 4px;border-radius:4px;background:var(--brand);color:#fff;vertical-align:1px;cursor:help;}
 .pw-rr{position:absolute;left:0;display:flex;}
 .pw-rc{box-sizing:border-box;flex:none;background:#474747;border-right:1px solid #111;border-bottom:1px solid #111;font-weight:700;display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
 .pw-rc.l{justify-content:flex-start;padding-left:6px;}
@@ -932,7 +936,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 
 <section style="--seccolor:var(--ch)" data-tab="io">
   <div class="sechead"><h2>Patch</h2><span class="count" id="ioCount"></span>
-    <span class="hint">The show's SoundGrid I/O devices, in LV1 slot order (A1–A8, then B1–B8): add them below, drag a card's ⋮⋮ to reorder. The patch window works like LV1's: pick a view (INPUT / OUTPUT / DEVICE TO DEVICE), the devices to show (top strip) and click or drag across cells (drag straight or diagonally to patch a run). New inputs patch themselves top-down (Auto) through the Mic/Line and MADI inputs until you patch them here. In the Input views each preamp has its Gain knob (drag up/down, wheel, arrow keys; double-click = +20 dB) and 48V button above its column. All of it goes into the .emo session.</span></div>
+    <span class="hint">The show's SoundGrid I/O devices, in LV1 slot order (A1–A8, then B1–B8): add them below, drag a card's ⋮⋮ to reorder. The patch window works like LV1's: pick a view (INPUT / OUTPUT / INTERNAL / DEVICE TO DEVICE), the devices to show (top strip) and click or drag across cells (drag straight or diagonally to patch a run). INTERNAL assigns strips to any number of groups, Main, matrixes, links and mute groups (LV1's rules: grey cells are not possible); the INPUTS / OUTPUTS menus show the first, a +N badge the rest. New inputs patch themselves top-down (Auto) through the Mic/Line and MADI inputs until you patch them here. In the Input views each preamp has its Gain knob (drag up/down, wheel, arrow keys; double-click = +20 dB) and 48V button above its column. All of it goes into the .emo session.</span></div>
   <div class="ioadd" id="ioAdd"></div>
   <div class="iodevs" id="ioDevs"></div>
   <div class="pw" id="pw"></div>
@@ -1315,6 +1319,73 @@ function patchRoutes(){ // the resolved patch as LV1 route rows (spec v9 `routes
   const d2d=state.d2d.filter(x=>pinOk(x.i)&&pinOk(x.o,true)).map(x=>[devK(x.i.d),x.i.c,devK(x.o.d),x.o.c]);
   return {in:inR,out:outR,d2d,ipf};
 }
+/* ---------- internal routing (PATCH › INTERNAL: Busses & Groups, multi-assign) ----------
+   A strip's internal assignments are a set of keys: "g:<group>", "LR", "C",
+   "M", "x:<matrix>", "l:<link label>", "u:<mute group 1-8>". Its first
+   group-or-LR / matrix / link / mute stay in the strip's own fields (group or
+   dest, matrix, link, mute: the menus of the INPUTS / OUTPUTS tabs);
+   everything beyond them lives in strip.xs = {to: [group names, "LR", "C",
+   "M"], mtx: [], link: [], mute: []}. Main / Center / Mono / Cue keep all of
+   theirs in xs. */
+const ASG_BUS=new Set(["main","center","mono","cue"]);
+function asgOf(kind,o){
+  const S=new Set(),xs=o.xs||{};
+  if(kind==="ch"){if(o.group!==NO_MAIN)S.add(o.group?"g:"+o.group:"LR");if(o.matrix)S.add("x:"+o.matrix);}
+  else if(kind==="grp"||kind==="fx"){if(o.dest!==NO_MAIN)S.add(o.dest&&o.dest!=="MASTER"?"g:"+o.dest:"LR");
+    if(kind==="grp")(o.matrix||[]).forEach(m=>S.add("x:"+m));}
+  if(!ASG_BUS.has(kind)){if(o.link)S.add("l:"+o.link);if(o.mute)S.add("u:"+o.mute);}
+  (xs.to||[]).forEach(t=>S.add(t==="LR"||t==="C"||t==="M"?t:"g:"+t));
+  (xs.mtx||[]).forEach(m=>S.add("x:"+m));(xs.link||[]).forEach(l=>S.add("l:"+l));(xs.mute||[]).forEach(u=>S.add("u:"+u));
+  return S;
+}
+function asgOrder(k){ // the Internal view's column order
+  const gi=named(state.groups).findIndex(g=>"g:"+g.name.trim()===k),mi=named(state.matrixes).findIndex(m=>"x:"+m.name.trim()===k);
+  if(gi>=0)return gi;if(k==="LR")return 1000;if(k==="C")return 1001;if(k==="M")return 1002;
+  if(mi>=0)return 2000+mi;if(k.startsWith("l:"))return 3000+Math.max(0,linkLabels().indexOf(k.slice(2)));
+  if(k.startsWith("u:"))return 4000+(+k.slice(2));return 9999;
+}
+function setAsg(kind,o,S){ // a key set -> the strip's own fields (first of each) + xs (the rest)
+  const keys=[...S].sort((a,b)=>asgOrder(a)-asgOrder(b));
+  const gs=keys.filter(k=>k.startsWith("g:")).map(k=>k.slice(2)),lr=S.has("LR"),cm=keys.filter(k=>k==="C"||k==="M");
+  const ms=keys.filter(k=>k.startsWith("x:")).map(k=>k.slice(2)),ls=keys.filter(k=>k.startsWith("l:")).map(k=>k.slice(2)),us=keys.filter(k=>k.startsWith("u:")).map(k=>k.slice(2));
+  const xs={to:[],mtx:[],link:[],mute:[]};
+  if(kind==="ch"||kind==="grp"||kind==="fx"){
+    const f=kind==="ch"?"group":"dest";
+    if(gs.length){o[f]=gs[0];xs.to.push(...gs.slice(1));if(lr)xs.to.push("LR");}
+    else o[f]=lr?(kind==="ch"?"":"MASTER"):NO_MAIN;
+    xs.to.push(...cm);
+  }else xs.to.push(...gs,...(lr?["LR"]:[]),...cm);
+  if(kind==="ch"){o.matrix=ms[0]||"";xs.mtx.push(...ms.slice(1));}
+  else if(kind==="grp")o.matrix=ms;
+  else xs.mtx.push(...ms);
+  if(ASG_BUS.has(kind)){xs.link.push(...ls);xs.mute.push(...us);}
+  else{o.link=ls[0]||"";xs.link.push(...ls.slice(1));o.mute=us[0]||"";xs.mute.push(...us.slice(1));}
+  o.xs=xs;
+}
+const xsCount=o=>{const x=o.xs||{};return ["to","mtx","link","mute"].reduce((n,k)=>n+((x[k]||[]).length),0);};
+const xsBadge=(kind,o)=>{const n=xsCount(o);return n?` <span class="xsn" title="${esc([...asgOf(kind,o)].sort((a,b)=>asgOrder(a)-asgOrder(b)).map(k=>k.replace(/^g:|^x:|^l:/,"").replace(/^u:/,"Mute ")).join(" · "))} (PATCH › INTERNAL)">+${n}</span>`:"";};
+function asgAllowed(kind,o,key){ // LV1's assign rules (WCMixerAssignRulesCreator; group pre / post FX: IsValidDynamicGroupAsgnByDstRules)
+  if(key.startsWith("l:")||key.startsWith("u:"))return true;
+  if(key.startsWith("x:"))return kind!=="mtx";
+  if(key==="LR"||key==="C"||key==="M")return ["ch","grp","fx","aux"].includes(kind);
+  if(key.startsWith("g:")){
+    const g=state.groups.find(x=>x.name.trim()===key.slice(2));if(!g)return false;
+    if(kind==="ch")return true;
+    if(kind==="fx")return !!g.postFx;
+    if(kind==="grp"){if(g===o)return false;const sp=!!o.postFx,dp=!!g.postFx;
+      return sp!==dp?!sp&&dp:state.groups.indexOf(o)<state.groups.indexOf(g);}
+  }
+  return false;
+}
+function asgStrips(){ // the Internal view's rows, in LV1's order: channels, groups, FX, auxes (Mon), Main / Center / Mono, Cue, matrixes
+  const L=[],add=(kind,list)=>named(list).forEach(o=>L.push({kind,o,name:o.name.trim()}));
+  add("ch",state.channels);add("grp",state.groups);add("fx",state.fx);add("aux",state.auxes);
+  L.push({kind:"main",o:state.master,name:"Main"});
+  if(cfg().mains>1){L.push({kind:"center",o:state.busx.center,name:"Center"});L.push({kind:"mono",o:state.busx.mono,name:"Mono"});}
+  L.push({kind:"cue",o:state.busx.cue,name:"Cue"});
+  add("mtx",state.matrixes);
+  return L;
+}
 function pinLabel(legs,out){ // pins -> "I24 3–4" / "SG4 AES 1–2" (html); plain numbers when the inventory is one MGB
   const ps=(legs||[]).filter(Boolean);
   if(!ps.length)return "—";
@@ -1613,7 +1684,7 @@ function rackLabel(kind,i){
 function renderMaster(){
   const r=state.master.rack;
   $("#mstTable tbody").innerHTML=
-    `<tr><td style="font-family:var(--font-num);font-size:12px;white-space:nowrap">MASTER L/R</td>${outCell("main",0,state.master,resolveOut(),true)}${rackCell("mst",0,r)}</tr>`+
+    `<tr><td style="font-family:var(--font-num);font-size:12px;white-space:nowrap">MASTER L/R${xsBadge("main",state.master)}</td>${outCell("main",0,state.master,resolveOut(),true)}${rackCell("mst",0,r)}</tr>`+
     rackRow("mst",0,r,3,true);
 }
 
@@ -1688,7 +1759,7 @@ function renderChannels(){
       ${nameCell("ch",i,ch.name,dups)}
       ${isDs?`<td><button class="stbtn small ${ch.stereo?"st":""}" disabled title="A split has its source's format">${ch.stereo?"ST":"M"}</button></td>`:stCell("ch",i,ch.stereo)}
       ${colorCell("ch",i,ch.color)}
-      <td>${s("group",ch.group,grpOpts,"MASTER")}</td>
+      <td>${s("group",ch.group,grpOpts,"MASTER")}${xsBadge("ch",ch)}</td>
       <td>${s("link",ch.link,linkLabels(),"None")}</td>
       ${muteCell("ch",i,ch.mute)}
       <td>${s("matrix",ch.matrix,mtxOpts,"None")}</td>
@@ -1708,14 +1779,14 @@ function renderGroups(){
   const mtxOpts=stripOpts("mtx");
   tb.innerHTML=state.groups.map((g,i)=>{
     const selfLabel=g.name.trim()||DEFNAME.grp(i);
-    const destOpts=["MASTER",...stripOpts("grp",selfLabel)];
-    if(g.dest&&!destOpts.includes(g.dest))destOpts.splice(1,0,g.dest);
+    const destOpts=["MASTER",NO_MAIN,...stripOpts("grp",selfLabel)];
+    if(g.dest&&!destOpts.includes(g.dest))destOpts.splice(2,0,g.dest);
     return `<tr${rowCls("grp",i)}>
       <td class="num"><span class="rgrip">⋮⋮</span>${i+1}</td>
       ${nameCell("grp",i,g.name,dups)}
       ${stCell("grp",i,g.stereo)}
       ${colorCell("grp",i,g.color)}
-      <td><select id="grp-${i}-dest" data-k="grp" data-i="${i}" data-f="dest">${destOpts.map(o=>`<option${o===g.dest?" selected":""}>${esc(o)}</option>`).join("")}</select></td>
+      <td><select id="grp-${i}-dest" data-k="grp" data-i="${i}" data-f="dest">${destOpts.map(o=>`<option value="${esc(o)}"${o===g.dest?" selected":""}>${o===NO_MAIN?"No master":esc(o)}</option>`).join("")}</select>${xsBadge("grp",g)}</td>
       ${linkCell("grp",i,g.link)}${muteCell("grp",i,g.mute)}
       <td><button class="pfbtn small ${g.postFx?"post":""}" id="grp-${i}-pf" data-k="grp" data-i="${i}" data-f="postFx">${g.postFx?"POST":"PRE"}</button></td>
       <td><div class="chips">${mtxOpts.length?mtxOpts.map(m=>`<label class="${g.matrix.includes(m)?"on":""}"><input type="checkbox" id="grp-${i}-mx-${esc(m)}" data-k="grp" data-i="${i}" data-f="mx" data-m="${esc(m)}" ${g.matrix.includes(m)?"checked":""}>${esc(m)}</label>`).join(""):'<span style="color:var(--dim);font-size:11px">no matrix strips in this configuration</span>'}</div></td>
@@ -1727,11 +1798,11 @@ function renderGroups(){
 function renderFx(){
   const tb=$("#fxTable tbody"); const dups=dupNames(state.fx);
   tb.innerHTML=state.fx.map((f,i)=>{
-    const destOpts=["MASTER",...stripOpts("grp")];
-    if(f.dest&&!destOpts.includes(f.dest))destOpts.splice(1,0,f.dest);
+    const destOpts=["MASTER",NO_MAIN,...stripOpts("grp")];
+    if(f.dest&&!destOpts.includes(f.dest))destOpts.splice(2,0,f.dest);
     return `<tr${rowCls("fx",i)}><td class="num"><span class="rgrip">⋮⋮</span>${i+1}</td>${nameCell("fx",i,f.name,dups)}${stCell("fx",i,f.stereo)}
       ${colorCell("fx",i,f.color)}
-      <td><select id="fx-${i}-dest" data-k="fx" data-i="${i}" data-f="dest">${destOpts.map(o=>`<option${o===f.dest?" selected":""}>${esc(o)}</option>`).join("")}</select></td>
+      <td><select id="fx-${i}-dest" data-k="fx" data-i="${i}" data-f="dest">${destOpts.map(o=>`<option value="${esc(o)}"${o===f.dest?" selected":""}>${o===NO_MAIN?"No master":esc(o)}</option>`).join("")}</select>${xsBadge("fx",f)}</td>
       ${linkCell("fx",i,f.link)}${muteCell("fx",i,f.mute)}
       ${rackCell("fx",i,f.rack)}
       ${opsCell("fx",i)}${ioOpsCell("fx",i)}</tr>`+rackRow("fx",i,f.rack,11,f.stereo);
@@ -1781,7 +1852,7 @@ function renderAux(){
       <td><select id="aux-${i}-dest" data-k="aux" data-i="${i}" data-f="dest">
         <option value=""${(a.dest||"")===""?" selected":""}>—</option>
         ${AUX_DESTS.map(o=>`<option${o===a.dest?" selected":""}>${o}</option>`).join("")}</select></td>
-      ${linkCell("aux",i,a.link)}${muteCell("aux",i,a.mute)}
+      ${linkCell("aux",i,a.link).replace(/<\/td>$/,xsBadge("aux",a)+"</td>")}${muteCell("aux",i,a.mute)}
       <td><input id="aux-${i}-pos" value="${esc(a.pos||"")}" data-k="aux" data-i="${i}" data-f="pos" list="posList" placeholder="position"></td>
       <td><input id="aux-${i}-notes" value="${esc(a.notes||"")}" data-k="aux" data-i="${i}" data-f="notes"></td>
       ${opsCell("aux",i)}${ioOpsCell("aux",i)}</tr>`).join("")
@@ -1940,7 +2011,7 @@ $("#laySec").addEventListener("dragend",()=>{
 });
 function renderSimple(kind,list,tableSel){
   const tb=$(tableSel+" tbody"); const dups=dupNames(list); const R=kind==="mtx"?resolveOut():null;
-  tb.innerHTML=list.map((it,i)=>`<tr${rowCls(kind,i)}><td class="num"><span class="rgrip">⋮⋮</span>${i+1}</td>${R?outCell(kind,i,it,R):""}${nameCell(kind,i,it.name,dups)}${stCell(kind,i,it.stereo)}${colorCell(kind,i,it.color)}${linkCell(kind,i,it.link)}${muteCell(kind,i,it.mute)}${opsCell(kind,i)}${ioOpsCell(kind,i)}</tr>`).join("")
+  tb.innerHTML=list.map((it,i)=>`<tr${rowCls(kind,i)}><td class="num"><span class="rgrip">⋮⋮</span>${i+1}</td>${R?outCell(kind,i,it,R):""}${nameCell(kind,i,it.name,dups)}${stCell(kind,i,it.stereo)}${colorCell(kind,i,it.color)}${linkCell(kind,i,it.link).replace(/<\/td>$/,xsBadge(kind,it)+"</td>")}${muteCell(kind,i,it.mute)}${opsCell(kind,i)}${ioOpsCell(kind,i)}</tr>`).join("")
     ||emptyRow(kind==="mtx"?10:9,kind==="aux"?"This mixer configuration has no aux strips.":"No matrix strips in this configuration.");
   const total=kind==="aux"?cfg().mon:MTX_COUNT;
   $(kind==="aux"?"#auxCount":"#mtxCount").textContent=total?`${named(list).length} named / ${total} strips`:"";
@@ -2310,7 +2381,9 @@ const PW_VIEWS={
   direct:{main:"output",label:"Direct",rows:"direct",out:true,allowH:true,allowV:false},
   busses:{main:"output",label:"Mix\nBusses",rows:"busses",out:true,allowH:true,allowV:false},
   d2d:{main:"d2d",label:"Device to Device",rows:"devin",out:true,allowH:true,allowV:false},
+  internal:{main:"internal",label:"Busses &\nGroups",rows:"asg",allowH:true,allowV:true},
 };
+const ASG_COLS=[["g","Groups","#136A84"],["main","Main","#6B979F"],["x","Matrix","#2962FF"],["l","Link","#FA7B14"],["u","Mute Groups","#FF4F4F"]];
 const PW_MSG={ // LV1's texts (WCMatrixManager: WMC_*_MSG)
   OVERWRITE:"Would you like to overwrite the existing assignments?",
   REMOVE:"Are you sure you want to remove selected assignments?",
@@ -2321,7 +2394,7 @@ const IPF_TEXT=["INP","PRE","PST","PSP"], IPF_COL=["#1A8E66","#7C4DFF","#FA7B14"
 const PW_KIND_COL={ch:"#0FA2AB",grp:"#136A84",fx:"#2d4f57",aux:"#01f1cc",mtx:"#2962FF",main:"#6B979F",center:"#6B979F",mono:"#6B979F",cue:"#ed1b24"};
 const PW={main:"input",sub:{input:"inputA",output:"direct"},sel:{input:[],output:[],d2d:[],d2dRows:[]},zoom:PW_DEF_ZOOM,
   rows:[],cols:[],mark:new Map(),hover:{r:-1,c:-1},drag:null,editing:null};
-const pwView=()=>PW_VIEWS[PW.main==="input"?PW.sub.input:PW.main==="output"?PW.sub.output:"d2d"];
+const pwView=()=>PW_VIEWS[PW.main==="input"?PW.sub.input:PW.main==="output"?PW.sub.output:PW.main==="internal"?"internal":"d2d"];
 const pwCell=()=>PW_ZOOM[PW.zoom];
 function pwSelOf(key){ // the shown devices of a strip: ids of existing devices, never empty while devices exist
   const ids=state.io.map(d=>d.id);
@@ -2332,6 +2405,16 @@ function pwSelOf(key){ // the shown devices of a strip: ids of existing devices,
 // ---- rows / columns of the current view
 function pwBuild(){
   const v=pwView(),rows=[],cols=[];
+  if(v.rows==="asg"){ // Internal: strips x Groups / Main / Matrix / Link / Mute groups
+    for(const s of asgStrips())rows.push({...s,ms:""});
+    state.groups.forEach((g,i)=>{if(g.name.trim())cols.push({key:"g:"+g.name.trim(),t:"g",lbl:String(i+1),name:g.name.trim()});});
+    cols.push({key:"LR",t:"main",lbl:"LR",name:"Main L/R"});
+    if(cfg().mains>1){cols.push({key:"C",t:"main",lbl:"C",name:"Center"});cols.push({key:"M",t:"main",lbl:"M",name:"Mono"});}
+    state.matrixes.forEach((m,i)=>{if(m.name.trim())cols.push({key:"x:"+m.name.trim(),t:"x",lbl:String(i+1),name:m.name.trim()});});
+    linkLabels().forEach((l,i)=>cols.push({key:"l:"+l,t:"l",lbl:String(i+1),name:l}));
+    for(let n=1;n<=MUTE_COUNT;n++)cols.push({key:"u:"+n,t:"u",lbl:String(n),name:"Mute "+n});
+    PW.rows=rows;PW.cols=cols;pwMarks();return;
+  }
   if(v.rows==="in"){
     state.channels.forEach((ch,i)=>{if(!ch.name.trim())return;const w=ch.stereo?2:1;
       for(let leg=0;leg<w;leg++)rows.push({ch,i,leg,kind:"ch",o:ch,name:ch.name.trim(),ms:w===2?(leg?"R":"L"):"M"});});
@@ -2353,7 +2436,13 @@ function pwBuild(){
   pwMarks();
 }
 function pwMarks(){ // cell states: "r:c" -> 1 patched, 2 patched but the output has another source too (red), 3 not possible (grey)
-  const v=pwView(),m=new Map(),col=new Map(PW.cols.map((c,j)=>[pinKey(c.pin),j]));
+  const v=pwView(),m=new Map();
+  if(v.rows==="asg"){
+    PW.rows.forEach((r,ri)=>{const S=asgOf(r.kind,r.o);
+      PW.cols.forEach((c,j)=>{if(S.has(c.key))m.set(ri+":"+j,1);else if(!asgAllowed(r.kind,r.o,c.key))m.set(ri+":"+j,3);});});
+    PW.mark=m;return;
+  }
+  const col=new Map(PW.cols.map((c,j)=>[pinKey(c.pin),j]));
   const put=(r,p,s)=>{const j=col.get(pinKey(p));if(j!==undefined)m.set(r+":"+j,s);};
   if(v.rows==="in"){
     const I=resolveIn(),L=v.bank?I.B:I.A;
@@ -2406,6 +2495,13 @@ async function pwApply(cells,on,all){
   const v=pwView(),ops=cells.map(([ri,cj])=>({r:PW.rows[ri],c:PW.cols[cj],st:PW.mark.get(ri+":"+cj)||0})).filter(o=>o.r&&o.c&&o.st!==3);
   if(v.rows==="devin"&&cells.some(([ri,cj])=>PW.mark.get(ri+":"+cj)===3))pwInfo(PW_MSG.INVALID);
   if(!ops.length)return;
+  if(v.rows==="asg"){ // internal assignments add up (LV1 never asks to overwrite them); removing asks
+    if(!on&&!await pwAsk(all?PW_MSG.REMOVE_ALL:PW_MSG.REMOVE))return;
+    for(const o of ops){const S=asgOf(o.r.kind,o.r.o);
+      if(on)S.add(o.c.key);else if(o.st===1)S.delete(o.c.key);else continue;
+      setAsg(o.r.kind,o.r.o,S);}
+    render();return;
+  }
   if(on){
     let conflict=false;
     if(v.rows==="in"){const I=resolveIn(),L=v.bank?I.B:I.A;
@@ -2445,30 +2541,40 @@ function pwRender(){
   const v=pwView(),cell=pwCell();
   pwBuild();
   const devBtn=(d,k,on,key)=>`<button class="pw-dev${k>=8?" bankB":""}${on?" on":""}" data-pwdev="${key}:${d.id}" title="${esc(IO_MODELS[d.model].label)} · slot ${k<8?"A":"B"}${k%8+1}"><span class="cap">${k+1}. ${esc(ioName(k))}</span><span class="st">OFFLINE</span><span class="md">${esc(IO_MODELS[d.model].label)}</span></button>`;
-  const colSel=pwSelOf(PW.main);
+  const isAsg=v.rows==="asg",colSel=isAsg?[]:pwSelOf(PW.main);
   const mains=[["input","INPUT"],["output","OUTPUT"],["internal","INTERNAL"],["d2d","DEVICE\nTO DEVICE"]];
   const subs=PW.main==="d2d"?state.io.map((d,k)=>devBtn(d,k,pwSelOf("d2dRows").includes(d.id),"d2dRows")).join("")
+    :isAsg?`<button data-pwsub="internal" class="on" disabled>All</button>`
     :(PW.main==="input"?["inputA","inputB"]:["direct","busses"]).map(s=>`<button data-pwsub="${s}" class="${(PW.main==="input"?PW.sub.input:PW.sub.output)===s?"on":""}">${esc(PW_VIEWS[s].label)}</button>`).join("");
-  // header geometry: device / [gain / 48V in the Input views] / type / channel number
-  const knobs=v.rows==="in"&&cell>=25, H={dev:22,gain:knobs?42:0,p48:knobs?22:0,type:20,num:22};
+  // header geometry: device / [gain / 48V in the Input views] / type / channel number;
+  // Internal: strip type / name (vertical) / number
+  const knobs=v.rows==="in"&&cell>=25, H=isAsg?{dev:22,gain:0,p48:0,type:Math.max(60,cell*2.6),num:22}:{dev:22,gain:knobs?42:0,p48:knobs?22:0,type:20,num:22};
   const chh=H.dev+H.gain+H.p48+H.type+H.num;
-  const RL=v.rows==="in"?[["color",14],["name",186],["ms",34]]:v.rows==="devin"?[["dev",140],["type",70],["num",40]]:[["color",14],["name",150],["ipf",42],["ms",34]];
+  const RL=isAsg?[["color",14],["name",220]]:v.rows==="in"?[["color",14],["name",186],["ms",34]]:v.rows==="devin"?[["dev",140],["type",70],["num",40]]:[["color",14],["name",150],["ipf",42],["ms",34]];
   const rhw=RL.reduce((a,[,w])=>a+w,0),font=Math.round(Math.min(13,Math.max(9,cell*.4)));
   // column header cells
   const hc=[];let y=0;
-  const span=(lvl,h,key,txt,extra)=>{ // spans of equal `key` across the columns
+  const span=(lvl,h,key,txt,extra,bg)=>{ // spans of equal `key` across the columns
     let j=0;while(j<PW.cols.length){let n=1;const kk=key(PW.cols[j]);while(j+n<PW.cols.length&&key(PW.cols[j+n])===kk)n++;
-      hc.push(`<div class="pw-hc l${extra||""}" style="left:${j*cell}px;top:${y}px;width:${n*cell}px;height:${h}px">${esc(txt(PW.cols[j]))}</div>`);j+=n;}
+      hc.push(`<div class="pw-hc l${extra||""}" style="left:${j*cell}px;top:${y}px;width:${n*cell}px;height:${h}px${bg?";background:"+bg(PW.cols[j]):""}">${esc(txt(PW.cols[j]))}</div>`);j+=n;}
     y+=h;};
-  span("dev",H.dev,c=>c.k,c=>c.dev," dv");
+  if(isAsg){
+    const T=Object.fromEntries(ASG_COLS.map(([t,l,c])=>[t,[l,c]]));
+    span("type",H.dev,c=>c.t,c=>T[c.t][0],"",c=>T[c.t][1]);
+    PW.cols.forEach((c,j)=>hc.push(`<div class="pw-hc pw-vn" style="left:${j*cell}px;top:${y}px;width:${cell}px;height:${H.type}px" title="${esc(c.name)}"><span>${esc(c.name)}</span></div>`));
+    y+=H.type;
+    PW.cols.forEach((c,j)=>hc.push(`<div class="pw-hc pw-num" data-pwc="${j}" style="left:${j*cell}px;top:${y}px;width:${cell}px;height:${H.num}px">${esc(c.lbl)}</div>`));
+  }else span("dev",H.dev,c=>c.k,c=>c.dev," dv");
   if(knobs){
     PW.cols.forEach((c,j)=>{const d=state.io[c.k],m=IO_MODELS[d.model],pre=m.chunk&&c.x.type==="Mic/Line";
       hc.push(`<div class="pw-hc pw-kn" style="left:${j*cell}px;top:${y}px;width:${cell}px;height:${H.gain}px">${pre?knobHtml(c.k,c.pin.c,d.gain[c.pin.c],m.gain[0],m.gain[1])+`<span class="pw-gv" data-iogv="${c.k}:${c.pin.c}">${d.gain[c.pin.c]}</span>`:""}</div>`);
       hc.push(`<div class="pw-hc" style="left:${j*cell}px;top:${y+H.gain}px;width:${cell}px;height:${H.p48}px">${pre?`<button type="button" class="p48${d.phantom[c.pin.c]?" on":""}" data-io48="${c.k}:${c.pin.c}" aria-pressed="${!!d.phantom[c.pin.c]}" title="48V phantom power">48V</button>`:""}</div>`);});
     y+=H.gain+H.p48;
   }
-  span("type",H.type,c=>c.k+"|"+c.x.type,c=>c.x.type==="Out"?"":c.x.type);
-  PW.cols.forEach((c,j)=>hc.push(`<div class="pw-hc pw-num" data-pwc="${j}" style="left:${j*cell}px;top:${y}px;width:${cell}px;height:${H.num}px">${esc(c.x.lbl)}</div>`));
+  if(!isAsg){
+    span("type",H.type,c=>c.k+"|"+c.x.type,c=>c.x.type==="Out"?"":c.x.type);
+    PW.cols.forEach((c,j)=>hc.push(`<div class="pw-hc pw-num" data-pwc="${j}" style="left:${j*cell}px;top:${y}px;width:${cell}px;height:${H.num}px">${esc(c.x.lbl)}</div>`));
+  }
   // row header lines
   const rh=PW.rows.map((r,ri)=>{
     const cells=RL.map(([kind,w])=>{
@@ -2486,13 +2592,13 @@ function pwRender(){
     return `<div class="pw-rr" data-pwr="${ri}" style="top:${ri*cell}px;height:${cell}px">${cells}</div>`;
   }).join("");
   const prev=host.querySelector(".pw-cells"),sx=prev?prev.scrollLeft:0,sy=prev?prev.scrollTop:0;
-  host.innerHTML=`<div class="pw-top"><div class="pw-main">${mains.map(([k,t])=>`<button data-pwmain="${k}" class="${PW.main===k?"on":""}"${k==="internal"?' disabled title="Internal (Busses &amp; Groups) comes in the next stage"':""}>${esc(t)}</button>`).join("")}</div>
-      <div class="pw-devs">${state.io.map((d,k)=>devBtn(d,k,colSel.includes(d.id),PW.main)).join("")}</div></div>
+  host.innerHTML=`<div class="pw-top"><div class="pw-main">${mains.map(([k,t])=>`<button data-pwmain="${k}" class="${PW.main===k?"on":""}">${esc(t)}</button>`).join("")}</div>
+      <div class="pw-devs">${isAsg?`<button data-pwsub="internal" class="pw-sbtn on">Busses &amp;\nGroups</button>`:state.io.map((d,k)=>devBtn(d,k,colSel.includes(d.id),PW.main)).join("")}</div></div>
     <div class="pw-body"><div class="pw-sub">${subs}</div>
       <div class="pw-mx" style="--rhw:${rhw}px;--chh:${chh}px;--pwfont:${font}px">
         <div class="pw-corner"><div class="pw-zoom"><button class="small" data-pwzoom="-1" title="Zoom out"${PW.zoom?"":" disabled"}>−</button><button class="small" data-pwzoom="1" title="Zoom in"${PW.zoom<PW_ZOOM.length-1?"":" disabled"}>+</button>
           <button class="small danger" data-pwdel title="Unassigns all patches from current patch view">Del</button></div>
-          <div class="pw-title"><b>${esc(v.label.replace("\n"," ").toUpperCase())}</b><span>${v.rows==="in"?"FROM ↓ device · TO → channel":v.rows==="devin"?"FROM device input · TO device output":"FROM strip · TO device output"}</span></div></div>
+          <div class="pw-title"><b>${esc(v.label.replace("\n"," ").toUpperCase())}</b><span>${v.rows==="in"?"FROM ↓ device · TO → channel":v.rows==="devin"?"FROM device input · TO device output":isAsg?"FROM strip · TO bus / link / mute group":"FROM strip · TO device output"}</span></div></div>
         <div class="pw-ch"><div class="pw-chin" style="width:${Math.max(1,PW.cols.length)*cell}px;height:${chh}px">${hc.join("")}</div></div>
         <div class="pw-rh"><div class="pw-rhin" style="width:${rhw}px;height:${PW.rows.length*cell}px">${rh}</div></div>
         <div class="pw-cells" tabindex="0"><div class="pw-space"><canvas></canvas></div></div>
@@ -2566,6 +2672,8 @@ function pwFoot(){ // what the cross-hair points at
   const el=$("#pwFoot");if(!el)return;
   const r=PW.rows[PW.hover.r],c=PW.cols[PW.hover.c];
   if(!r||!c){el.textContent="";return;}
+  if(pwView().rows==="asg"){const st=PW.mark.get(PW.hover.r+":"+PW.hover.c);
+    el.textContent=`${r.name} → ${c.name}${st===3?" (not possible in LV1)":""}`;return;}
   const v=pwView(),src=v.rows==="devin"?`${r.dev} ${r.x.type} ${r.x.lbl}`:`${r.name}${r.ms!=="M"?" "+r.ms:""}`;
   const dst=`${c.dev} ${c.x.type==="Out"?"Out":c.x.type} ${c.x.lbl}`;
   el.textContent=v.rows==="in"?`${dst} → ${src}`:`${src} → ${dst}`;
@@ -3010,12 +3118,17 @@ function buildSpec(){
   const pk=o=>({...(Array.isArray(o.outs)?{outs:o.outs.map(L=>(L||[]).filter(isPin).map(q=>({d:q.d,c:q.c})))}:{}),
     ...(Number.isInteger(o.ipf)&&o.ipf!==2?{ipf:o.ipf}:{})});
   const outKeys=(o,pp)=>({ports:pp,...pk(o)});
+  // v10: the strip's internal assignments beyond its own fields (PATCH › INTERNAL): xs = {to, mtx, link, mute}
+  const xk=(o,noMtx)=>{const x=o.xs||{},r={};
+    for(const f of ["to","mtx","link","mute"])if(!(noMtx&&f==="mtx")&&(x[f]||[]).length)r[f]=f==="mute"?x[f].map(Number):[...x[f]];
+    return Object.keys(r).length?{xs:r}:{};};
+  const noDest=o=>o.dest===NO_MAIN?{unassigned:true}:{};
   // A stock rack exports as no rack field at all (the converter leaves the
   // template's default rack untouched). Unnamed strips don't export.
   const rackOut=r=>isStock(r)?undefined:{slots:[...r.slots]};
   const withRack=(o,r)=>{const rr=rackOut(r);if(rr)o.rack=rr;return o;};
   const spec={
-    format:"lv1-input-list",version:9,
+    format:"lv1-input-list",version:10,
     show:{...state.show},
     config:{id:c.id,inputs:c.ch,groups:c.grp,aux:c.mon,fx:FX_COUNT,matrix:MTX_COUNT,mains:c.mains},
     // v7: the I/O inventory in slot order; v9: each device's id (the pins' d).
@@ -3030,24 +3143,24 @@ function buildSpec(){
       group:ch.group&&ch.group!==NO_MAIN?ch.group:null,
       ...(ch.group===NO_MAIN?{unassigned:true}:{}), // no LR / group assignment
       ...(ch.ds?{split:ch.ds}:{}), // digital split of that input (.emo only)
-      matrix:ch.matrix?[ch.matrix]:[],
+      matrix:[...(ch.matrix?[ch.matrix]:[]),...((ch.xs||{}).mtx||[])],...xk(ch,true),
       mic:ch.mic.trim(),stand:ch.stand.trim(),position:ch.pos.trim(),notes:(ch.notes||"").trim(),
       ...(ch.color!==null&&ch.color!==undefined?{color:ch.color}:{}),
       ...lm(ch),
     },ch.rack):null).filter(Boolean),
-    groups:named(state.groups).map(g=>withRack({name:g.name.trim(),stereo:g.stereo,dest:g.dest==="MASTER"?null:g.dest,postFx:!!g.postFx,matrix:g.matrix,
-      ...(g.color!==null&&g.color!==undefined?{color:g.color}:{}),...lm(g),...pk(g)},g.rack)),
-    fx:named(state.fx).map(f=>withRack({name:f.name.trim(),stereo:f.stereo,dest:f.dest==="MASTER"?null:f.dest,
-      ...(f.color!==null&&f.color!==undefined?{color:f.color}:{}),...lm(f),...pk(f)},f.rack)),
+    groups:named(state.groups).map(g=>withRack({name:g.name.trim(),stereo:g.stereo,dest:g.dest==="MASTER"||g.dest===NO_MAIN?null:g.dest,...noDest(g),postFx:!!g.postFx,matrix:g.matrix,
+      ...(g.color!==null&&g.color!==undefined?{color:g.color}:{}),...lm(g),...pk(g),...xk(g,true)},g.rack)),
+    fx:named(state.fx).map(f=>withRack({name:f.name.trim(),stereo:f.stereo,dest:f.dest==="MASTER"||f.dest===NO_MAIN?null:f.dest,...noDest(f),
+      ...(f.color!==null&&f.color!==undefined?{color:f.color}:{}),...lm(f),...pk(f),...xk(f)},f.rack)),
     // v8: ports = the strip's output patch (1-based, numbering the inventory's outputs) on auxes,
     // master and matrixes; out = the builder's pick (absent = auto, 0 = not patched, n = first output).
     auxes:state.auxes.map((a,i)=>a.name.trim()?{name:a.name.trim(),stereo:a.stereo,...outKeys(a,aps[i]),
       dest:a.dest||"",position:(a.pos||"").trim(),notes:(a.notes||"").trim(),
-      ...(a.color!==null&&a.color!==undefined?{color:a.color}:{}),...lm(a)}:null).filter(Boolean),
+      ...(a.color!==null&&a.color!==undefined?{color:a.color}:{}),...lm(a),...xk(a)}:null).filter(Boolean),
     matrixes:state.matrixes.map((m,i)=>m.name.trim()?{name:m.name.trim(),stereo:m.stereo,...outKeys(m,op.mtx[i]),
-      ...(m.color!==null&&m.color!==undefined?{color:m.color}:{}),...lm(m)}:null).filter(Boolean),
-    master:outKeys(state.master,op.mst),
-    busx:Object.fromEntries(Object.entries(state.busx).map(([b,o])=>[b,pk(o)])),
+      ...(m.color!==null&&m.color!==undefined?{color:m.color}:{}),...lm(m),...xk(m)}:null).filter(Boolean),
+    master:{...outKeys(state.master,op.mst),...xk(state.master)},
+    busx:Object.fromEntries(Object.entries(state.busx).map(([b,o])=>[b,{...pk(o),...xk(o)}])),
     ...(state.d2d.length?{d2d:state.d2d.map(x=>({i:{d:x.i.d,c:x.i.c},o:{d:x.o.d,c:x.o.c}}))}:{}),
   };
   if((state.links||[]).some(n=>n.trim()))spec.links=state.links.map(n=>n.trim());
@@ -3097,6 +3210,11 @@ function loadSpec(spec){
   // v9 patch keys (see buildSpec): pins, output lists, tap. An Auto strip (aux / Master / matrix) has no `outs`;
   // v8 kept its pick in `out` (a global number: applyConfig turns it into pins).
   const pinsIn=v=>Array.isArray(v)?v.map(q=>q===0?0:isPin(q)?{d:q.d,c:q.c}:null):undefined;
+  // v10 internal assignments beyond the strip's own fields (+ a channel's matrix feeds after its first)
+  const strs=v=>Array.isArray(v)?v.filter(x=>typeof x==="string"&&x.trim()).map(x=>x.trim()):[];
+  const xsIn=(o,moreMtx)=>{const x=o.xs&&typeof o.xs==="object"?o.xs:{};
+    return {xs:{to:strs(x.to),mtx:[...strs(moreMtx),...strs(x.mtx)],link:strs(x.link),
+      mute:(Array.isArray(x.mute)?x.mute:[]).map(Number).filter(n=>n>=1&&n<=8).map(String)}};};
   const pk=(o,auto)=>{const r={};
     if(Array.isArray(o.outs))r.outs=o.outs.map(L=>Array.isArray(L)?L.filter(isPin).map(q=>({d:q.d,c:q.c})):[]);
     else if(auto){if((spec.version||0)<9)r.out=outIn(o);else r.outs=null;}
@@ -3108,17 +3226,17 @@ function loadSpec(spec){
     channels:(spec.channels||[]).map(c=>({...defCh(),name:c.name||"",stereo:!!c.stereo,group:c.unassigned?NO_MAIN:grpName(c.group),ds:typeof c.split==="string"?c.split:"",
       link:(spec.version||0)<6&&c.link===c.group?"":linkIn(c),
       matrix:(c.matrix&&c.matrix[0])||"",mic:c.mic||"",stand:c.stand||"",pos:c.position||"",notes:c.notes||"",rack:rackIn(c.rack),color:colIn(c),mute:muteIn(c),
-      ...(pinsIn(c.inA)?{inA:pinsIn(c.inA)}:{}),...(pinsIn(c.inB)?{inB:pinsIn(c.inB)}:{}),...pk(c,false)})),
-    groups:(spec.groups||[]).map(g=>({...defGrp(),name:g.name||"",stereo:g.stereo!==false,dest:g.dest||"MASTER",postFx:!!g.postFx,matrix:g.matrix||[],rack:rackIn(g.rack),color:colIn(g),link:linkIn(g),mute:muteIn(g),...pk(g,false)})),
-    fx:(spec.fx||[]).map(f=>({...defFx(),name:f.name||"",stereo:f.stereo!==false,dest:f.dest||"MASTER",rack:rackIn(f.rack),color:colIn(f),link:linkIn(f),mute:muteIn(f),...pk(f,false)})),
+      ...(pinsIn(c.inA)?{inA:pinsIn(c.inA)}:{}),...(pinsIn(c.inB)?{inB:pinsIn(c.inB)}:{}),...pk(c,false),...xsIn(c,(c.matrix||[]).slice(1))})),
+    groups:(spec.groups||[]).map(g=>({...defGrp(),name:g.name||"",stereo:g.stereo!==false,dest:g.unassigned?NO_MAIN:g.dest||"MASTER",postFx:!!g.postFx,matrix:g.matrix||[],rack:rackIn(g.rack),color:colIn(g),link:linkIn(g),mute:muteIn(g),...pk(g,false),...xsIn(g)})),
+    fx:(spec.fx||[]).map(f=>({...defFx(),name:f.name||"",stereo:f.stereo!==false,dest:f.unassigned?NO_MAIN:f.dest||"MASTER",rack:rackIn(f.rack),color:colIn(f),link:linkIn(f),mute:muteIn(f),...pk(f,false),...xsIn(f)})),
     auxes:(spec.auxes||[]).map(a=>({...defAux(),name:a.name||"",stereo:!!a.stereo,
-      dest:a.dest||"",pos:a.position||"",notes:a.notes||"",color:colIn(a),link:linkIn(a),mute:muteIn(a),...pk(a,true)})),
-    matrixes:(spec.matrixes||[]).map(m=>({...defMtx(),name:m.name||"",stereo:!!m.stereo,color:colIn(m),link:linkIn(m),mute:muteIn(m),...pk(m,true)})),
+      dest:a.dest||"",pos:a.position||"",notes:a.notes||"",color:colIn(a),link:linkIn(a),mute:muteIn(a),...pk(a,true),...xsIn(a)})),
+    matrixes:(spec.matrixes||[]).map(m=>({...defMtx(),name:m.name||"",stereo:!!m.stereo,color:colIn(m),link:linkIn(m),mute:muteIn(m),...pk(m,true),...xsIn(m)})),
     links:Array.from({length:LINK_COUNT},(_,i)=>String((spec.links||[])[i]||"")),
     layers:(spec.layers||[]).slice(0,LAYER_COUNT).map(l=>({name:String((l&&l.name)||""),
       strips:((l&&l.strips)||[]).slice(0,LAYER_SLOTS).map(s=>s&&LAYER_KINDS.includes(s.type)?[s.type,s.type==="main"?"":String(s.name||"")]:null)})),
-    master:{rack:rackIn(spec.master?.rack),outs:null,...pk(spec.master||{},true)},
-    busx:Object.fromEntries(["cue","center","mono"].map(b=>[b,{outs:[],ipf:2,...pk((spec.busx||{})[b]||{},false)}])),
+    master:{rack:rackIn(spec.master?.rack),outs:null,...pk(spec.master||{},true),...xsIn(spec.master||{})},
+    busx:Object.fromEntries(["cue","center","mono"].map(b=>[b,{outs:[],ipf:2,...pk((spec.busx||{})[b]||{},false),...xsIn((spec.busx||{})[b]||{})}])),
     d2d:(Array.isArray(spec.d2d)?spec.d2d:[]).filter(x=>x&&isPin(x.i)&&isPin(x.o)).map(x=>({i:{d:x.i.d,c:x.i.c},o:{d:x.o.d,c:x.o.c}})),
     io:Array.isArray(spec.io)?spec.io:[{model:"MGB"}], // normalized by applyConfig()
     stage:{
@@ -3523,6 +3641,11 @@ function renameRefs(kind,oldName,newName){
   if(!o||!v||o===v)return;
   const lk=kind==="lnk"?"link":kind; // custom-layer slots
   for(const l of state.layers)l.strips=l.strips.map(s=>s&&s[0]===lk&&s[1]===o?[lk,v]:s);
+  { // extra internal assignments (strip.xs, PATCH › INTERNAL)
+    const f={grp:"to",mtx:"mtx",lnk:"link"}[kind];
+    if(f)for(const x of [...state.channels,...state.groups,...state.fx,...state.auxes,...state.matrixes,state.master,...Object.values(state.busx||{})])
+      if(x&&x.xs&&Array.isArray(x.xs[f]))x.xs[f]=x.xs[f].map(n=>n===o?v:n);
+  }
   if(kind==="lnk"){ // a link label (name or "Link N") used on any strip
     for(const l of [state.channels,state.groups,state.fx,state.auxes,state.matrixes])
       for(const x of l)if(x.link===o)x.link=v;
@@ -5223,11 +5346,21 @@ async function emoExport(spec){
     });
     for(let i=chans.length;i<nCh;i++)assignments.push([1+i,LR]);
     groups.forEach((g,i)=>{
-      assignments.push([GRP0+i,grpId[g.dest]??LR]);
+      if(!g.unassigned)assignments.push([GRP0+i,grpId[g.dest]??LR]);
       for(const m of (g.matrix||[]))if(m in mtxId)assignments.push([GRP0+i,mtxId[m]]);
     });
     for(let i=groups.length;i<nGrp;i++)assignments.push([GRP0+i,LR]);
-    fx.forEach((f,i)=>assignments.push([FX0+i,grpId[f.dest]??LR]));
+    fx.forEach((f,i)=>{if(!f.unassigned)assignments.push([FX0+i,grpId[f.dest]??LR]);});
+    // v10 extra internal assignments (xs, PATCH › INTERNAL) of every strip, after its own;
+    // mirrored by make_lv1_session (keep in sync)
+    const xsStrips=[...chans.map((c,i)=>[1+i,c]),...groups.map((g,i)=>[GRP0+i,g]),...fx.map((f,i)=>[FX0+i,f]),
+      ...auxes.map((a,i)=>[FX0+8+i,a]),...mtxs.map((m,i)=>[MTX0+i,m]),[LR,spec.master||{}],
+      ...[[4,"center"],[5,"mono"],[7,"cue"]].filter(([t])=>first[t]!==undefined).map(([t,b])=>[first[t],(spec.busx||{})[b]||{}])];
+    const seenA=new Set(assignments.map(a=>a.join(":")));
+    for(const [obj,o] of xsStrips){const x=o.xs||{};
+      for(const t of [...(x.to||[]).map(t=>t==="LR"?LR:t==="C"?first[4]:t==="M"?first[5]:grpId[t]),...(x.mtx||[]).map(m=>mtxId[m])])
+        if(t!==undefined&&t!==obj&&!seenA.has(obj+":"+t)){seenA.add(obj+":"+t);assignments.push([obj,t]);}
+    }
     const rows=assignments.map(([s,d])=>[-1,s,7,-1,-1,2,1,d,0,-1,-1,-1,0,0]);
 
     // LINK + MUTE GROUP membership rows — a statement-for-statement port of
@@ -5243,6 +5376,8 @@ async function emoExport(spec){
     fx.forEach((f,i)=>member.push([FX0+i,f.link||null,f.mute]));
     auxes.forEach((a,i)=>member.push([FX0+8+i,a.link||null,a.mute]));
     mtxs.forEach((m,i)=>member.push([MTX0+i,m.link||null,m.mute]));
+    for(const [obj,o] of xsStrips){const x=o.xs||{}; // v10 extra links / mute groups
+      for(const l of x.link||[])member.push([obj,l,null]);for(const u of x.mute||[])member.push([obj,null,+u]);}
     const table=Array.from({length:16},(_,s)=>String((spec.links||[])[s]||"").trim());
     const slot={};
     for(const [,l] of member){ // explicit slots first
@@ -5410,15 +5545,21 @@ async function emoImport(bytes,fileStemName){
       "SELECT chainer_id, param_id, param_value FROM snapshot_chainer_params WHERE snapshot_id = -1 AND param_id IN (592, 106)")){
       if(pid===592)colorOf[cid]=Math.round(v);else if(v)postFxOf[cid]=true;
     }
-    const dests={},links={},mtxFeeds={},mutes={};
-    const MUTE0=first[13];
+    // Every assignment row: the first group (else LR) / link / mute group is the strip's own
+    // field; the rest becomes its xs (multi-assign, PATCH › INTERNAL) further below.
+    const dests={},links={},mtxFeeds={},mutes={},allTo={},allLinks={},allMutes={};
+    const MUTE0=first[13],push=(m,k,v)=>(m[k]=m[k]||[]).push(v);
     for(const [src,dst,at] of eq(db,
-      "SELECT src_id, dst_id, dst_asgn_type FROM snapshot_assignment WHERE snapshot_id = -1 AND dst_asgn_type IN (0, 2)")){
-      if(at===2&&MUTE0!==undefined&&dst>=MUTE0&&dst<MUTE0+8){mutes[src]=dst-MUTE0+1;continue;}
-      if(at===2)links[src]=dst;
-      else if(dst>=MTX0&&dst<MTX0+nMtx)(mtxFeeds[src]=mtxFeeds[src]||[]).push(dst);
-      else dests[src]=dst;
+      "SELECT src_id, dst_id, dst_asgn_type FROM snapshot_assignment WHERE snapshot_id = -1 AND dst_asgn_type IN (0, 2) ORDER BY id")){
+      if(at===2&&MUTE0!==undefined&&dst>=MUTE0&&dst<MUTE0+8){push(allMutes,src,dst-MUTE0+1);continue;}
+      if(at===2)push(allLinks,src,dst);
+      else if(dst>=MTX0&&dst<MTX0+nMtx)push(mtxFeeds,src,dst);
+      else push(allTo,src,dst);
     }
+    for(const [src,L] of Object.entries(allTo)){const g=L.find(d=>d>=GRP0&&d<GRP0+nGrp&&GRP0>=0);
+      const d=g!==undefined?g:L.includes(LR)?LR:undefined;if(d!==undefined)dests[src]=d;}
+    for(const [src,L] of Object.entries(allLinks))links[src]=L[0];
+    for(const [src,L] of Object.entries(allMutes))mutes[src]=L[0];
     const linkTable=Array.from({length:16},(_,s)=>{
       const nm=(nameOf[LNK0+s]||"").trim();return /^Link \d+$/.test(nm)?"":nm;});
     const linkLab=obj=>{const s=obj-LNK0;return (linkTable[s]||"")||`Link ${s+1}`;};
@@ -5472,7 +5613,7 @@ async function emoImport(bytes,fileStemName){
     // group destinations + matrix feeds
     for(const g of groups){
       const d=dests[g._cid];
-      g.dest=(d!==undefined&&d!==LR&&grpLabel[d])?grpLabel[d]:null;
+      g.dest=(d!==undefined&&d!==LR&&grpLabel[d])?grpLabel[d]:null;if(d===undefined)g.unassigned=true;
       g.matrix=(mtxFeeds[g._cid]||[]).map(m=>mtxLabel[m]).filter(Boolean);
       delete g._cid;
     }
@@ -5517,7 +5658,7 @@ async function emoImport(bytes,fileStemName){
       const d=dests[cid];
       refOf[`2:${i}`]=["fx",nm&&!isDef(nm,fxRe)?nm:"Fx "+(i+1)];
       fxs.push(objOf[`2:${i}`]={name:nm&&!isDef(nm,fxRe)?nm:"Fx "+(i+1),stereo:stereoOf[cid]!==false,
-        dest:(d!==undefined&&d!==LR&&grpLabel[d])?grpLabel[d]:null,
+        dest:(d!==undefined&&d!==LR&&grpLabel[d])?grpLabel[d]:null,...(d===undefined?{unassigned:true}:{}),
         ...(colorOf[cid]!=null?{color:colorOf[cid]}:{}),...lmOf(cid),
         ...(rackOf(cid)?{rack:rackOf(cid)}:{})});
     }
@@ -5584,6 +5725,24 @@ async function emoImport(bytes,fileStemName){
     for(const [ot,oi,v] of eq(db,"SELECT o.obj_type, o.obj_index, p.param_value FROM snapshot_chainer_params p JOIN object o ON o.id = p.chainer_id "+
         "WHERE p.snapshot_id = -1 AND p.param_id = 379")){
       const o=srcObj(ot,oi),t=Math.round(v);if(o&&t>=0&&t<=3&&t!==2)o.ipf=t;
+    }
+    // Multi-assign: what a strip has beyond its own fields (first group-or-LR, the matrix list of
+    // channels / groups, first link, first mute group) -> xs = {to, mtx, link, mute}
+    const toLab=d=>d===LR?"LR":d===first[4]?"C":d===first[5]?"M":grpLabel[d]||null;
+    const xsFor=(cid,ownMtx,ownTo)=>{ // ownTo: the strip has a group-or-LR field of its own (channel, group, FX)
+      const own=ownTo?dests[cid]:undefined,to=(allTo[cid]||[]).filter(d=>d!==own).map(toLab).filter(Boolean);
+      const x={to,mtx:ownMtx?[]:(mtxFeeds[cid]||[]).map(m=>mtxLabel[m]).filter(Boolean),
+        link:(allLinks[cid]||[]).slice(1).map(linkLab),mute:(allMutes[cid]||[]).slice(1)};
+      return x.to.length||x.mtx.length||x.link.length||x.mute.length?x:null;};
+    for(const [key,o] of Object.entries(objOf)){
+      const [t,i]=key.split(":").map(Number),cid=t===0?1+i:t===1?GRP0+i:t===2?FX0+i:t===6?MTX0+i:null;
+      if(cid===null)continue;const x=xsFor(cid,t===0||t===1,t===0||t===1||(t===2&&i<8));if(x)o.xs=x;
+    }
+    for(const [o,cid] of [[master,LR],[busx.center,first[4]],[busx.mono,first[5]],[busx.cue,first[7]]]){
+      if(cid===undefined)continue;
+      const x={to:(allTo[cid]||[]).map(toLab).filter(Boolean),mtx:(mtxFeeds[cid]||[]).map(m=>mtxLabel[m]).filter(Boolean),
+        link:(allLinks[cid]||[]).map(linkLab),mute:allMutes[cid]||[]};
+      if(x.to.length||x.mtx.length||x.link.length||x.mute.length)o.xs=x;
     }
     return {
       format:"lv1-input-list",version:9,
