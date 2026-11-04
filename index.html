@@ -3974,11 +3974,10 @@ $("#siImg").addEventListener("change",e=>{
   const it=stg().items[stageSel],v=e.target.value;if(!it||!v||it.img===v)return;
   it.img=v;it.cm=libCm(v)||it.cm;
   const {chs}=linkedRowsFor([stageSel]);
-  if(chs.size){const all=lsStagePicks();for(const c of chs.values())all[c.name.trim().toUpperCase()]=v;
-    try{localStorage.setItem("lv1.stagePicks",JSON.stringify(all));}catch(_){/* not remembered */}}
+  if(chs.size)rememberPicks([...chs.values()].map(c=>c.name),v);
   e.target.blur();render();
   setStatus(`Picture changed to “${v.startsWith("custom:")?((stg().custom[v.slice(7)]||lsCustoms()[v.slice(7)]||{}).name||v):libName(v)}” — links and patch kept`+
-    (chs.size?`; remembered for ${[...chs.values()].map(c=>c.name.trim()).join(", ")}.`:"."));
+    (chs.size?`; remembered for ${[...chs.values()].map(c=>c.name.trim()).join(", ")}${useOnline()?" (shared through the online library)":""}.`:"."));
 });
 $("#siDup").onclick=()=>{const it=stg().items[stageSel];if(!it)return;
   // A duplicate is a NEW instrument: it starts outside the position, without
@@ -4202,7 +4201,41 @@ function stageImgFor(fam,chs){ // the picture for one recognised group
 }
 const STAGE_GROUP=new Set(["kit","piano","leslie","keys"]); // families whose inputs on one Position form ONE instrument
 const STAGE_GLABEL={kit:"Drums",piano:"Piano",leslie:"Leslie",keys:"Keys"};
-function lsStagePicks(){try{return JSON.parse(localStorage.getItem("lv1.stagePicks")||"{}");}catch(_){return {};}}
+/* Remembered stage pictures: {NAME: {img, t}} ("-" = skip) in this browser and — with the Google
+   bridge set up — in the online show library as ONE reserved document (PICKS_ID, hidden from the
+   show list; the existing saveShow / get ops carry it, so no bridge redeploy). Every computer and
+   teammate on that bridge shares them; merging keeps the newest pick per name. */
+const PICKS_ID="LV1-BUILDER-STAGE-PICKS";
+function lsPicksRaw(){try{const o=JSON.parse(localStorage.getItem("lv1.stagePicks")||"{}");
+  for(const k in o)if(typeof o[k]==="string")o[k]={img:o[k],t:0}; // v117 stored plain ids
+  return o;}catch(_){return {};}}
+const lsPicksPut=o=>{try{localStorage.setItem("lv1.stagePicks",JSON.stringify(o));}catch(_){/* quota / blocked: not remembered */}};
+function lsStagePicks(){return Object.fromEntries(Object.entries(lsPicksRaw()).map(([k,v])=>[k,v.img]));}
+function mergePicks(a,b){const o={...a};
+  for(const [k,v] of Object.entries(b||{}))if(v&&v.img&&(!o[k]||(v.t||0)>(o[k].t||0)))o[k]={img:v.img,t:v.t||0};
+  return o;}
+let picksTimer=null;
+function rememberPicks(names,img){ // a user's pick for these input names; shared online shortly after
+  const all=lsPicksRaw(),t=Date.now();
+  for(const n of names)all[n.trim().toUpperCase()]={img,t};
+  lsPicksPut(all);
+  if(useOnline()){clearTimeout(picksTimer);picksTimer=setTimeout(()=>syncPicks(true).catch(()=>{}),1500);}
+}
+async function syncPicks(push){ // pull + merge into this browser; push the merged set when the library lacks some of it
+  if(!useOnline())return false;
+  const r=await Promise.race([gsGet(`${bridgeUrl()}?shows=get&show=${PICKS_ID}`),
+    new Promise((_,rej)=>setTimeout(()=>rej(new Error("the online library did not answer")),10000))]);
+  if(!r.ok&&!/not found/.test(r.error||""))throw bridgeErr(r);
+  const remote=(r.ok&&r.doc&&r.doc.stagePicks)||{},merged=mergePicks(lsPicksRaw(),remote);
+  lsPicksPut(merged);
+  const news=Object.entries(merged).some(([k,v])=>!remote[k]||remote[k].img!==v.img||(remote[k].t||0)!==v.t);
+  if(push&&news){
+    const w=await gsPost(bridgeUrl(),JSON.stringify({op:"saveShow",id:PICKS_ID,
+      doc:{show:{name:"Remembered stage pictures"},savedAt:new Date().toISOString(),stagePicks:merged}}),"Sharing remembered stage pictures…");
+    if(!w.ok)throw bridgeErr(w);
+  }
+  return true;
+}
 function stageProposal(missing){ // -> [{img, fam, chs:[channel rows], label}]
   const picks=lsStagePicks(),groups=[],byKey=new Map();
   for(const c of missing){
@@ -4273,15 +4306,14 @@ $("#inputsToStage").onclick=async()=>{
   const missing=state.channels.filter(c=>c.name.trim()&&!c.ds&&!have.has(c.name.trim().toUpperCase()));
   if(!missing.length){setStatus("Every named input already has a stage item.");return;}
   if(!STAGELIB.length){setStatus("The image library hasn't loaded yet.",true);return;}
+  let offline=false;
+  if(useOnline()){setStatus("Reading the remembered pictures from the online library…");
+    try{await syncPicks(false);}catch(_){offline=true;}}
   const groups=stageProposal(missing);
   const r=await stagePreview(groups);
   if(!r){setStatus("Inputs → stage cancelled — nothing added.");return;}
   groups.forEach((g,i)=>g.img=r.picks[i]);
-  if(r.remember){
-    const all=lsStagePicks();
-    for(const g of groups)for(const c of g.chs)all[c.name.trim().toUpperCase()]=g.img;
-    try{localStorage.setItem("lv1.stagePicks",JSON.stringify(all));}catch(_){/* quota / blocked: just not remembered */}
-  }
+  if(r.remember)for(const g of groups)rememberPicks(g.chs.map(c=>c.name),g.img);
   const put=groups.filter(g=>g.img!=="-");
   stageLayout(put);
   const first=stg().items.length;
@@ -4294,7 +4326,8 @@ $("#inputsToStage").onclick=async()=>{
   render();
   const n=put.reduce((s,g)=>s+g.chs.length,0),skipped=groups.length-put.length;
   setStatus(`${put.length} stage item${put.length===1?"":"s"} added for ${n} input${n===1?"":"s"}`+
-    (skipped?` (${skipped} skipped)`:"")+" — they are selected: drag them into place.");
+    (skipped?` (${skipped} skipped)`:"")+" — they are selected: drag them into place."+
+    (offline?" (Online library unreachable — used this browser's remembered pictures.)":""),offline);
 };
 /* Render the stage to a bitmap (used by Export PNG and the vendor PDF).
    It reproduces the on-screen stage (#stage + .sitem/.slab/.rbox CSS) at a
@@ -5135,7 +5168,7 @@ async function refreshOnline(){
   try{
     const r=await gsGet(`${bridgeUrl()}?shows=list`);
     if(!r.ok)throw bridgeErr(r);
-    onlineShows=r.shows||[];
+    onlineShows=(r.shows||[]).filter(s=>s.id!==PICKS_ID); // the remembered stage pictures are not a show
   }catch(err){onlineShows=null;onlineErr="Online library unavailable: "+(err.message||err);}
   renderShows();
 }
@@ -5147,6 +5180,7 @@ async function saveOnline(id,doc){
   loadedOnline={id,savedAt:doc.savedAt};
 }
 $("#btnShows").onclick=()=>{const m=$("#showsMenu");m.hidden=!m.hidden;if(!m.hidden)refreshOnline();};
+setTimeout(()=>syncPicks(true).catch(()=>{}),2500); // share / learn remembered stage pictures (quietly; Inputs → stage re-reads)
 document.addEventListener("click",e=>{ // click outside closes the menu
   if(!e.target.closest("#showsWrap")&&!e.target.closest("#cfm"))$("#showsMenu").hidden=true;
 });
