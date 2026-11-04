@@ -4750,16 +4750,47 @@ function foldLR(rows,warn,make){ // shared L/R-pair folding for sheet rows
   const out=[];
   for(let i=0;i<rows.length;i++){
     const r=rows[i];if(!r.name)continue;
-    let stereo=false;
+    let stereo=false,r2=null;
     if(r.cfg==="L"){
-      if(rows[i+1]&&rows[i+1].cfg==="R"){stereo=true;i++;}
+      if(rows[i+1]&&rows[i+1].cfg==="R"){stereo=true;r2=rows[++i];}
       else warn.push(`${r.name}: L row without an R row below it — made mono`);
     }else if(r.cfg==="R"){
       warn.push(`${r.name}: R row without an L row above it — made mono`);
     }
     const name=(stereo?r.name.replace(/\s+[LR]$/i,""):r.name).trim();
-    out.push(make(name,stereo,r));
+    out.push(make(name,stereo,r,r2));
   }
+  return out;
+}
+/* The sheet's PATCH column is the input number (1-based, over the Auto inputs).
+   Skipped numbers are deliberate empty channels: each one becomes an empty
+   default strip, and the next named channel is pinned to its sheet number
+   (one pin re-syncs Auto from there on, so the rest stays Auto). */
+function sheetPatch(chans,warn){
+  const auto=autoInList(),out=[],used=new Set();
+  let p=0,top=0,short=0; // p mirrors resolveIn's Auto pointer; top = highest input number placed so far
+  for(const {ch,nums} of chans){
+    const prevA=ch.inA||[];delete ch.inA;
+    const legs=nums.map((n,l)=>{
+      if(!(n>0)){ // no number on the sheet (e.g. an AES leg): keep the builder's own patch
+        const q=prevA[l];
+        if(q===0)return 0;
+        if(pinOk(q)){const j=pinIdx(auto,q);if(j>=0){p=j+1;top=Math.max(top,p);}return q;}
+        top=Math.max(top,++p);return null;
+      }
+      if(used.has(n))warn.push(`${ch.name}: input ${n} is on the sheet twice — both channels share it`);
+      used.add(n);
+      if(l===0)for(let k=top;k<n-1;k++)out.push(defCh()); // skipped numbers -> empty channels (they take no input)
+      top=Math.max(top,n);
+      if(n-1===p){p++;return null;}
+      p=n;
+      if(n>auto.length){short++;return null;}
+      return auto[n-1];
+    });
+    if(legs.some(q=>q!==null))ch.inA=legs;
+    out.push(ch);
+  }
+  if(short)warn.push(`the sheet uses inputs beyond the ${auto.length} Auto inputs of this I/O — add devices on PATCH`);
   return out;
 }
 function applySheet(data){ // sheet rows -> builder channels (keeps routing/racks by name)
@@ -4771,11 +4802,12 @@ function applySheet(data){ // sheet rows -> builder channels (keeps routing/rack
     if(k in show)state.show[k]=show[k]||"";
   const old=new Map(state.channels.filter(c=>c.name.trim()).map(c=>[c.name.trim().toUpperCase(),c]));
   const warn=[];
-  const chans=foldLR(data.rows||[],warn,(name,stereo,r)=>{
+  const num=r=>parseInt(r&&r.num,10)||0;
+  const chans=sheetPatch(foldLR(data.rows||[],warn,(name,stereo,r,r2)=>{
     const prev=old.get(name.toUpperCase());
-    return {...(prev||defCh()),name,stereo,
-      mic:r.mic||"",stand:r.stand||"",pos:r.pos||"",notes:r.notes||""};
-  });
+    return {ch:{...(prev||defCh()),name,stereo,
+      mic:r.mic||"",stand:r.stand||"",pos:r.pos||"",notes:r.notes||""},nums:stereo?[num(r),num(r2)]:[num(r)]};
+  }),warn);
   // Digital splits aren't on the sheet: keep them (below the pulled inputs)
   // while their source input is still there.
   const have=new Set(chans.map(c=>c.name));
@@ -4796,9 +4828,11 @@ function applySheet(data){ // sheet rows -> builder channels (keeps routing/rack
     warn.push("auxes not synced — the deployed bridge script is an older version (copy the current one from Setup… and redeploy)");
   }
   clearSel();rackOpen=null;applyConfig();render();
-  let msg=`Builder updated from the sheet: ${Math.min(nPulled,cfg().ch)} input${nPulled===1?"":"s"}`+
+  const kept=chans.slice(0,cfg().ch),nIn=kept.filter(c=>c.name).length,nGap=kept.length-nIn;
+  let msg=`Builder updated from the sheet: ${nIn} input${nIn===1?"":"s"}`+
+    (nGap?` (+${nGap} empty channel${nGap===1?"":"s"} kept from skipped sheet numbers)`:"")+
     (nAux>=0?`, ${nAux} aux${nAux===1?"":"es"}.`:".");
-  if(dropped)msg+=` ${dropped} input(s) beyond the ${cfg().ch}-strip bank were dropped.`;
+  if(dropped)msg+=` ${dropped} strip(s) beyond the ${cfg().ch}-strip bank were dropped.`;
   if(warn.length)msg+=" "+warn.join(" · ");
   setStatus(msg,!!(warn.length||dropped));
 }
@@ -4808,6 +4842,14 @@ $("#btnPull").onclick=async()=>{
   try{
     const data=await gsGet(`${p.br}?id=${encodeURIComponent(p.id)}`);
     if(!data.ok)throw new Error(data.error||"bridge error");
+    const nCh=named(state.channels.filter(c=>!c.ds)).length,nAx=named(state.auxes).length;
+    if(nCh||nAx){
+      const cnt=rs=>(rs||[]).filter(r=>r.name&&r.cfg!=="R").length,nS=cnt(data.rows),nSa=cnt(data.auxes);
+      const ok=await askConfirm(`The builder already has ${nCh} input${nCh===1?"":"s"} and ${nAx} aux${nAx===1?"":"es"}.\n`+
+        `Pulling REPLACES the input and aux lists (and the show details) with the sheet's ${nS} input${nS===1?"":"s"} and ${nSa} aux${nSa===1?"":"es"}, numbered as on the sheet.\n`+
+        `Inputs whose names match keep their routing, racks and colours; everything else resets.`,"OK — replace","Cancel");
+      if(!ok){setStatus("Pull cancelled — the builder is unchanged.");return;}
+    }
     applySheet(data);
   }catch(err){gsError(err);}
   finally{gsBusy=false;$("#btnPull").disabled=false;}
