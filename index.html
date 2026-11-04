@@ -1469,7 +1469,7 @@ document.addEventListener("keydown",e=>{ // Esc clears every list selection
 function defaultShow(){
   // Start empty: pick the mixer config, name strips, route, export.
   return {show:{name:"",date:"",venue:"",sheetUrl:"",fohContact:"",monContact:"",pmContact:"",fohDesk:"",monDesk:"",pa:"",notes:""},configId:"80-16",
-          channels:[],groups:[],fx:[],auxes:[],matrixes:[],master:{rack:null,outs:null},io:[ioDev("MGB")],d2d:[],
+          channels:[],groups:[],fx:[],auxes:[],matrixes:[],master:{rack:null,outs:null},io:[ioDev("CLASSIC")],d2d:[], // a new show starts on one Waves IO (Classic); shows saved without io[] stay MGB
           stage:{items:[],custom:{},widthM:12}};
 }
 function applyConfig(){
