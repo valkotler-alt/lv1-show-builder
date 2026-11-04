@@ -4994,13 +4994,15 @@ async function gsPost(br,body,label){ // POST; where POST is blocked -> chunked 
   }
   return gsPushChunked(br,body,label);
 }
-function ioText(legs,out){ // pins -> "IONIC 24-1 Mic/Line 3–4" (the I/O column of the Google Sheet / vendor PDF)
+function ioText(legs,out){ // pins -> "IONIC 24-1 Mic/Line 3–4" / "MADI 5" (the I/O column of the Google Sheet / vendor PDF)
   const ps=(legs||[]).filter(Boolean).map(p=>{const k=devK(p.d);
     return {k,x:IO_MODELS[state.io[k].model][out?"outChs":"inChs"].find(z=>z.c===p.c)};});
   const one=a=>`${a.x.type==="Out"?"Out":a.x.type} ${a.x.lbl}`;
+  // The show's one MGB needs no device name; a second MGB keeps them apart.
+  const dev=k=>state.io[k].model==="MGB"&&state.io.filter(d=>d.model==="MGB").length===1?"":ioName(k)+" ";
   if(!ps.length)return "";
-  if(ps.length===2&&ps[0].k===ps[1].k&&ps[0].x.type===ps[1].x.type)return `${ioName(ps[0].k)} ${one(ps[0])}–${ps[1].x.lbl}`;
-  return ps.map(a=>`${ioName(a.k)} ${one(a)}`).join(" / ");
+  if(ps.length===2&&ps[0].k===ps[1].k&&ps[0].x.type===ps[1].x.type)return `${dev(ps[0].k)}${one(ps[0])}–${ps[1].x.lbl}`;
+  return ps.map(a=>dev(a.k)+one(a)).join(" / ");
 }
 function sheetRows(){ // builder channels -> sheet rows (stereo = L row + R row)
   const pts=ports(),A=resolveIn().A;const out=[];
@@ -5384,7 +5386,7 @@ $("#btnPdf").onclick=async()=>{
   const label=(t,ly)=>{doc.setFont("helvetica","bold");doc.setFontSize(8);doc.setTextColor(110);
     doc.text(t,14,ly,{charSpace:0.8});doc.setTextColor(0);};
   label("INPUTS",y+3);
-  // I/O = the device and channel the patch (PATCH tab) puts there, e.g. "IONIC 24-1 Mic/Line 3"
+  // I/O = the device and channel the patch (PATCH tab) puts there, e.g. "IONIC 24-1 Mic/Line 3" (an MGB: just "MADI 3")
   const ioCols={0:{cellWidth:14,halign:"right"},1:{cellWidth:42},3:{cellWidth:12,halign:"center"}};
   doc.autoTable({...tbl,startY:y+5.5,columnStyles:ioCols,
     head:[["CH","I/O","NAME","M/ST","MIC / DI","STAND","STAGE POSITION","NOTES"]],
