@@ -520,7 +520,14 @@ tr:last-child td{border-bottom:none;}
 td input,td select{width:100%;min-width:72px;box-sizing:border-box;background:transparent;border-color:transparent;}
 td input:focus,td select:focus{border-color:var(--accent)!important;}
 td select.asg{min-width:104px;}
-td select.mutesel{min-width:58px;width:58px;}
+/* read-only internal assignment (edited on PATCH › INTERNAL; a click opens the strip's row there) */
+td button.asgv{display:block;width:100%;min-width:104px;max-width:180px;padding:5px 8px;font-size:12px;text-align:left;background:transparent;border-color:transparent;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+td button.asgv.mu{min-width:58px;width:58px;}
+td button.asgv:hover{background:var(--panel2);border-color:var(--line);}
+td button.asgv:hover::after{content:" ↗";color:var(--dim);}
+td button.asgv.none{color:var(--dim);}
+td button.asgv.multi{font-weight:700;letter-spacing:.06em;color:var(--accent);}
+td button.asgv.missing{color:var(--mtx);}
 td.lnkmem{font-size:12px;color:var(--dim);} /* group / link / matrix: room for the name */
 td select.missing{color:var(--mtx);}
 td input:hover,td select:hover,td input:focus,td select:focus{background:var(--panel2);border-color:var(--line);}
@@ -556,7 +563,7 @@ td input::placeholder{color:var(--dim);opacity:.55;font-style:italic;}
 .p48.on{color:#fff;background:#d63a3a;border-color:#d63a3a;}
 .p48.on:hover{background:#e04848;}
 /* PATCH tab: the LV1 patch window (LV1's own dark palette in every theme: WCMatrixManager / WCMatrixDelegate colours) */
-.pw{margin-top:14px;background:#1b1b1b;border:1px solid #000;border-radius:8px;padding:8px;color:#e7e7e7;user-select:none;}
+.pw{margin-top:14px;scroll-margin-top:56px;background:#1b1b1b;border:1px solid #000;border-radius:8px;padding:8px;color:#e7e7e7;user-select:none;}
 .pw button{font-family:inherit;}
 .pw-top{display:flex;gap:8px;margin-bottom:8px;}
 .pw-main{display:flex;gap:8px;padding:8px;background:#262626;border-radius:6px;align-items:center;flex:none;}
@@ -920,7 +927,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 
 <section style="--seccolor:var(--ch)" data-tab="in">
   <div class="sechead"><h2>Inputs</h2><span class="count" id="chCount"></span>
-    <span class="hint">Patch = the input on the PATCH tab: new inputs take the device inputs top-down (Auto, stereo takes two) until you patch them there. <b>DS</b> on a row adds a digital split — the same input on another strip, off the master, for monitors (.emo only: never on the PDF, sheet or stage). Click a row's # to select (Shift = range, Ctrl = add/remove, Esc = clear) · drag the # to move rows.</span></div>
+    <span class="hint">Patch = the input on the PATCH tab: new inputs take the device inputs top-down (Auto, stereo takes two) until you patch them there. <b>DS</b> on a row adds a digital split — the same input on another strip, off the master, for monitors (.emo only: never on the PDF, sheet or stage). Group, Link and Mute are assigned on PATCH › INTERNAL (MULTI = several): click one to open the input's row there. Click a row's # to select (Shift = range, Ctrl = add/remove, Esc = clear) · drag the # to move rows.</span></div>
   <div class="tblwrap"><table id="chTable">
     <thead><tr><th>#</th><th>Patch</th><th>Name</th><th>M/ST</th><th>Color</th><th>Group</th><th>Link</th><th>Mute</th><th>Matrix</th><th>Mic</th><th>Stand</th><th>Stage position</th><th>Notes</th><th>Rack</th><th></th><th class="iocol"></th><th class="iocol"></th></tr></thead>
     <tbody></tbody>
@@ -929,7 +936,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 
 <section style="--seccolor:var(--ch)" data-tab="io">
   <div class="sechead"><h2>Patch</h2><span class="count" id="ioCount"></span>
-    <span class="hint">The show's SoundGrid I/O devices, in LV1 slot order (A1–A8, then B1–B8): add them below; in the patch window's top strip drag a device's ⋮⋮ to reorder it and ✕ removes it. The patch window works like LV1's: pick a view (INPUT / OUTPUT / INTERNAL / DEVICE TO DEVICE), the devices to show (top strip) and click or drag across cells (drag straight or diagonally to patch a run). INTERNAL assigns strips to any number of groups, Main, matrixes, links and mute groups (LV1's rules: grey cells are not possible); the INPUTS / OUTPUTS menus show the first, a +N badge the rest. New inputs patch themselves top-down (Auto) through the Mic/Line and MADI inputs until you patch them here. In the Input views each preamp has its Gain knob (drag up/down, wheel, arrow keys; double-click = +20 dB) and 48V button above its column. All of it goes into the .emo session.</span></div>
+    <span class="hint">The show's SoundGrid I/O devices, in LV1 slot order (A1–A8, then B1–B8): add them below; in the patch window's top strip drag a device's ⋮⋮ to reorder it and ✕ removes it. The patch window works like LV1's: pick a view (INPUT / OUTPUT / INTERNAL / DEVICE TO DEVICE), the devices to show (top strip) and click or drag across cells (drag straight or diagonally to patch a run). INTERNAL assigns strips to any number of groups, Main, matrixes, links and mute groups (LV1's rules: grey cells are not possible) — the only place to assign groups, links and mutes: the INPUTS / OUTPUTS tables show them read-only (MULTI for several) and a click there opens the strip's row here. New inputs patch themselves top-down (Auto) through the Mic/Line and MADI inputs until you patch them here. In the Input views each preamp has its Gain knob (drag up/down, wheel, arrow keys; double-click = +20 dB) and 48V button above its column. All of it goes into the .emo session.</span></div>
   <div class="ioadd" id="ioAdd"></div>
   <div class="iodevs" id="ioDevs"></div>
   <div class="pw" id="pw"></div>
@@ -937,7 +944,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 
 <section style="--seccolor:var(--grp)" data-tab="out">
   <div class="sechead"><h2>Groups</h2><span class="count" id="grpCount"></span>
-    <span class="hint">Pre/Post FX is the LV1 group processing point. Destination MASTER = LR.</span></div>
+    <span class="hint">Pre/Post FX is the LV1 group processing point. Destination MASTER = LR. Destination, Link and Mute are assigned on PATCH › INTERNAL: click one to open the group's row there.</span></div>
   <div class="tblwrap"><table id="grpTable">
     <thead><tr><th>#</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>Link</th><th>Mute</th><th>FX point</th><th>Matrix feeds</th><th>Rack</th><th></th><th class="iocol"></th><th class="iocol"></th></tr></thead>
     <tbody></tbody>
@@ -1307,7 +1314,7 @@ function patchRoutes(){ // the resolved patch as LV1 route rows (spec v9 `routes
    A strip's internal assignments are a set of keys: "g:<group>", "LR", "C",
    "M", "x:<matrix>", "l:<link label>", "u:<mute group 1-8>". Its first
    group-or-LR / matrix / link / mute stay in the strip's own fields (group or
-   dest, matrix, link, mute: the menus of the INPUTS / OUTPUTS tabs);
+   dest, matrix, link, mute — the spec / .emo fields; INPUTS / OUTPUTS show them read-only);
    everything beyond them lives in strip.xs = {to: [group names, "LR", "C",
    "M"], mtx: [], link: [], mute: []}. Main / Center / Mono / Cue keep all of
    theirs in xs. */
@@ -1348,6 +1355,29 @@ function setAsg(kind,o,S){ // a key set -> the strip's own fields (first of each
 }
 const xsCount=o=>{const x=o.xs||{};return ["to","mtx","link","mute"].reduce((n,k)=>n+((x[k]||[]).length),0);};
 const xsBadge=(kind,o)=>{const n=xsCount(o);return n?` <span class="xsn" title="${esc([...asgOf(kind,o)].sort((a,b)=>asgOrder(a)-asgOrder(b)).map(k=>k.replace(/^g:|^x:|^l:/,"").replace(/^u:/,"Mute ")).join(" · "))} (PATCH › INTERNAL)">+${n}</span>`:"";};
+/* The INPUTS / OUTPUTS tables show a strip's Group (or Destination), Link and Mute assignments
+   read-only — they are edited on PATCH › INTERNAL: the one assignment's name, MULTI for several
+   (all of them in the tooltip), ⚠ for a strip that is not in this configuration. A click opens
+   the strip's row there (pwFocus). t: g = groups + Main / Center / Mono, x = matrix, l = link, u = mute. */
+const ASG_T={g:k=>k.startsWith("g:")||k==="LR"||k==="C"||k==="M",x:k=>k.startsWith("x:"),l:k=>k.startsWith("l:"),u:k=>k.startsWith("u:")};
+const asgName=k=>k==="LR"?"MASTER":k==="C"?"Center":k==="M"?"Mono":k.startsWith("u:")?"Mute "+k.slice(2):k.slice(2);
+function asgCell(kind,i,o,t){
+  const ks=[...asgOf(kind,o)].filter(ASG_T[t]).sort((a,b)=>asgOrder(a)-asgOrder(b));
+  const bad=k=>asgOrder(k)===9999||(k.startsWith("l:")&&!linkLabels().includes(k.slice(2)));
+  const miss=ks.some(bad),one=ks.length===1;
+  const txt=!ks.length?(t==="g"?"No master":"—"):one?(t==="u"?ks[0].slice(2):asgName(ks[0])):"MULTI";
+  const tip=(ks.length?ks.map(k=>(bad(k)?"⚠ not in this configuration: ":"")+asgName(k)).join(" · "):"Not assigned")+" — click: edit on PATCH › INTERNAL";
+  return `<td><button type="button" class="asgv${t==="u"?" mu":""}${ks.length?"":" none"}${ks.length>1?" multi":""}${miss?" missing":""}" data-asgk="${kind}" data-asgi="${i}" data-asgt="${t}" title="${esc(tip)}">${miss?"⚠ ":""}${esc(txt)}</button></td>`;
+}
+function pwFocus(kind,o,t){ // PATCH › INTERNAL with the strip's row (and its first assignment of type t) in view
+  PW.main="internal";setTab("io");pwRender();$("#pw").scrollIntoView({block:"start"});
+  const sc=$("#pw .pw-cells"),ri=PW.rows.findIndex(r=>r.o===o);if(!sc||ri<0)return;
+  const S=asgOf(kind,o),cell=pwCell();
+  let cj=PW.cols.findIndex(c=>ASG_T[t](c.key)&&S.has(c.key));if(cj<0)cj=PW.cols.findIndex(c=>ASG_T[t](c.key));
+  sc.scrollTop=Math.max(0,ri*cell-(sc.clientHeight-cell)/2);
+  if(cj>=0)sc.scrollLeft=Math.max(0,cj*cell-(sc.clientWidth-cell)/2);
+  PW.hover={r:ri,c:cj};pwSync();pwFoot();sc.focus({preventScroll:true});
+}
 function asgAllowed(kind,o,key){ // LV1's assign rules (WCMixerAssignRulesCreator; group pre / post FX: IsValidDynamicGroupAsgnByDstRules)
   if(key.startsWith("l:")||key.startsWith("u:"))return true;
   if(key.startsWith("x:"))return kind!=="mtx";
@@ -1682,7 +1712,7 @@ const rowCls=(kind,i)=>` data-rk="${kind}" data-ri="${i}"`+(sel[kind].has(i)?' c
 /* Assignment menus list EVERY strip of the selected mixer configuration:
    the strip's name when set, else its default label ("Group 3"). Picking an
    unnamed strip auto-names it so the assignment is actually built. */
-function stripOpts(kind,exceptLabel){
+function stripOpts(kind){
   const list=listFor[kind]();
   const used=new Set(list.map(x=>x.name.trim().toUpperCase()).filter(Boolean));
   return list.map((x,i)=>{
@@ -1690,7 +1720,7 @@ function stripOpts(kind,exceptLabel){
     if(n)return n;
     const d=DEFNAME[kind](i);
     return used.has(d.toUpperCase())?null:d; // a real name shadows a default label
-  }).filter(o=>o&&o!==exceptLabel);
+  }).filter(Boolean);
 }
 function autoName(kind,label){ // picking an unnamed strip's default label names it
   const list=listFor[kind]();
@@ -1706,7 +1736,6 @@ const linkLabels=()=>Array.from({length:LINK_COUNT},(_,i)=>linkLabel(i));
 
 function renderChannels(){
   const tb=$("#chTable tbody"); const pts=resolveIn().A; const dups=dupNames(state.channels);
-  const grpOpts=[NO_MAIN,...stripOpts("grp")];
   const mtxOpts=stripOpts("mtx");
   const srcOpts=state.channels.filter(c=>!c.ds&&c.name.trim()).map(c=>c.name.trim());
   tb.innerHTML=state.channels.map((ch,i)=>{
@@ -1734,10 +1763,8 @@ function renderChannels(){
       ${nameCell("ch",i,ch.name,dups)}
       ${isDs?`<td><button class="stbtn small ${ch.stereo?"st":""}" disabled title="A split has its source's format">${ch.stereo?"ST":"M"}</button></td>`:stCell("ch",i,ch.stereo)}
       ${colorCell("ch",i,ch.color)}
-      <td>${s("group",ch.group,grpOpts,"MASTER")}${xsBadge("ch",ch)}</td>
-      <td>${s("link",ch.link,linkLabels(),"None")}</td>
-      ${muteCell("ch",i,ch.mute)}
-      <td>${s("matrix",ch.matrix,mtxOpts,"None")}</td>
+      ${asgCell("ch",i,ch,"g")}${asgCell("ch",i,ch,"l")}${asgCell("ch",i,ch,"u")}
+      ${(ch.xs&&ch.xs.mtx||[]).length?asgCell("ch",i,ch,"x"):`<td>${s("matrix",ch.matrix,mtxOpts,"None")}</td>`}
       ${ioCells}
       ${rackCell("ch",i,ch.rack)}
       ${opsCell("ch",i,!isDs&&ch.name.trim()?`<button class="small dsbtn" data-k="ch" data-i="${i}" data-f="split" title="Digital split: add a copy of this input on the next free strip — same physical input, its own processing, not routed to master (for monitors)">DS</button>`:"")}${ioOpsCell("ch",i)}</tr>`+rackRow("ch",i,ch.rack,17,ch.stereo);
@@ -1753,16 +1780,12 @@ function renderGroups(){
   const tb=$("#grpTable tbody"); const dups=dupNames(state.groups);
   const mtxOpts=stripOpts("mtx");
   tb.innerHTML=state.groups.map((g,i)=>{
-    const selfLabel=g.name.trim()||DEFNAME.grp(i);
-    const destOpts=["MASTER",NO_MAIN,...stripOpts("grp",selfLabel)];
-    if(g.dest&&!destOpts.includes(g.dest))destOpts.splice(2,0,g.dest);
     return `<tr${rowCls("grp",i)}>
       <td class="num"><span class="rgrip">⋮⋮</span>${i+1}</td>
       ${nameCell("grp",i,g.name,dups)}
       ${stCell("grp",i,g.stereo)}
       ${colorCell("grp",i,g.color)}
-      <td><select id="grp-${i}-dest" data-k="grp" data-i="${i}" data-f="dest">${destOpts.map(o=>`<option value="${esc(o)}"${o===g.dest?" selected":""}>${o===NO_MAIN?"No master":esc(o)}</option>`).join("")}</select>${xsBadge("grp",g)}</td>
-      ${linkCell("grp",i,g.link)}${muteCell("grp",i,g.mute)}
+      ${asgCell("grp",i,g,"g")}${asgCell("grp",i,g,"l")}${asgCell("grp",i,g,"u")}
       <td><button class="pfbtn small ${g.postFx?"post":""}" id="grp-${i}-pf" data-k="grp" data-i="${i}" data-f="postFx">${g.postFx?"POST":"PRE"}</button></td>
       <td><div class="chips">${mtxOpts.length?mtxOpts.map(m=>`<label class="${g.matrix.includes(m)?"on":""}"><input type="checkbox" id="grp-${i}-mx-${esc(m)}" data-k="grp" data-i="${i}" data-f="mx" data-m="${esc(m)}" ${g.matrix.includes(m)?"checked":""}>${esc(m)}</label>`).join(""):'<span style="color:var(--dim);font-size:11px">no matrix strips in this configuration</span>'}</div></td>
       ${rackCell("grp",i,g.rack)}
@@ -1773,12 +1796,9 @@ function renderGroups(){
 function renderFx(){
   const tb=$("#fxTable tbody"); const dups=dupNames(state.fx);
   tb.innerHTML=state.fx.map((f,i)=>{
-    const destOpts=["MASTER",NO_MAIN,...stripOpts("grp")];
-    if(f.dest&&!destOpts.includes(f.dest))destOpts.splice(2,0,f.dest);
     return `<tr${rowCls("fx",i)}><td class="num"><span class="rgrip">⋮⋮</span>${i+1}</td>${nameCell("fx",i,f.name,dups)}${stCell("fx",i,f.stereo)}
       ${colorCell("fx",i,f.color)}
-      <td><select id="fx-${i}-dest" data-k="fx" data-i="${i}" data-f="dest">${destOpts.map(o=>`<option value="${esc(o)}"${o===f.dest?" selected":""}>${o===NO_MAIN?"No master":esc(o)}</option>`).join("")}</select>${xsBadge("fx",f)}</td>
-      ${linkCell("fx",i,f.link)}${muteCell("fx",i,f.mute)}
+      ${asgCell("fx",i,f,"g")}${asgCell("fx",i,f,"l")}${asgCell("fx",i,f,"u")}
       ${rackCell("fx",i,f.rack)}
       ${opsCell("fx",i)}${ioOpsCell("fx",i)}</tr>`+rackRow("fx",i,f.rack,11,f.stereo);
   }).join("");
@@ -1827,7 +1847,7 @@ function renderAux(){
       <td><select id="aux-${i}-dest" data-k="aux" data-i="${i}" data-f="dest">
         <option value=""${(a.dest||"")===""?" selected":""}>—</option>
         ${AUX_DESTS.map(o=>`<option${o===a.dest?" selected":""}>${o}</option>`).join("")}</select></td>
-      ${linkCell("aux",i,a.link).replace(/<\/td>$/,xsBadge("aux",a)+"</td>")}${muteCell("aux",i,a.mute)}
+      ${asgCell("aux",i,a,"l")}${asgCell("aux",i,a,"u")}
       <td><input id="aux-${i}-pos" value="${esc(a.pos||"")}" data-k="aux" data-i="${i}" data-f="pos" list="posList" placeholder="position"></td>
       <td><input id="aux-${i}-notes" value="${esc(a.notes||"")}" data-k="aux" data-i="${i}" data-f="notes"></td>
       ${opsCell("aux",i)}${ioOpsCell("aux",i)}</tr>`).join("")
@@ -1979,7 +1999,7 @@ $("#laySec").addEventListener("dragend",()=>{
 });
 function renderSimple(kind,list,tableSel){
   const tb=$(tableSel+" tbody"); const dups=dupNames(list); const R=kind==="mtx"?resolveOut():null;
-  tb.innerHTML=list.map((it,i)=>`<tr${rowCls(kind,i)}><td class="num"><span class="rgrip">⋮⋮</span>${i+1}</td>${R?outCell(kind,i,it,R):""}${nameCell(kind,i,it.name,dups)}${stCell(kind,i,it.stereo)}${colorCell(kind,i,it.color)}${linkCell(kind,i,it.link).replace(/<\/td>$/,xsBadge(kind,it)+"</td>")}${muteCell(kind,i,it.mute)}${opsCell(kind,i)}${ioOpsCell(kind,i)}</tr>`).join("")
+  tb.innerHTML=list.map((it,i)=>`<tr${rowCls(kind,i)}><td class="num"><span class="rgrip">⋮⋮</span>${i+1}</td>${R?outCell(kind,i,it,R):""}${nameCell(kind,i,it.name,dups)}${stCell(kind,i,it.stereo)}${colorCell(kind,i,it.color)}${asgCell(kind,i,it,"l")}${asgCell(kind,i,it,"u")}${opsCell(kind,i)}${ioOpsCell(kind,i)}</tr>`).join("")
     ||emptyRow(kind==="mtx"?10:9,kind==="aux"?"This mixer configuration has no aux strips.":"No matrix strips in this configuration.");
   const total=kind==="aux"?cfg().mon:MTX_COUNT;
   $(kind==="aux"?"#auxCount":"#mtxCount").textContent=total?`${named(list).length} named / ${total} strips`:"";
@@ -2007,7 +2027,7 @@ function renderWarnings(){
       if(c.matrix&&!mN.has(c.matrix))bad.add(c.matrix);}
     for(const l of [state.channels,state.groups,state.fx,state.auxes,state.matrixes])
       for(const x of l)if(x.name.trim()&&x.link&&!lN.has(x.link))bad.add(x.link);
-    if(bad.size)w.push(`Strips point to groups / links / matrixes that don't exist: ${[...bad].join(", ")} — re-pick them (⚠ in the menus).`);
+    if(bad.size)w.push(`Strips point to groups / links / matrixes that don't exist: ${[...bad].join(", ")} — reassign them on PATCH › INTERNAL (click a ⚠ cell to open its row).`);
   }
   for(const [label,list] of [["inputs",state.channels],["groups",state.groups],["FX",state.fx],["auxes",state.auxes],["matrixes",state.matrixes]]){
     const d=dupNames(list); if(d.size)w.push(`Duplicate ${label} names: ${[...d].join(", ")} — LV1 strips should be unique.`);
@@ -2054,7 +2074,7 @@ const listFor={ch:()=>state.channels,grp:()=>state.groups,fx:()=>state.fx,aux:()
    selection "make the others match this row" would silently do nothing.
    While such a menu is focused it sits on a hidden placeholder showing the
    same text, so every pick is a change; closing without a pick restores. */
-const MULTI_MENUS=new Set(["color","group","link","mute","matrix","stand","dest"]);
+const MULTI_MENUS=new Set(["color","matrix","stand","dest"]);
 document.addEventListener("focusin",e=>{
   const s=e.target;
   if(s.tagName!=="SELECT"||!MULTI_MENUS.has(s.dataset.f))return;
@@ -2134,29 +2154,27 @@ document.addEventListener("input",e=>{
     else nameEdit={k,i,cur};
     if(k==="ch"||k==="aux")setTimeout(()=>renderStage(),0); // captions follow
   }
-  if(["name","group","link","mute","matrix","mic","stand","notes","dest"].includes(f)){it[f]=t.value;
+  if(["name","matrix","mic","stand","notes","dest"].includes(f)){it[f]=t.value;
     if(f==="name"&&(k==="grp"||k==="mtx")){render();t&&focusBack(k,t.dataset.i,"name");return;}
     // Assigning to an unnamed strip (shown by its default label) names it,
     // so the routing is actually built into the session.
-    const nk=f==="group"||(f==="dest"&&(k==="grp"||k==="fx"))?"grp":f==="matrix"?"mtx":null;
-    // Assignment menus edited on a selected row apply to the whole selection
-    // (a group is never set as its own destination).
-    const tg=["group","link","mute","matrix","stand","dest"].includes(f)?multiTargets():[];
+    const nk=f==="matrix"?"mtx":null;
+    // Menus edited on a selected row apply to the whole selection
+    // (groups / links / mutes are assigned on PATCH › INTERNAL).
+    const tg=["matrix","stand","dest"].includes(f)?multiTargets():[];
     if(tg.length>1){
       let n=0;
-      for(const j of tg){const o=list[j];if(!o)continue;
-        if(f==="dest"&&k==="grp"&&o.name.trim()&&o.name.trim()===t.value)continue;
-        o[f]=t.value;n++;}
+      for(const j of tg){const o=list[j];if(!o)continue;o[f]=t.value;n++;}
       const named=nk&&autoName(nk,t.value);
       render();
-      const lab={group:"Group",link:"Link",mute:"Mute group",matrix:"Matrix",stand:"Stand",dest:"Destination"}[f];
+      const lab={matrix:"Matrix",stand:"Stand",dest:"Destination"}[f];
       setStatus(`${lab} “${t.value||"—"}” set on ${n} selected ${STRIP_PLURAL[k]}`
         +(named?` (strip “${t.value}” named automatically).`:"."));
       return;
     }
     if(nk&&autoName(nk,t.value)){
       render();
-      setStatus(`${nk==="grp"?"Group":"Matrix"} strip “${t.value}” named automatically so the assignment is built.`);
+      setStatus(`Matrix strip “${t.value}” named automatically so the assignment is built.`);
       return;
     }
     renderWarnings(); if(f==="name"){refreshNameHighlights(k);if(k==="ch")refreshPorts();}
@@ -2516,8 +2534,7 @@ async function pwApply(cells,on,all){
 // ---- rendering
 function pwRender(){
   const host=$("#pw");if(!host)return;
-  if(!state.io.length){host.innerHTML="";return;}
-  const v=pwView(),cell=pwCell();
+  const v=pwView(),cell=pwCell(); // no devices: the Internal view still works
   pwBuild();
   const devBtn=(d,k,on,key,edit)=>{const m=IO_MODELS[d.model];
     return `<button class="pw-dev${k>=8?" bankB":""}${on?" on":""}" data-pwdev="${key}:${d.id}"${edit?` data-iocard="${k}"`:""} title="${esc(m.label)} · slot ${k<8?"A":"B"}${k%8+1} · in ${ioRuns(m.inChs)} · out ${ioRuns(m.outChs)}${edit?" — click: show / hide its channels · drag ⋮⋮: reorder · ✕: remove":""}">`+
@@ -2587,7 +2604,7 @@ function pwRender(){
         <div class="pw-rh"><div class="pw-rhin" style="width:${rhw}px;height:${PW.rows.length*cell}px">${rh}</div></div>
         <div class="pw-cells" tabindex="0"><div class="pw-space"><canvas></canvas></div></div>
       </div></div>
-    <div class="pw-foot" id="pwFoot">${PW.rows.length?"":v.rows==="in"?"No named inputs yet: name channels on the INPUTS tab.":v.rows==="devin"?"Pick the source devices on the left.":"No named strips with outputs."}</div>`;
+    <div class="pw-foot" id="pwFoot">${!isAsg&&!state.io.length?"No I/O devices: add one above.":PW.rows.length?"":v.rows==="in"?"No named inputs yet: name channels on the INPUTS tab.":v.rows==="devin"?"Pick the source devices on the left.":"No named strips with outputs."}</div>`;
   const sc=host.querySelector(".pw-cells");
   sc.scrollLeft=sx;sc.scrollTop=sy;
   pwLayout();
@@ -2774,6 +2791,8 @@ $("#pw").addEventListener("keydown",e=>{ // arrow keys move the cross-hair; Ente
 addEventListener("resize",()=>{if(document.body.dataset.tab==="io")pwLayout();});
 function focusBack(k,i,f){const el=document.getElementById(`${k}-${i}-${f}`);if(el){el.focus();const v=el.value;el.value="";el.value=v;}}
 document.addEventListener("click",e=>{
+  const av=e.target.closest&&e.target.closest("[data-asgk]");
+  if(av){const k=av.dataset.asgk,o=listFor[k]()[+av.dataset.asgi];if(o)pwFocus(k,o,av.dataset.asgt);return;}
   // Row selection: click a row (its # cell or any non-field space) selects
   // it; Shift-click extends a range from the anchor; Ctrl/Cmd-click toggles
   // one row; clicking the only selected row again deselects. Esc clears.
@@ -3007,16 +3026,6 @@ document.addEventListener("dragend",e=>{
   if(tr)tr.draggable=false;
   rowDrag=null;clearDropMarks();
 });
-function linkCell(kind,i,cur){ // non-input strips: None or a link
-  const opts=linkLabels(),miss=cur&&!opts.includes(cur);
-  const all=miss?[cur,...opts]:opts;
-  return `<td><select id="${kind}-${i}-link" class="asg${miss?" missing":""}" data-k="${kind}" data-i="${i}" data-f="link">
-    <option value=""${cur?"":" selected"}>None</option>${all.map(o=>`<option value="${esc(o)}"${o===cur?" selected":""}>${miss&&o===cur?"⚠ ":""}${esc(o)}</option>`).join("")}</select></td>`;
-}
-function muteCell(kind,i,cur){
-  return `<td><select id="${kind}-${i}-mute" class="mutesel" data-k="${kind}" data-i="${i}" data-f="mute">
-    <option value="">—</option>${Array.from({length:MUTE_COUNT},(_,n)=>`<option value="${n+1}"${String(cur)===String(n+1)?" selected":""}>${n+1}</option>`).join("")}</select></td>`;
-}
 function ioOpsCell(kind,i){
   return `<td class="rowops iocol"><button class="small" data-k="${kind}" data-i="${i}" data-f="ins" title="Add a new ${STRIP_NOUN[kind]} below this row">＋</button></td>
     <td class="rowops iocol"><button class="small danger" data-k="${kind}" data-i="${i}" data-f="del" title="Delete this row (following rows move up)">✕</button></td>`;
