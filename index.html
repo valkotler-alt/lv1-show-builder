@@ -810,8 +810,17 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 .stpscroll{overflow:auto;margin:10px 0 12px;border-top:1px solid var(--line);}
 .stpscroll table{width:100%;border-collapse:collapse;font-size:12px;}
 .stpscroll td{padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:middle;}
-.stpimg{width:52px;}.stpimg img{width:48px;height:32px;object-fit:contain;display:block;}
-.stpscroll select{max-width:230px;}
+.stpimg{width:52px;}.stpimg img{width:48px;height:32px;object-fit:contain;display:block;}.stpimg img[hidden]{display:none;}
+.picbtn{max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;}
+.picpop{position:fixed;z-index:1100;width:320px;max-width:calc(100vw - 16px);max-height:min(380px,70vh);display:flex;flex-direction:column;
+  background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.45);padding:6px;}
+.picpop input{margin-bottom:6px;width:100%;box-sizing:border-box;}
+.picl{overflow:auto;min-height:0;}
+.picopt{display:flex;align-items:center;gap:8px;padding:3px 6px;border-radius:5px;cursor:pointer;font-size:12px;}
+.picopt:hover,.picopt.hi{background:color-mix(in srgb,var(--accent) 20%,transparent);}
+.picopt.cur .picnm{font-weight:700;}
+.picth{width:36px;height:24px;object-fit:contain;flex:none;}
+.piccat{margin-left:auto;color:var(--dim);font-size:10px;white-space:nowrap;}
 .stpscroll td.stpins{color:var(--fg);white-space:normal;overflow-wrap:anywhere;}.stppos,.stpmem{color:var(--dim);font-size:11px;}
 .stpremember{font-size:12px;color:var(--dim);margin-bottom:12px;display:flex;gap:6px;align-items:center;}
 .noteswrap{display:flex;flex-direction:column;gap:12px;max-width:680px;}
@@ -1050,7 +1059,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
         <span class="hint">· depth <span id="stageD"></span> m (items are drawn at their real size — the chair is 50 cm)</span></div>
       <div id="stage"><div class="stagelabel">A U D I E N C E</div><div class="stagesize" id="stageSizeLab"></div></div>
       <div id="sinsp" class="sinsp" hidden>
-        <label id="siImgWrap" title="Swap the picture — the item keeps its linked inputs / aux, Position and caption">Picture <select id="siImg" class="small"></select></label>
+        <label id="siImgWrap" title="Swap the picture — the item keeps its linked inputs / aux, Position and caption. “No picture” takes it off the stage and keeps the inputs.">Picture <button class="small picbtn" id="siImg"></button></label>
         <label id="siCmWrap">Width <input type="number" id="siCm" min="5" max="1200" step="1" style="width:68px"> cm</label>
         <label id="siRsWrap" hidden>Riser size <select id="siRsize">
           <option value="" hidden>—</option>
@@ -3513,8 +3522,7 @@ function renderInspector(){
   // Single-item fields hide in group mode.
   $("#siCmWrap").hidden=multi||riser;
   $("#siImgWrap").hidden=multi||riser;
-  if(!multi&&!riser&&document.activeElement!==$("#siImg")&&$("#siImg").dataset.for!==it.img){
-    $("#siImg").innerHTML=stageImgOptions(it.img,false);$("#siImg").dataset.for=it.img;}
+  if(!multi&&!riser)$("#siImg").textContent=picName(it.img)+" ▾";
   $("#siRsWrap").hidden=multi||!riser;
   $("#siNoteWrap").hidden=multi||!riser;
   $("#siRotWrap").hidden=multi; // a constellation rotates by steps only
@@ -3603,7 +3611,7 @@ function renderItemIO(it){
   const rows=[];
   for(const c of chs.values()){
     const x=state.channels.indexOf(c);
-    rows.push(`<span class="iorow">${pts[x]?portLabel(pts[x]):"—"}<input data-iok="ch" data-ioi="${x}" value="${esc(c.name)}" spellcheck="false"></span>`);
+    rows.push(`<span class="iorow">${pts[x]&&pts[x].length?portLabel(pts[x]):"—"}<input data-iok="ch" data-ioi="${x}" value="${esc(c.name)}" spellcheck="false"></span>`);
   }
   for(const a of axs.values()){
     const x=state.auxes.indexOf(a);
@@ -3968,17 +3976,25 @@ $("#siPos").addEventListener("input",()=>{
 });
 $("#siPos").addEventListener("change",()=>render()); // persist + refresh the datalist
 $("#siFlip").onclick=()=>{const it=stg().items[stageSel];if(!it)return;it.flip=!it.flip;render();};
-// Swap the picture only: links (ins / label / auxl), Position, caption and rotation stay. The new
-// picture is remembered for the linked inputs, so the next Inputs → stage picks it (see stageProposal).
-$("#siImg").addEventListener("change",e=>{
-  const it=stg().items[stageSel],v=e.target.value;if(!it||!v||it.img===v)return;
-  it.img=v;it.cm=libCm(v)||it.cm;
-  const {chs}=linkedRowsFor([stageSel]);
-  if(chs.size)rememberPicks([...chs.values()].map(c=>c.name),v);
-  e.target.blur();render();
-  setStatus(`Picture changed to “${v.startsWith("custom:")?((stg().custom[v.slice(7)]||lsCustoms()[v.slice(7)]||{}).name||v):libName(v)}” — links and patch kept`+
-    (chs.size?`; remembered for ${[...chs.values()].map(c=>c.name.trim()).join(", ")}${useOnline()?" (shared through the online library)":""}.`:"."));
-});
+// Swap the picture only: links (ins / label / auxl), Position, caption and rotation stay. "No picture"
+// takes the item off the stage but, unlike Delete, keeps its inputs / aux and their patch. Either
+// choice is remembered for the linked inputs, so the next Inputs → stage uses it (see stageProposal).
+$("#siImg").onclick=e=>{
+  const btn=e.currentTarget,idx=stageSel,it=stg().items[idx];if(!it||picToggle(btn))return;
+  openPicPicker(btn,it.img,"off the stage — inputs kept",v=>{
+    if(stg().items[idx]!==it||it.img===v)return;
+    const {chs}=linkedRowsFor([idx]),names=[...chs.values()].map(c=>c.name.trim());
+    if(names.length)rememberPicks(names,v);
+    const mem=names.length?`; remembered for ${names.join(", ")}${useOnline()?" (shared through the online library)":""}`:"";
+    if(v==="-"){
+      stg().items.splice(idx,1);stageSel=-1;mSel=new Set();render();
+      setStatus(`Picture removed from the stage — ${names.length?`${names.join(", ")} ${names.length===1?"stays in the list with its":"stay in the list with their"} patch`:"nothing was linked to it"}${mem}.`);
+      return;
+    }
+    it.img=v;it.cm=libCm(v)||it.cm;render();
+    setStatus(`Picture changed to “${picName(v)}” — links and patch kept${mem}.`);
+  });
+};
 $("#siDup").onclick=()=>{const it=stg().items[stageSel];if(!it)return;
   // A duplicate is a NEW instrument: it starts outside the position, without
   // the original's input/aux links, and gets its own add-to-IO-list offer.
@@ -4269,33 +4285,70 @@ function stageLayout(groups){ // anchor per Position (zone words, else the famil
       g.y=Math.min(0.92,Math.max(0.08,s.y+(i%2)*0.04));});
   }
 }
-function stageImgOptions(sel,skip=true){ // library (+ my images) as <optgroup>s; skip: the "no stage item" choice first
-  const cats=[...new Set(STAGELIB.map(e=>e.cat))];
-  const custom=Object.entries({...lsCustoms(),...stg().custom});
-  return (skip?`<option value="-"${sel==="-"?" selected":""}>— skip (no stage item) —</option>`:"")+
-    cats.map(cat=>`<optgroup label="${esc(cat)}">${STAGELIB.filter(e=>e.cat===cat).map(e=>
-      `<option value="${esc(e.id)}"${e.id===sel?" selected":""}>${esc(e.name)}</option>`).join("")}</optgroup>`).join("")+
-    (custom.length?`<optgroup label="My images">${custom.map(([id,c])=>
-      `<option value="custom:${esc(id)}"${"custom:"+id===sel?" selected":""}>${esc(c.name||id)}</option>`).join("")}</optgroup>`:"");
+/* ---- searchable picture picker (Inputs → stage preview + the inspector's Picture) ----
+   A popover with a search box over the library + my images, thumbnails, arrow keys / Enter,
+   and the "no picture" choice ("-") first. */
+const NO_PIC="— no picture —";
+const picName=id=>id==="-"?NO_PIC:id.startsWith("custom:")
+  ?((stg().custom[id.slice(7)]||lsCustoms()[id.slice(7)]||{}).name||id.slice(7)):libName(id);
+const picList=()=>[...STAGELIB.map(e=>({id:e.id,name:e.name,cat:e.cat})),
+  ...Object.entries({...lsCustoms(),...stg().custom}).map(([id,c])=>({id:"custom:"+id,name:c.name||id,cat:c.cat||"My images"}))];
+let picPop=null;
+function closePicPicker(){if(picPop){picPop.remove();picPop=null;}}
+const picToggle=btn=>{if(picPop&&picPop._anchor===btn){closePicPicker();return true;}return false;}; // a 2nd click on the button closes it
+function openPicPicker(anchor,cur,noneHint,onPick){
+  closePicPicker();
+  const d=document.createElement("div");d.className="picpop";
+  d.innerHTML=`<input type="search" placeholder="search pictures… (name or category)" spellcheck="false"><div class="picl"></div>`;
+  const q=d.querySelector("input"),list=d.querySelector(".picl"),all=picList();
+  let shown=[],hi=0;
+  const mark=()=>{list.querySelectorAll(".picopt").forEach((el,i)=>el.classList.toggle("hi",i===hi));
+    const h=list.querySelector(".hi");if(h)h.scrollIntoView({block:"nearest"});};
+  const draw=()=>{const t=q.value.trim().toLowerCase();
+    const none=!t||/^(no|non|none|skip|-)/.test(t)?[{id:"-",name:NO_PIC,cat:noneHint}]:[];
+    shown=[...none,...all.filter(o=>!t||(o.name+" "+o.cat+" "+o.id).toLowerCase().includes(t))];
+    hi=t?0:Math.max(0,shown.findIndex(o=>o.id===cur));
+    list.innerHTML=shown.map(o=>`<div class="picopt${o.id===cur?" cur":""}" data-pic="${esc(o.id)}">${o.id==="-"?'<span class="picth"></span>'
+      :`<img class="picth" loading="lazy" alt="" src="${esc(imgSrc(o.id))}">`}<span class="picnm">${esc(o.name)}</span><span class="piccat">${esc(o.cat)}</span></div>`).join("")
+      ||'<div class="menuempty">no picture matches</div>';
+    mark();};
+  const pick=id=>{closePicPicker();onPick(id);};
+  q.addEventListener("input",draw);
+  q.addEventListener("keydown",e=>{
+    if(e.key==="ArrowDown"||e.key==="ArrowUp"){e.preventDefault();hi=Math.max(0,Math.min(shown.length-1,hi+(e.key==="ArrowDown"?1:-1)));mark();}
+    else if(e.key==="Enter"){e.preventDefault();if(shown[hi])pick(shown[hi].id);}
+    else if(e.key==="Escape"){e.preventDefault();e.stopPropagation();closePicPicker();anchor.focus();}
+  });
+  list.addEventListener("click",e=>{const o=e.target.closest("[data-pic]");if(o)pick(o.dataset.pic);});
+  document.body.append(d);picPop=d;d._anchor=anchor;draw();
+  const r=anchor.getBoundingClientRect(),h=d.offsetHeight,w=d.offsetWidth;
+  d.style.left=Math.max(8,Math.min(r.left,innerWidth-w-8))+"px";
+  d.style.top=(r.bottom+4+h>innerHeight&&r.top-4-h>0?r.top-4-h:Math.min(r.bottom+4,innerHeight-h-8))+"px";
+  q.focus();
 }
+document.addEventListener("pointerdown",e=>{if(picPop&&!picPop.contains(e.target)&&!e.target.closest(".picbtn"))closePicPicker();},true);
 function stagePreview(groups){ // modal: one row per proposed item -> resolves the chosen picture per row (or null = cancel)
   return new Promise(res=>{
     const d=document.createElement("div");d.className="stpdlg";
     d.innerHTML=`<div class="cfmbox" role="dialog" aria-modal="true" aria-label="Inputs to stage">
       <div class="stphead"><b>Inputs → stage</b> — ${groups.length} item${groups.length===1?"":"s"} for ${groups.reduce((s,g)=>s+g.chs.length,0)} input${groups.reduce((s,g)=>s+g.chs.length,0)===1?"":"s"}. Change any picture, or skip it.</div>
       <div class="stpscroll"><table><tbody>${groups.map((g,i)=>`<tr>
-        <td class="stpimg"><img alt="" src="${g.img==="-"?"":esc(imgSrc(g.img))}"></td>
-        <td><select data-g="${i}">${stageImgOptions(g.img)}</select>${g.remembered?' <span class="stpmem" title="Picked for this input before">remembered</span>':""}</td>
+        <td class="stpimg"><img alt=""${g.img==="-"?" hidden":` src="${esc(imgSrc(g.img))}"`}></td>
+        <td><button class="small picbtn" data-g="${i}" title="Pick another picture (searchable)">${esc(picName(g.img))} ▾</button>${g.remembered?' <span class="stpmem" title="Picked for this input before">remembered</span>':""}</td>
         <td class="stpins">${g.chs.map(c=>esc(c.name.trim())).join(", ")}${(g.chs[0].pos||"").trim()?` <span class="stppos">@ ${esc(g.chs[0].pos.trim())}</span>`:""}</td></tr>`).join("")}</tbody></table></div>
       <label class="stpremember"><input type="checkbox" checked> Remember these pictures for these input names (this browser)</label>
       <div class="cfmbtns"><button class="small" data-r="0">Cancel</button><button class="primary" data-r="1">Add to stage</button></div></div>`;
-    d.addEventListener("change",e=>{const s=e.target.closest("select[data-g]");if(!s)return;
-      const im=s.closest("tr").querySelector("img");im.src=s.value==="-"?"":imgSrc(s.value);});
-    const done=ok=>{const picks=ok?[...d.querySelectorAll("select[data-g]")].map(s=>s.value):null;
-      const remember=d.querySelector(".stpremember input").checked;
-      d.remove();document.removeEventListener("keydown",key,true);res(picks&&{picks,remember});};
-    const key=e=>{if(e.key==="Escape"){e.preventDefault();done(false);}};
-    d.addEventListener("click",e=>{const b=e.target.closest("[data-r]");if(b)done(b.dataset.r==="1");});
+    const chosen=groups.map(g=>g.img);
+    const done=ok=>{closePicPicker();const remember=d.querySelector(".stpremember input").checked;
+      d.remove();document.removeEventListener("keydown",key,true);res(ok?{picks:chosen,remember}:null);};
+    const key=e=>{if(e.key==="Escape"&&!picPop){e.preventDefault();done(false);}}; // an open picker takes Esc first
+    d.addEventListener("click",e=>{
+      const pb=e.target.closest(".picbtn[data-g]");
+      if(pb){if(picToggle(pb))return;const i=+pb.dataset.g;
+        openPicPicker(pb,chosen[i],"no stage item for these inputs",id=>{chosen[i]=id;
+          pb.textContent=picName(id)+" ▾";const im=pb.closest("tr").querySelector("img");im.hidden=id==="-";if(id!=="-")im.src=imgSrc(id);pb.focus();});
+        return;}
+      const b=e.target.closest("[data-r]");if(b)done(b.dataset.r==="1");});
     document.addEventListener("keydown",key,true);
     document.body.append(d);d.querySelector('[data-r="1"]').focus();
   });
