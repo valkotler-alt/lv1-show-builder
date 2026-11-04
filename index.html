@@ -1077,7 +1077,8 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 
 <p class="foot">
 <b>Export .emo</b> builds the complete LV1 session right in the browser, on the factory template of the selected mixer configuration
-(the show name becomes the file name) — only named strips are built, packed top-down. <b>Import .emo…</b> loads any LV1 session back
+(the show name becomes the file name) — each input row is that LV1 channel: an empty row between named inputs is a
+placeholder, built as an empty default strip that still takes its input; empty rows after the last named input aren't built. <b>Import .emo…</b> loads any LV1 session back
 into the builder (patch, mic/stand/position and notes are not stored in .emo and start empty). The vendor PDF carries the input list
 (#, name, format, mic, stand, stage position for named inputs — no routing or racks) plus the stage plot as a landscape page.
 <b>Patch</b> holds the show's SoundGrid I/O (MGB, Waves Classic, IONIC 16 / 24, DSPRO SG1000 / SG4000; up to 16 devices, in
@@ -1085,7 +1086,7 @@ LV1 slot order) and LV1's patch window: Input A / B, Output Direct / Mix Busses 
 48V above its column. New inputs patch themselves top-down (Auto) until you patch them there. The .emo session gets every device
 pre-assigned offline and the whole patch; importing an .emo reads it back.
 <b>Export DiGiCo SD10</b> (beta) writes the inputs only — names, mono/stereo, port N on Rack 1 Mic N and the Insert A send on
-MADI N (the MADI port is renamed “LV1”), packed top-down, digital splits left out. It edits your own SD10 default session: the first
+MADI N (the MADI port is renamed “LV1”), row for row like the .emo (a placeholder is “Ch N”, patched), digital splits left out. It edits your own SD10 default session: the first
 export asks for it (SD10 offline editor: new session, Save As) and keeps it in this browser; Shift-click to pick another. Open the
 result in the SD10 offline editor and Save As before it goes near a console.
 <b>Racks</b>: each strip's rack is 8 slots (1–8), exactly like LV1. The default EMO-F2 / EMO-D5 / EMO-Q4 are ordinary rack plugins —
@@ -1230,13 +1231,17 @@ const pinKey=p=>p.d+":"+p.c;
 const pinIdx=(list,p)=>list.findIndex(q=>pinEq(q,p));
 const autoInList=()=>state.io.flatMap(d=>IO_MODELS[d.model].inChs.filter(x=>x.auto).map(x=>({d:d.id,c:x.c})));
 const allOutList=()=>state.io.flatMap(d=>IO_MODELS[d.model].outChs.map(x=>({d:d.id,c:x.c})));
-function resolveIn(){ // -> {A, B: per channel (null = unnamed) an array of legs: pin | null, short: Auto legs left without an input}
-  const auto=autoInList(),A=[],B=[];let p=0,short=0;
+/* An unnamed input row ABOVE the last named one is a placeholder: an empty LV1 strip kept in its
+   place (default name and state) that still takes its input, so row = LV1 strip and the input
+   numbers below it don't move. Unnamed rows after the last named one are not built. */
+const chLast=()=>state.channels.map(c=>!!c.name.trim()).lastIndexOf(true);
+function resolveIn(){ // -> {A, B: per channel (null = not built) an array of legs: pin | null, short: Auto legs left without an input}
+  const auto=autoInList(),A=[],B=[],last=chLast();let p=0,short=0;
   state.channels.forEach((ch,i)=>{
-    if(!ch.name.trim()){A[i]=B[i]=null;return;}
+    if(!ch.name.trim()&&i>last){A[i]=B[i]=null;return;}
     const w=ch.stereo?2:1;
     B[i]=Array.from({length:w},(_,l)=>{const q=(ch.inB||[])[l];return pinOk(q)?q:null;});
-    if(ch.ds)return; // a digital split: its Auto legs follow its source (second pass)
+    if(ch.ds&&ch.name.trim())return; // a digital split: its Auto legs follow its source (second pass)
     A[i]=Array.from({length:w},(_,l)=>{
       const q=(ch.inA||[])[l];
       if(q===0)return null;
@@ -1256,8 +1261,9 @@ function resolveIn(){ // -> {A, B: per channel (null = unnamed) an array of legs
 // Strips that can feed outputs, in the order of LV1's Direct / Mix Busses rows.
 // Only auxes, Master and matrixes take the Auto output chain (in OUTPUTS-tab order).
 const OUT_AUTO=new Set(["aux","main","mtx"]);
-function outStrips(){ // [{kind, o, name, idx (packed index of its kind)}]
-  const L=[],add=(kind,list)=>named(list).forEach((o,i)=>L.push({kind,o,name:o.name.trim(),idx:i}));
+function outStrips(){ // [{kind, o, name, idx (LV1 index of its kind: packed, except inputs = their row, see chLast)}]
+  const L=[],add=(kind,list)=>{let n=0;
+    list.forEach((o,i)=>{if(o.name.trim())L.push({kind,o,name:o.name.trim(),idx:kind==="ch"?i:n++});});};
   add("ch",state.channels);add("grp",state.groups);add("fx",state.fx);add("aux",state.auxes);add("mtx",state.matrixes);
   L.push({kind:"main",o:state.master,name:"Main",idx:0});
   if(cfg().mains>1){L.push({kind:"center",o:state.busx.center,name:"Center",idx:0});L.push({kind:"mono",o:state.busx.mono,name:"Mono",idx:0});}
@@ -1294,7 +1300,7 @@ function patchRoutes(){ // the resolved patch as LV1 route rows (spec v9 `routes
   const {A,B}=resolveIn(),R=resolveOut(),inR=[],outR=[],ipf=[];
   let n=0;
   state.channels.forEach((ch,i)=>{
-    if(!ch.name.trim())return;
+    if(!A[i])return; // not built (placeholders are)
     [A[i],B[i]].forEach((L,bank)=>(L||[]).forEach((q,leg)=>{if(q)inR.push([n,bank,leg,devK(q.d),q.c]);}));
     n++;
   });
@@ -2008,11 +2014,6 @@ function renderWarnings(){
   if(orphans.length)w.push(`Channels pointing at a group that is no longer named: ${orphans.join(", ")} (they will route to MASTER).`);
   const lostDs=state.channels.filter(c=>c.ds&&c.name.trim()&&splitSource(c)<0).map(c=>`${c.name.trim()} (← ${c.ds})`);
   if(lostDs.length)w.push(`Digital splits whose source input no longer exists: ${lostDs.join(", ")} — re-pick the source (⚠), or they are built with no input patch.`);
-  // Gaps: named strips below unnamed ones still build — but packed top-down,
-  // so LV1 strip numbers will differ from the row numbers shown here.
-  const chNames=state.channels.map(c=>!!c.name.trim());
-  const firstGap=chNames.indexOf(false), lastNamed=chNames.lastIndexOf(true);
-  if(firstGap!==-1&&lastNamed>firstGap)w.push("Named inputs sit below unnamed strips — the built session packs named strips top-down, so LV1 strip numbers will differ from the row numbers shown here.");
   // Rack sanity: racks on unnamed strips, unknown plugins, format mismatches, overfull racks.
   const racks=[
     ...state.channels.map((c,i)=>[c.name.trim()||`input row ${i+1}`,c.rack,c.stereo,!!c.name.trim()]),
@@ -2339,7 +2340,7 @@ function pwSelOf(key){ // the shown devices of a strip: ids of existing devices,
 // ---- rows / columns of the current view
 /* Every strip of the mixer configuration (MIXER tab), named or not: an unnamed one shows its LV1
    default name ("Channel 12", "Group 3"…) and is named that way when it is patched (only named
-   strips are built into the session). */
+   strips and input placeholders, see chLast, are built into the session). */
 const PW_LISTS={ch:()=>state.channels,grp:()=>state.groups,fx:()=>state.fx,aux:()=>state.auxes,mtx:()=>state.matrixes};
 function pwAllStrips(kinds){ // [{kind, o, name, idx (packed index, -1 unnamed), unnamed}] in the given kind order
   const byObj=new Map(outStrips().map(s=>[s.o,s])),L=[];
@@ -2352,6 +2353,7 @@ function pwAllStrips(kinds){ // [{kind, o, name, idx (packed index, -1 unnamed),
 }
 function pwNameIt(kind,o,fromInput){ // an unnamed strip that gets patched takes its default name
   if(!PW_LISTS[kind]||o.name.trim())return;
+  if(kind==="ch"&&fromInput&&state.channels.indexOf(o)<chLast())return; // a placeholder is built (and patched) unnamed
   o.name=DEFNAME[kind](PW_LISTS[kind]().indexOf(o));
   if(kind==="ch"&&!fromInput)o.inA=(o.inA||[]).length?o.inA:[0,0]; // named from an output / internal view: no Auto input
 }
@@ -2813,18 +2815,18 @@ document.addEventListener("click",e=>{
 });
 /* Digital split of input row i: the first free strip BELOW the last named
    input (so no existing channel moves), same input, own processing, off
-   the master. The packed LV1 channel number is reported. */
+   the master. Row = LV1 channel (placeholders keep their place, see chLast). */
 function addSplit(i){
   const src=state.channels[i],n=src.name.trim();
   if(!n||src.ds)return;
-  const last=state.channels.map(c=>!!c.name.trim()).lastIndexOf(true);
+  const last=chLast();
   const j=state.channels.findIndex((c,x)=>x>last&&!c.name.trim());
   if(j<0){setStatus(`No free input strip below the last named input for a split of “${n}” — the ${cfg().ch}-strip bank is full.`,true);return;}
   const taken=new Set(named(state.channels).map(c=>c.name.trim().toUpperCase()));
   const name=dedupeName(n+" DS",taken);
   state.channels[j]={...defCh(),name,ds:n,stereo:src.stereo,group:NO_MAIN,color:src.color};
   render();
-  setStatus(`Digital split “${name}” added as LV1 channel ${named(state.channels).length} — patched to “${n}”'s input (${ports()[i].join("–")}), not routed to master.`);
+  setStatus(`Digital split “${name}” added as LV1 channel ${j+1} — patched to “${n}”'s input (${ports()[i].join("–")}), not routed to master.`);
 }
 /* Resetting a strip that a stage instrument is linked to keeps the stage
    and the list in sync: the instrument is removed from the stage (or, when
@@ -3072,7 +3074,7 @@ $("#btnNew").onclick=async()=>{
 
 /* ---------- spec export / import ---------- */
 function buildSpec(){
-  const pts=ports(),op=outPorts(),aps=op.aux; const c=cfg();
+  const pts=ports(),op=outPorts(),aps=op.aux,last=chLast(); const c=cfg();
   // v9 patch keys of a strip (PATCH tab): its pins as the builder holds them (see the patch model) and its output tap
   const pinsOut=L=>L.map(q=>q===0?0:isPin(q)?{d:q.d,c:q.c}:null);
   const pk=o=>({...(Array.isArray(o.outs)?{outs:o.outs.map(L=>(L||[]).filter(isPin).map(q=>({d:q.d,c:q.c})))}:{}),
@@ -3088,14 +3090,18 @@ function buildSpec(){
   const rackOut=r=>isStock(r)?undefined:{slots:[...r.slots]};
   const withRack=(o,r)=>{const rr=rackOut(r);if(rr)o.rack=rr;return o;};
   const spec={
-    format:"lv1-input-list",version:10,
+    format:"lv1-input-list",version:11,
     show:{...state.show},
     config:{id:c.id,inputs:c.ch,groups:c.grp,aux:c.mon,fx:FX_COUNT,matrix:MTX_COUNT,mains:c.mains},
     // v7: the I/O inventory in slot order; v9: each device's id (the pins' d).
     io:state.io.map(d=>IO_MODELS[d.model].chunk?{id:d.id,model:d.model,gain:[...d.gain],phantom:[...d.phantom]}:{id:d.id,model:d.model}),
     // v9: the resolved patch as LV1 route rows (slot / channel index) — what the converters write
     routes:patchRoutes(),
-    channels:state.channels.map((ch,i)=>ch.name.trim()?withRack({
+    // v11: a placeholder (unnamed row above the last named input) is {name:"", placeholder:true}: built
+    // in place as a default strip that keeps its input patch; spec channel index = LV1 strip index.
+    channels:state.channels.map((ch,i)=>!ch.name.trim()?(i<last?{name:"",placeholder:true,stereo:!!ch.stereo,ports:pts[i]||[],
+      ...(Array.isArray(ch.inA)&&ch.inA.some(q=>q!==null&&q!==undefined)?{inA:pinsOut(ch.inA)}:{}),
+      ...(Array.isArray(ch.inB)&&ch.inB.some(isPin)?{inB:pinsOut(ch.inB)}:{})}:null):withRack({
       name:ch.name.trim(),stereo:ch.stereo,ports:pts[i]||[],
       ...(Array.isArray(ch.inA)&&ch.inA.some(q=>q!==null&&q!==undefined)?{inA:pinsOut(ch.inA)}:{}),
       ...(Array.isArray(ch.inB)&&ch.inB.some(isPin)?{inB:pinsOut(ch.inB)}:{}),
@@ -3107,7 +3113,7 @@ function buildSpec(){
       mic:ch.mic.trim(),stand:ch.stand.trim(),position:ch.pos.trim(),notes:(ch.notes||"").trim(),
       ...(ch.color!==null&&ch.color!==undefined?{color:ch.color}:{}),
       ...lm(ch),
-    },ch.rack):null).filter(Boolean),
+    },ch.rack)).filter(Boolean),
     groups:named(state.groups).map(g=>withRack({name:g.name.trim(),stereo:g.stereo,dest:g.dest==="MASTER"||g.dest===NO_MAIN?null:g.dest,...noDest(g),postFx:!!g.postFx,matrix:g.matrix,
       ...(g.color!==null&&g.color!==undefined?{color:g.color}:{}),...lm(g),...pk(g),...xk(g,true)},g.rack)),
     fx:named(state.fx).map(f=>withRack({name:f.name.trim(),stereo:f.stereo,dest:f.dest==="MASTER"||f.dest===NO_MAIN?null:f.dest,...noDest(f),
@@ -4763,12 +4769,16 @@ function foldLR(rows,warn,make){ // shared L/R-pair folding for sheet rows
   return out;
 }
 /* The sheet's PATCH column is the input number (1-based, over the Auto inputs).
-   Skipped numbers are deliberate empty channels: each one becomes an empty
-   default strip, and the next named channel is pinned to its sheet number
-   (one pin re-syncs Auto from there on, so the rest stays Auto). */
+   Skipped numbers are deliberate empty channels: each one becomes a placeholder
+   (see chLast) on that input. Legs are pinned only where Auto would not land on
+   the sheet number (out of order), so a sheet in order stays all-Auto. */
 function sheetPatch(chans,warn){
   const auto=autoInList(),out=[],used=new Set();
   let p=0,top=0,short=0; // p mirrors resolveIn's Auto pointer; top = highest input number placed so far
+  const take=n=>{ // a leg on input n: null = Auto lands there anyway, else its pin
+    if(n-1===p){p++;return null;}
+    p=n;if(n>auto.length){short++;return null;}
+    return auto[n-1];};
   for(const {ch,nums} of chans){
     const prevA=ch.inA||[];delete ch.inA;
     const legs=nums.map((n,l)=>{
@@ -4778,14 +4788,12 @@ function sheetPatch(chans,warn){
         if(pinOk(q)){const j=pinIdx(auto,q);if(j>=0){p=j+1;top=Math.max(top,p);}return q;}
         top=Math.max(top,++p);return null;
       }
-      if(used.has(n))warn.push(`${ch.name}: input ${n} is on the sheet twice — both channels share it`);
+      if(used.has(n))warn.push(`${ch.name}: input ${n} is already taken above on the sheet — both channels share it`);
       used.add(n);
-      if(l===0)for(let k=top;k<n-1;k++)out.push(defCh()); // skipped numbers -> empty channels (they take no input)
+      if(l===0)for(let k=top+1;k<n;k++){ // skipped numbers -> placeholders (empty strips on their own input)
+        const ph=defCh(),q=take(k);if(q)ph.inA=[q];out.push(ph);used.add(k);}
       top=Math.max(top,n);
-      if(n-1===p){p++;return null;}
-      p=n;
-      if(n>auto.length){short++;return null;}
-      return auto[n-1];
+      return take(n);
     });
     if(legs.some(q=>q!==null))ch.inA=legs;
     out.push(ch);
@@ -4830,7 +4838,7 @@ function applySheet(data){ // sheet rows -> builder channels (keeps routing/rack
   clearSel();rackOpen=null;applyConfig();render();
   const kept=chans.slice(0,cfg().ch),nIn=kept.filter(c=>c.name).length,nGap=kept.length-nIn;
   let msg=`Builder updated from the sheet: ${nIn} input${nIn===1?"":"s"}`+
-    (nGap?` (+${nGap} empty channel${nGap===1?"":"s"} kept from skipped sheet numbers)`:"")+
+    (nGap?` (+${nGap} empty placeholder channel${nGap===1?"":"s"} for skipped sheet numbers)`:"")+
     (nAux>=0?`, ${nAux} aux${nAux===1?"":"es"}.`:".");
   if(dropped)msg+=` ${dropped} strip(s) beyond the ${cfg().ch}-strip bank were dropped.`;
   if(warn.length)msg+=" "+warn.join(" · ");
@@ -5279,8 +5287,9 @@ async function emoExport(spec){
     const LR=first[3],GRP0=first[1]??-1,FX0=first[2],MTX0=first[6],LNK0=first[12];
     const nCh=alloc[0],nGrp=alloc[1]||0,nMtx=alloc[6]||0,nAux=alloc[2]-8;
 
-    const chans=(spec.channels||[]).map(c=>({...c,ports:(c.ports||[]).map(p=>p-1),
-      stereo:(c.ports||[]).length===2}));
+    const chans=(spec.channels||[]).map((c,i)=>({...c,ports:(c.ports||[]).map(p=>p-1),
+      stereo:(c.ports||[]).length===2,
+      ...(c.name?{}:{name:"Channel "+(i+1)})})); // v11 placeholder: a default strip in place (patch only)
     const groups=spec.groups||[],fx=spec.fx||[],auxes=spec.auxes||[],mtxs=spec.matrixes||[];
     if(chans.length>nCh)throw new Error("template has "+nCh+" input strips");
     if(groups.length>nGrp)throw new Error("template has "+nGrp+" group strips");
@@ -5667,7 +5676,10 @@ async function emoImport(bytes,fileStemName){
       const cid=1+i,nm=(nameOf[cid]||"").trim();
       // Default-named strips are imported only when they carry content
       // (a touched rack or a color); they keep their default label.
-      if((!nm||isDef(nm,chRe))&&!hasPlugs(cid)&&colorOf[cid]==null)continue;
+      // Other default strips come in as placeholders (empty, patch only), so the strips
+      // below keep their numbers; the trailing ones are dropped after the loop.
+      if((!nm||isDef(nm,chRe))&&!hasPlugs(cid)&&colorOf[cid]==null){
+        channels.push(objOf[`0:${i}`]={name:"",placeholder:true,stereo:!!stereoOf[cid],ports:[]});continue;}
       const st=!!stereoOf[cid];
       const d=dests[cid],lk=links[cid];
       const grp=(d!==undefined&&d!==LR&&grpLabel[d])?grpLabel[d]:null;
@@ -5683,6 +5695,7 @@ async function emoImport(bytes,fileStemName){
       channels.push(objOf[`0:${i}`]=c);refOf[`0:${i}`]=["ch",c.name];
       if(!src){port+=st?2:1;chByIdx[i]=c;if(pk&&!(pk in firstByPatch))firstByPatch[pk]=i;}
     }
+    while(channels.length&&channels[channels.length-1].placeholder){channels.pop();delete objOf[`0:${channels.length}`];}
     const fxRe=/^Fx \d+$/,monRe=/^Mon \d+$/;
     const fxs=[],auxes=[],auxBank=[]; // auxBank: each imported aux's aux-bank index (for its output patch)
     for(let i=0;i<8;i++){
@@ -5873,16 +5886,17 @@ function sesExport(base,spec){
     const off=o.mods[0x12].slots["0,18,0"];
     if(d[off]===7&&d[off+3]===SES.INPUT)d.fill(0,off,off+4);
   }
-  const sum={inputs:chans.length,stereo:[],unpatched:[],noInsert:[],splits:spec.channels.length-chans.length};
+  const sum={inputs:chans.filter(c=>c.name).length,stereo:[],unpatched:[],noInsert:[],splits:spec.channels.length-chans.length};
   inLabels.forEach((lab,n)=>{
-    const obj=inputs[lab.slot],c=chans[n],ports=c?(c.ports||[]).map(p=>p-1):[],stereo=ports.length===2;
+    const obj=inputs[lab.slot],ports=chans[n]?(chans[n].ports||[]).map(p=>p-1):[],stereo=ports.length===2;
+    const c=chans[n]&&chans[n].name?chans[n]:null; // a v11 placeholder: "Ch N" in place, patch only
     const name=Uint8Array.from(Array.from(c?c.name:"Ch "+lab.num,ch=>{const x=ch.codePointAt(0);return x>255?63:x;}).slice(0,31));
     for(const m of Object.values(obj.mods))nameField(m.off+8,name);
     nameField(obj.trailer+4,name);nameField(lab.off+8,name);
     const w=stereo?2:1;
     put(obj,"232,8,0",f32(w));put(obj,"232,8,1",f32(w));put(obj,"232,14,0",f32(w));put(obj,"20,5,0",f32(stereo?1:0));
     d[obj.trailer+40]=d[lab.off+41]=w;
-    if(stereo)sum.stereo.push(c.name);
+    if(stereo&&c)sum.stereo.push(c.name);
     // A stereo input names its left socket; the right side is the next one.
     const port=ports.length?ports[0]:null,patched=port!==null&&port+ports.length<=rack;
     put(obj,"0,1,0",patched?[0,0,port,SES.RACK]:[0,0,0,0]);put(obj,"0,1,1",[0,0,0,0]);
