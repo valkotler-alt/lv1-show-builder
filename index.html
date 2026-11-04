@@ -4506,8 +4506,10 @@ const GS_SCRIPT=`/**
  *   I/O = the device and channel the builder's patch puts there (written by the
  *   builder, e.g. "IONIC 24-1 Mic/Line 3"; not read back). Column D has an
  *   M / L / R dropdown. The aux table starts at column J, the same way.
- *   Reading finds every column by its header, so sheets written by older
- *   bridge versions (no I/O columns, aux table at column I) still read.
+ *   A show whose I/O is all MGB (the push sends noIo) has no I/O columns:
+ *   the PATCH number says it all, and the aux table starts at column I.
+ *   Reading finds every column by its header, so sheets without I/O columns
+ *   (those, and sheets written by older bridge versions) read the same.
  */
 
 var HEADERS = ["PATCH", "I/O", "CH NAME", "M/L/R", "MIC", "STAND", "POSITION", "NOTES"];
@@ -4773,14 +4775,23 @@ function _write(d) {
     sh.getRange("C7").setNote("FOH console and software version.");
     sh.getRange("C8").setNote("Monitor console and software version.");
     sh.getRange("C9").setNote("PA system.");
+    // An all-MGB show (d.noIo) leaves the I/O columns out: o shifts every
+    // column after PATCH, and the aux table moves up to column I.
+    var io = !d.noIo;
+    var o = io ? 1 : 0;
+    var noIoCol = function (h) { return io || h !== "I/O"; };
+    var H = HEADERS.filter(noIoCol);
+    var AH = AUX_HEADERS.filter(noIoCol);
+    var AC = AUX_COL - 1 + o;
     sh.getRange("E1")
-      .setValue("<- fill in the yellow cells. Inputs below: one row per input; a stereo channel is an L row + an R row. I/O = the patched device input / output.")
+      .setValue("<- fill in the yellow cells. Inputs below: one row per input; a stereo channel is an L row + an R row." +
+        (io ? " I/O = the patched device input / output." : ""))
       .setFontStyle("italic")
       .setFontColor("#888888");
 
     // Header row.
-    sh.getRange(HEADER_ROW, 1, 1, HEADERS.length)
-      .setValues([HEADERS])
+    sh.getRange(HEADER_ROW, 1, 1, H.length)
+      .setValues([H])
       .setFontWeight("bold")
       .setBackground("#22262e")
       .setFontColor("#ffffff");
@@ -4796,15 +4807,17 @@ function _write(d) {
     sh.getRange(DATA_ROW, 1, prefill, 1).setValues(nums).setFontColor("#888888");
     if (rows.length) {
       var vals = rows.map(function (r) {
-        return [r.io || "", r.name || "", r.cfg || "M", r.mic || "", r.stand || "", r.pos || "", r.notes || ""];
+        var v = [r.name || "", r.cfg || "M", r.mic || "", r.stand || "", r.pos || "", r.notes || ""];
+        return io ? [r.io || ""].concat(v) : v;
       });
-      sh.getRange(DATA_ROW, 2, vals.length, 7).setValues(vals);
+      sh.getRange(DATA_ROW, 2, vals.length, H.length - 1).setValues(vals);
     }
 
-    // AUX / monitor-outputs table at columns J..P: OUT | I/O | AUX NAME | M/L/R |
-    // DESTINATION | POSITION | NOTES, with a pre-numbered OUT column and dropdowns.
-    sh.getRange(HEADER_ROW, AUX_COL, 1, AUX_HEADERS.length)
-      .setValues([AUX_HEADERS])
+    // AUX / monitor-outputs table at columns J..P (I..O without I/O): OUT | I/O |
+    // AUX NAME | M/L/R | DESTINATION | POSITION | NOTES, with a pre-numbered OUT
+    // column and dropdowns.
+    sh.getRange(HEADER_ROW, AC, 1, AH.length)
+      .setValues([AH])
       .setFontWeight("bold")
       .setBackground("#22262e")
       .setFontColor("#ffffff");
@@ -4813,48 +4826,51 @@ function _write(d) {
     if (auxPrefill > MAX_ROWS) auxPrefill = MAX_ROWS;
     var anums = [];
     for (var m = 0; m < auxPrefill; m++) anums.push([m + 1]);
-    sh.getRange(DATA_ROW, AUX_COL, auxPrefill, 1).setValues(anums).setFontColor("#888888");
+    sh.getRange(DATA_ROW, AC, auxPrefill, 1).setValues(anums).setFontColor("#888888");
     if (auxes.length) {
       var avals = auxes.map(function (r) {
-        return [r.io || "", r.name || "", r.cfg || "M", r.dest || "", r.pos || "", r.notes || ""];
+        var v = [r.name || "", r.cfg || "M", r.dest || "", r.pos || "", r.notes || ""];
+        return io ? [r.io || ""].concat(v) : v;
       });
-      sh.getRange(DATA_ROW, AUX_COL + 1, avals.length, 6).setValues(avals);
+      sh.getRange(DATA_ROW, AC + 1, avals.length, AH.length - 1).setValues(avals);
     }
 
-    // M/L/R dropdowns (inputs col D, auxes col M) and the aux DESTINATION
-    // dropdown, down to MAX_ROWS so rows can be added by hand.
+    // M/L/R dropdowns (inputs col D, auxes col M; C and K without I/O) and the
+    // aux DESTINATION dropdown, down to MAX_ROWS so rows can be added by hand.
     var rule = SpreadsheetApp.newDataValidation()
       .requireValueInList(["M", "L", "R"], true)
       .setAllowInvalid(false)
       .build();
-    sh.getRange(DATA_ROW, 4, MAX_ROWS, 1).setDataValidation(rule);
-    sh.getRange(DATA_ROW, AUX_COL + 3, MAX_ROWS, 1).setDataValidation(rule);
+    sh.getRange(DATA_ROW, 3 + o, MAX_ROWS, 1).setDataValidation(rule);
+    sh.getRange(DATA_ROW, AC + 2 + o, MAX_ROWS, 1).setDataValidation(rule);
     var destRule = SpreadsheetApp.newDataValidation()
       .requireValueInList(AUX_DESTS, true)
       .setAllowInvalid(true)
       .build();
-    sh.getRange(DATA_ROW, AUX_COL + 4, MAX_ROWS, 1).setDataValidation(destRule);
+    sh.getRange(DATA_ROW, AC + 3 + o, MAX_ROWS, 1).setDataValidation(destRule);
 
     sh.setColumnWidth(1, 56);
-    sh.setColumnWidth(2, 150); // I/O
-    sh.setColumnWidth(3, 160);
-    sh.setColumnWidth(4, 64);
-    sh.setColumnWidths(5, 3, 130);
-    sh.setColumnWidth(8, 220);
-    sh.setColumnWidth(9, 30); // spacer between the two tables
-    sh.setColumnWidth(AUX_COL, 56);
-    sh.setColumnWidth(AUX_COL + 1, 150); // I/O
-    sh.setColumnWidth(AUX_COL + 2, 160);
-    sh.setColumnWidth(AUX_COL + 3, 64);
-    sh.setColumnWidth(AUX_COL + 4, 120);
-    sh.setColumnWidth(AUX_COL + 5, 130);
-    sh.setColumnWidth(AUX_COL + 6, 220);
-    sh.getRange(DATA_ROW, 2, MAX_ROWS, 1).setFontColor("#555555");
-    sh.getRange(DATA_ROW, AUX_COL + 1, MAX_ROWS, 1).setFontColor("#555555");
+    if (io) sh.setColumnWidth(2, 150); // I/O
+    sh.setColumnWidth(2 + o, 160);
+    sh.setColumnWidth(3 + o, 64);
+    sh.setColumnWidths(4 + o, 3, 130);
+    sh.setColumnWidth(7 + o, 220);
+    sh.setColumnWidth(8 + o, 30); // spacer between the two tables
+    sh.setColumnWidth(AC, 56);
+    if (io) sh.setColumnWidth(AC + 1, 150); // I/O
+    sh.setColumnWidth(AC + 1 + o, 160);
+    sh.setColumnWidth(AC + 2 + o, 64);
+    sh.setColumnWidth(AC + 3 + o, 120);
+    sh.setColumnWidth(AC + 4 + o, 130);
+    sh.setColumnWidth(AC + 5 + o, 220);
+    if (io) {
+      sh.getRange(DATA_ROW, 2, MAX_ROWS, 1).setFontColor("#555555");
+      sh.getRange(DATA_ROW, AC + 1, MAX_ROWS, 1).setFontColor("#555555");
+    }
     sh.getRange(DATA_ROW, 1, MAX_ROWS, 1).setHorizontalAlignment("right");
-    sh.getRange(DATA_ROW, AUX_COL, MAX_ROWS, 1).setHorizontalAlignment("right");
+    sh.getRange(DATA_ROW, AC, MAX_ROWS, 1).setHorizontalAlignment("right");
 
-    return { ok: true, rows: rows.length, auxes: auxes.length };
+    return { ok: true, rows: rows.length, auxes: auxes.length, io: io };
   } catch (err) {
     return { ok: false, error: String(err) };
   }
@@ -4994,15 +5010,15 @@ async function gsPost(br,body,label){ // POST; where POST is blocked -> chunked 
   }
   return gsPushChunked(br,body,label);
 }
-function ioText(legs,out){ // pins -> "IONIC 24-1 Mic/Line 3–4" / "MADI 5" (the I/O column of the Google Sheet / vendor PDF)
+// An all-MGB show has no I/O column on the Sheet / PDF: the CH / PATCH number already is the MGB input.
+const ioColumn=()=>!(state.io.length&&state.io.every(d=>d.model==="MGB"));
+function ioText(legs,out){ // pins -> "IONIC 24-1 Mic/Line 3–4" (the I/O column of the Google Sheet / vendor PDF)
   const ps=(legs||[]).filter(Boolean).map(p=>{const k=devK(p.d);
     return {k,x:IO_MODELS[state.io[k].model][out?"outChs":"inChs"].find(z=>z.c===p.c)};});
   const one=a=>`${a.x.type==="Out"?"Out":a.x.type} ${a.x.lbl}`;
-  // The show's one MGB needs no device name; a second MGB keeps them apart.
-  const dev=k=>state.io[k].model==="MGB"&&state.io.filter(d=>d.model==="MGB").length===1?"":ioName(k)+" ";
-  if(!ps.length)return "";
-  if(ps.length===2&&ps[0].k===ps[1].k&&ps[0].x.type===ps[1].x.type)return `${dev(ps[0].k)}${one(ps[0])}–${ps[1].x.lbl}`;
-  return ps.map(a=>dev(a.k)+one(a)).join(" / ");
+  if(!ps.length||!ioColumn())return "";
+  if(ps.length===2&&ps[0].k===ps[1].k&&ps[0].x.type===ps[1].x.type)return `${ioName(ps[0].k)} ${one(ps[0])}–${ps[1].x.lbl}`;
+  return ps.map(a=>`${ioName(a.k)} ${one(a)}`).join(" / ");
 }
 function sheetRows(){ // builder channels -> sheet rows (stereo = L row + R row)
   const pts=ports(),A=resolveIn().A;const out=[];
@@ -5143,10 +5159,12 @@ $("#btnPush").onclick=async()=>{
   gsBusy=true;$("#btnPush").disabled=true;setStatus("Writing the sheet…");
   try{
     const body=JSON.stringify({id:p.id,show:{name:state.show.name,date:state.show.date,venue:state.show.venue,fohContact:state.show.fohContact||"",monContact:state.show.monContact||"",pmContact:state.show.pmContact||"",fohDesk:state.show.fohDesk||"",monDesk:state.show.monDesk||"",pa:state.show.pa||"",notes:state.show.notes||""},
-      rows:sheetRows(),prefill:cfg().ch,auxes:auxSheetRows(),auxPrefill:cfg().mon});
+      rows:sheetRows(),prefill:cfg().ch,auxes:auxSheetRows(),auxPrefill:cfg().mon,noIo:!ioColumn()});
     const data=await gsPost(p.br,body,"Writing the sheet…");
     if(!data.ok)throw new Error(data.error||"bridge error");
-    setStatus(`Google Sheet updated: ${data.rows} row${data.rows===1?"":"s"} written (template layout refreshed).`);
+    const oldBridge=!ioColumn()&&data.io!==false; // bridges before v120 always write the I/O column (left blank here)
+    setStatus(`Google Sheet updated: ${data.rows} row${data.rows===1?"":"s"} written (template layout refreshed).`+
+      (oldBridge?" The I/O column is still there (blank): the deployed bridge script is an older version — copy the current one from Setup… and redeploy.":""),oldBridge);
   }catch(err){gsError(err);}
   finally{gsBusy=false;$("#btnPush").disabled=false;}
 };
@@ -5386,21 +5404,23 @@ $("#btnPdf").onclick=async()=>{
   const label=(t,ly)=>{doc.setFont("helvetica","bold");doc.setFontSize(8);doc.setTextColor(110);
     doc.text(t,14,ly,{charSpace:0.8});doc.setTextColor(0);};
   label("INPUTS",y+3);
-  // I/O = the device and channel the patch (PATCH tab) puts there, e.g. "IONIC 24-1 Mic/Line 3" (an MGB: just "MADI 3")
-  const ioCols={0:{cellWidth:14,halign:"right"},1:{cellWidth:42},3:{cellWidth:12,halign:"center"}};
+  // I/O = the device and channel the patch (PATCH tab) puts there, e.g. "IONIC 24-1 Mic/Line 3";
+  // an all-MGB show has no I/O column (iox drops it from every row).
+  const io=ioColumn(),iox=r=>io?r:r.filter((_,j)=>j!==1);
+  const ioCols=io?{0:{cellWidth:14,halign:"right"},1:{cellWidth:42},3:{cellWidth:12,halign:"center"}}:tbl.columnStyles;
   doc.autoTable({...tbl,startY:y+5.5,columnStyles:ioCols,
-    head:[["CH","I/O","NAME","M/ST","MIC / DI","STAND","STAGE POSITION","NOTES"]],
-    body:state.channels.map((c,i)=>c.name.trim()&&!c.ds?[pts[i].join("–")||"—",ioText(inA[i]),c.name.trim(),c.stereo?"ST":"M",c.mic,c.stand,c.pos,c.notes||""]:null).filter(Boolean),
+    head:[iox(["CH","I/O","NAME","M/ST","MIC / DI","STAND","STAGE POSITION","NOTES"])],
+    body:state.channels.map((c,i)=>c.name.trim()&&!c.ds?iox([pts[i].join("–")||"—",ioText(inA[i]),c.name.trim(),c.stereo?"ST":"M",c.mic,c.stand,c.pos,c.notes||""]):null).filter(Boolean),
   });
   // Auxes / monitors: output port, I/O, mix name, format, destination (wedge / IEM…), position, notes.
   const aps=auxPorts(),RO=resolveOut();
-  const auxRows=state.auxes.map((a,i)=>a.name.trim()?[aps[i].join("–")||"—",ioText((RO.legs.get(a)||[]).flat(),true),a.name.trim(),a.stereo?"ST":"M",a.dest||"",(a.pos||"").trim(),(a.notes||"").trim()]:null).filter(Boolean);
+  const auxRows=state.auxes.map((a,i)=>a.name.trim()?iox([aps[i].join("–")||"—",ioText((RO.legs.get(a)||[]).flat(),true),a.name.trim(),a.stereo?"ST":"M",a.dest||"",(a.pos||"").trim(),(a.notes||"").trim()]):null).filter(Boolean);
   if(auxRows.length){
     let ay=doc.lastAutoTable.finalY+9;
     if(ay+22>doc.internal.pageSize.getHeight()-16){doc.addPage("a4","portrait");ay=18;} // keep the heading with its table
     label("AUXES / MONITORS",ay);
     doc.autoTable({...tbl,startY:ay+2.5,columnStyles:ioCols,
-      head:[["OUT","I/O","NAME","M/ST","DESTINATION","STAGE POSITION","NOTES"]],
+      head:[iox(["OUT","I/O","NAME","M/ST","DESTINATION","STAGE POSITION","NOTES"])],
       body:auxRows,
     });
   }
