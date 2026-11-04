@@ -636,10 +636,6 @@ tr[data-ds] td.dscell .dsnote{font-size:11px;}
 .dsbtn{font-family:var(--font-num);font-size:10.5px;font-weight:700;letter-spacing:.04em;margin-right:4px;}
 .pfbtn{font-family:var(--font-num);font-size:11px;min-width:44px;}
 .pfbtn.post{color:var(--grp);border-color:var(--grp);}
-.chips{display:flex;flex-wrap:wrap;gap:4px;}
-.chips label{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-family:var(--font-num);border:1px solid var(--line);border-radius:4px;padding:2px 6px;cursor:pointer;color:var(--dim);}
-.chips label.on{color:var(--mtx);border-color:var(--mtx);}
-.chips input{position:absolute;opacity:0;width:1px;height:1px;}
 .rackbtn{font-family:var(--font-num);font-size:11px;min-width:58px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dim);}
 .rackbtn.custom{color:var(--seccolor,var(--accent));border-color:var(--seccolor,var(--accent));}
 tr.rackrow td{background:var(--panel2);padding:10px 12px;}
@@ -927,7 +923,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 
 <section style="--seccolor:var(--ch)" data-tab="in">
   <div class="sechead"><h2>Inputs</h2><span class="count" id="chCount"></span>
-    <span class="hint">Patch = the input on the PATCH tab: new inputs take the device inputs top-down (Auto, stereo takes two) until you patch them there. <b>DS</b> on a row adds a digital split — the same input on another strip, off the master, for monitors (.emo only: never on the PDF, sheet or stage). Group, Link and Mute are assigned on PATCH › INTERNAL (MULTI = several): click one to open the input's row there. Click a row's # to select (Shift = range, Ctrl = add/remove, Esc = clear) · drag the # to move rows.</span></div>
+    <span class="hint">Patch = the input on the PATCH tab: new inputs take the device inputs top-down (Auto, stereo takes two) until you patch them there. <b>DS</b> on a row adds a digital split — the same input on another strip, off the master, for monitors (.emo only: never on the PDF, sheet or stage). Group, Link, Mute and Matrix are assigned on PATCH › INTERNAL (MULTI = several): click one to open the input's row there. Click a row's # to select (Shift = range, Ctrl = add/remove, Esc = clear) · drag the # to move rows.</span></div>
   <div class="tblwrap"><table id="chTable">
     <thead><tr><th>#</th><th>Patch</th><th>Name</th><th>M/ST</th><th>Color</th><th>Group</th><th>Link</th><th>Mute</th><th>Matrix</th><th>Mic</th><th>Stand</th><th>Stage position</th><th>Notes</th><th>Rack</th><th></th><th class="iocol"></th><th class="iocol"></th></tr></thead>
     <tbody></tbody>
@@ -936,7 +932,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 
 <section style="--seccolor:var(--ch)" data-tab="io">
   <div class="sechead"><h2>Patch</h2><span class="count" id="ioCount"></span>
-    <span class="hint">The show's SoundGrid I/O devices, in LV1 slot order (A1–A8, then B1–B8): add them below; in the patch window's top strip drag a device's ⋮⋮ to reorder it and ✕ removes it. The patch window works like LV1's: pick a view (INPUT / OUTPUT / INTERNAL / DEVICE TO DEVICE), the devices to show (top strip) and click or drag across cells (drag straight or diagonally to patch a run). INTERNAL assigns strips to any number of groups, Main, matrixes, links and mute groups (LV1's rules: grey cells are not possible) — the only place to assign groups, links and mutes: the INPUTS / OUTPUTS tables show them read-only (MULTI for several) and a click there opens the strip's row here. New inputs patch themselves top-down (Auto) through the Mic/Line and MADI inputs until you patch them here. In the Input views each preamp has its Gain knob (drag up/down, wheel, arrow keys; double-click = +20 dB) and 48V button above its column. All of it goes into the .emo session.</span></div>
+    <span class="hint">The show's SoundGrid I/O devices, in LV1 slot order (A1–A8, then B1–B8): add them below; in the patch window's top strip drag a device's ⋮⋮ to reorder it and ✕ removes it. The patch window works like LV1's: pick a view (INPUT / OUTPUT / INTERNAL / DEVICE TO DEVICE), the devices to show (top strip) and click or drag across cells (drag straight or diagonally to patch a run). INTERNAL assigns strips to any number of groups, Main, matrixes, links and mute groups (LV1's rules: grey cells are not possible) — the only place to assign groups, matrixes, links and mutes: the INPUTS / OUTPUTS tables show them read-only (MULTI for several) and a click there opens the strip's row here. New inputs patch themselves top-down (Auto) through the Mic/Line and MADI inputs until you patch them here. In the Input views each preamp has its Gain knob (drag up/down, wheel, arrow keys; double-click = +20 dB) and 48V button above its column. All of it goes into the .emo session.</span></div>
   <div class="ioadd" id="ioAdd"></div>
   <div class="iodevs" id="ioDevs"></div>
   <div class="pw" id="pw"></div>
@@ -944,7 +940,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 
 <section style="--seccolor:var(--grp)" data-tab="out">
   <div class="sechead"><h2>Groups</h2><span class="count" id="grpCount"></span>
-    <span class="hint">Pre/Post FX is the LV1 group processing point. Destination MASTER = LR. Destination, Link and Mute are assigned on PATCH › INTERNAL: click one to open the group's row there.</span></div>
+    <span class="hint">Pre/Post FX is the LV1 group processing point. Destination MASTER = LR. Destination, Link, Mute and Matrix feeds are assigned on PATCH › INTERNAL: click one to open the group's row there.</span></div>
   <div class="tblwrap"><table id="grpTable">
     <thead><tr><th>#</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>Link</th><th>Mute</th><th>FX point</th><th>Matrix feeds</th><th>Rack</th><th></th><th class="iocol"></th><th class="iocol"></th></tr></thead>
     <tbody></tbody>
@@ -980,7 +976,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 
 <section style="--seccolor:var(--mtx)" data-tab="out">
   <div class="sechead"><h2>Matrixes</h2><span class="count" id="mtxCount"></span>
-    <span class="hint">LV1 matrix strips 1–8. Feed them from inputs or groups above. Patch = the matrix's output (Auto continues after Master L/R).</span></div>
+    <span class="hint">LV1 matrix strips 1–8. Feed them on PATCH › INTERNAL (Matrix columns). Patch = the matrix's output (Auto continues after Master L/R).</span></div>
   <div class="tblwrap"><table id="mtxTable">
     <thead><tr><th>#</th><th>Patch</th><th>Name</th><th>M/ST</th><th>Color</th><th>Link</th><th>Mute</th><th></th><th class="iocol"></th><th class="iocol"></th></tr></thead>
     <tbody></tbody>
@@ -1355,7 +1351,7 @@ function setAsg(kind,o,S){ // a key set -> the strip's own fields (first of each
 }
 const xsCount=o=>{const x=o.xs||{};return ["to","mtx","link","mute"].reduce((n,k)=>n+((x[k]||[]).length),0);};
 const xsBadge=(kind,o)=>{const n=xsCount(o);return n?` <span class="xsn" title="${esc([...asgOf(kind,o)].sort((a,b)=>asgOrder(a)-asgOrder(b)).map(k=>k.replace(/^g:|^x:|^l:/,"").replace(/^u:/,"Mute ")).join(" · "))} (PATCH › INTERNAL)">+${n}</span>`:"";};
-/* The INPUTS / OUTPUTS tables show a strip's Group (or Destination), Link and Mute assignments
+/* The INPUTS / OUTPUTS tables show a strip's Group (or Destination), Matrix, Link and Mute assignments
    read-only — they are edited on PATCH › INTERNAL: the one assignment's name, MULTI for several
    (all of them in the tooltip), ⚠ for a strip that is not in this configuration. A click opens
    the strip's row there (pwFocus). t: g = groups + Main / Center / Mono, x = matrix, l = link, u = mute. */
@@ -1448,7 +1444,7 @@ const DEF={ch:defCh,grp:defGrp,fx:defFx,aux:defAux,mtx:defMtx};
 const STRIP_NOUN={ch:"input",aux:"aux",grp:"group",fx:"FX",mtx:"matrix"};
 const STRIP_PLURAL={ch:"inputs",aux:"auxes",grp:"groups",fx:"FX returns",mtx:"matrixes"};
 const STRIP_NEW={ch:"New Input",aux:"New Aux",grp:"New Group",fx:"New FX",mtx:"New MTX"};
-const DEFNAME={ch:i=>`Channel ${i+1}`,grp:i=>`Group ${i+1}`,fx:i=>`Fx ${i+1}`,aux:i=>`Mon ${i+1}`,mtx:i=>`MTX ${i+1}`}; // MTX: short enough for the matrix-feed chips
+const DEFNAME={ch:i=>`Channel ${i+1}`,grp:i=>`Group ${i+1}`,fx:i=>`Fx ${i+1}`,aux:i=>`Mon ${i+1}`,mtx:i=>`MTX ${i+1}`}; // MTX: short enough for narrow cells
 
 let state=defaultShow();
 let rackOpen=null; // "ch-3" | "grp-0" | "fx-1" | "mst-0" | null
@@ -1709,26 +1705,6 @@ function dupNames(list){const seen=new Set(),dup=new Set();
 // Every strip row carries its bank + index for drag-to-reorder.
 const rowCls=(kind,i)=>` data-rk="${kind}" data-ri="${i}"`+(sel[kind].has(i)?' class="selon"':'');
 
-/* Assignment menus list EVERY strip of the selected mixer configuration:
-   the strip's name when set, else its default label ("Group 3"). Picking an
-   unnamed strip auto-names it so the assignment is actually built. */
-function stripOpts(kind){
-  const list=listFor[kind]();
-  const used=new Set(list.map(x=>x.name.trim().toUpperCase()).filter(Boolean));
-  return list.map((x,i)=>{
-    const n=x.name.trim();
-    if(n)return n;
-    const d=DEFNAME[kind](i);
-    return used.has(d.toUpperCase())?null:d; // a real name shadows a default label
-  }).filter(Boolean);
-}
-function autoName(kind,label){ // picking an unnamed strip's default label names it
-  const list=listFor[kind]();
-  if(!label||list.some(x=>x.name.trim().toUpperCase()===label.trim().toUpperCase()))return false;
-  const j=list.findIndex((x,i)=>!x.name.trim()&&DEFNAME[kind](i)===label);
-  if(j<0)return false;
-  list[j].name=label;return true;
-}
 const LINK_COUNT=16; // LV1 link strips (every config)
 const MUTE_COUNT=8;  // LV1 mute groups (every config; no names)
 const linkLabel=i=>((state.links||[])[i]||"").trim()||`Link ${i+1}`;
@@ -1736,16 +1712,12 @@ const linkLabels=()=>Array.from({length:LINK_COUNT},(_,i)=>linkLabel(i));
 
 function renderChannels(){
   const tb=$("#chTable tbody"); const pts=resolveIn().A; const dups=dupNames(state.channels);
-  const mtxOpts=stripOpts("mtx");
   const srcOpts=state.channels.filter(c=>!c.ds&&c.name.trim()).map(c=>c.name.trim());
   tb.innerHTML=state.channels.map((ch,i)=>{
-    const s=(f,cur,opts,none)=>{
-      // A value that is not in the bank (deleted / misspelt strip) stays
-      // visible, flagged — exporting it would route to MASTER.
-      const miss=cur&&!opts.includes(cur)&&f!=="stand";
-      const all=cur&&!opts.includes(cur)?[cur,...opts]:opts;
-      return `<select id="ch-${i}-${f}" class="asg${miss?" missing":""}" data-k="ch" data-i="${i}" data-f="${f}">
-      <option value=""${cur===""?" selected":""}>${none}</option>${all.map(o=>`<option value="${esc(o)}"${o===cur?" selected":""}>${miss&&o===cur?"⚠ ":""}${o===NO_MAIN?"No master":esc(o)}</option>`).join("")}</select>`;};
+    const stand=()=>{ // a legacy value outside STANDS stays visible
+      const all=ch.stand&&!STANDS.includes(ch.stand)?[ch.stand,...STANDS]:STANDS;
+      return `<select id="ch-${i}-stand" class="asg" data-k="ch" data-i="${i}" data-f="stand">
+      <option value=""${ch.stand===""?" selected":""}>—</option>${all.map(o=>`<option value="${esc(o)}"${o===ch.stand?" selected":""}>${esc(o)}</option>`).join("")}</select>`;};
     const isDs=!!ch.ds;
     // A split row: no mic / stand / position / notes (operating only) — its
     // source picker instead; the format follows the source.
@@ -1754,7 +1726,7 @@ function renderChannels(){
           (splitSource(ch)<0?[ch.ds]:[]).concat(srcOpts.filter(n=>n!==ch.name.trim())).map(o=>`<option value="${esc(o)}"${o===ch.ds?" selected":""}>${splitSource(ch)<0&&o===ch.ds?"⚠ ":""}${esc(o)}</option>`).join("")}</select>
         <span class="dsnote">same input · .emo only</span></td>`
       :`<td><input id="ch-${i}-mic" value="${esc(ch.mic)}" data-k="ch" data-i="${i}" data-f="mic" placeholder="e.g. B91A"></td>
-      <td>${s("stand",ch.stand,STANDS,"—")}</td>
+      <td>${stand()}</td>
       <td><input id="ch-${i}-pos" value="${esc(ch.pos)}" data-k="ch" data-i="${i}" data-f="pos" list="posList" placeholder="position"></td>
       <td><input id="ch-${i}-notes" value="${esc(ch.notes)}" data-k="ch" data-i="${i}" data-f="notes"></td>`;
     return `<tr${rowCls("ch",i)}${isDs?' data-ds="1"':""}>
@@ -1764,7 +1736,7 @@ function renderChannels(){
       ${isDs?`<td><button class="stbtn small ${ch.stereo?"st":""}" disabled title="A split has its source's format">${ch.stereo?"ST":"M"}</button></td>`:stCell("ch",i,ch.stereo)}
       ${colorCell("ch",i,ch.color)}
       ${asgCell("ch",i,ch,"g")}${asgCell("ch",i,ch,"l")}${asgCell("ch",i,ch,"u")}
-      ${(ch.xs&&ch.xs.mtx||[]).length?asgCell("ch",i,ch,"x"):`<td>${s("matrix",ch.matrix,mtxOpts,"None")}</td>`}
+      ${asgCell("ch",i,ch,"x")}
       ${ioCells}
       ${rackCell("ch",i,ch.rack)}
       ${opsCell("ch",i,!isDs&&ch.name.trim()?`<button class="small dsbtn" data-k="ch" data-i="${i}" data-f="split" title="Digital split: add a copy of this input on the next free strip — same physical input, its own processing, not routed to master (for monitors)">DS</button>`:"")}${ioOpsCell("ch",i)}</tr>`+rackRow("ch",i,ch.rack,17,ch.stereo);
@@ -1778,7 +1750,6 @@ function chCountText(A){
 }
 function renderGroups(){
   const tb=$("#grpTable tbody"); const dups=dupNames(state.groups);
-  const mtxOpts=stripOpts("mtx");
   tb.innerHTML=state.groups.map((g,i)=>{
     return `<tr${rowCls("grp",i)}>
       <td class="num"><span class="rgrip">⋮⋮</span>${i+1}</td>
@@ -1787,7 +1758,7 @@ function renderGroups(){
       ${colorCell("grp",i,g.color)}
       ${asgCell("grp",i,g,"g")}${asgCell("grp",i,g,"l")}${asgCell("grp",i,g,"u")}
       <td><button class="pfbtn small ${g.postFx?"post":""}" id="grp-${i}-pf" data-k="grp" data-i="${i}" data-f="postFx">${g.postFx?"POST":"PRE"}</button></td>
-      <td><div class="chips">${mtxOpts.length?mtxOpts.map(m=>`<label class="${g.matrix.includes(m)?"on":""}"><input type="checkbox" id="grp-${i}-mx-${esc(m)}" data-k="grp" data-i="${i}" data-f="mx" data-m="${esc(m)}" ${g.matrix.includes(m)?"checked":""}>${esc(m)}</label>`).join(""):'<span style="color:var(--dim);font-size:11px">no matrix strips in this configuration</span>'}</div></td>
+      ${asgCell("grp",i,g,"x")}
       ${rackCell("grp",i,g.rack)}
       ${opsCell("grp",i)}${ioOpsCell("grp",i)}</tr>`+rackRow("grp",i,g.rack,13,g.stereo);
   }).join("")||emptyRow(13,"This mixer configuration has no group strips.");
@@ -2074,7 +2045,7 @@ const listFor={ch:()=>state.channels,grp:()=>state.groups,fx:()=>state.fx,aux:()
    selection "make the others match this row" would silently do nothing.
    While such a menu is focused it sits on a hidden placeholder showing the
    same text, so every pick is a change; closing without a pick restores. */
-const MULTI_MENUS=new Set(["color","matrix","stand","dest"]);
+const MULTI_MENUS=new Set(["color","stand","dest"]);
 document.addEventListener("focusin",e=>{
   const s=e.target;
   if(s.tagName!=="SELECT"||!MULTI_MENUS.has(s.dataset.f))return;
@@ -2142,10 +2113,6 @@ document.addEventListener("input",e=>{
   }
   if(f==="ds"){it.ds=t.value;render();return;} // a split's source: format + patch follow
   if(f==="out"){setOutPick(k,it,t.value);render();return;} // aux / matrix output patch
-  if(f==="mx"){const m=t.dataset.m;it.matrix=t.checked?[...it.matrix,m]:it.matrix.filter(x=>x!==m);
-    if(t.checked&&autoName("mtx",m)){render();setStatus(`Matrix strip “${m}” named automatically so the feed is built.`);}
-    else renderGroups();
-    return;}
   if(f==="name"){
     const i=+t.dataset.i;
     const cur=nameEdit&&nameEdit.k===k&&nameEdit.i===i?nameEdit.cur:it.name;
@@ -2154,27 +2121,16 @@ document.addEventListener("input",e=>{
     else nameEdit={k,i,cur};
     if(k==="ch"||k==="aux")setTimeout(()=>renderStage(),0); // captions follow
   }
-  if(["name","matrix","mic","stand","notes","dest"].includes(f)){it[f]=t.value;
+  if(["name","mic","stand","notes","dest"].includes(f)){it[f]=t.value;
     if(f==="name"&&(k==="grp"||k==="mtx")){render();t&&focusBack(k,t.dataset.i,"name");return;}
-    // Assigning to an unnamed strip (shown by its default label) names it,
-    // so the routing is actually built into the session.
-    const nk=f==="matrix"?"mtx":null;
     // Menus edited on a selected row apply to the whole selection
-    // (groups / links / mutes are assigned on PATCH › INTERNAL).
-    const tg=["matrix","stand","dest"].includes(f)?multiTargets():[];
+    // (groups / links / mutes / matrixes are assigned on PATCH › INTERNAL).
+    const tg=["stand","dest"].includes(f)?multiTargets():[];
     if(tg.length>1){
       let n=0;
       for(const j of tg){const o=list[j];if(!o)continue;o[f]=t.value;n++;}
-      const named=nk&&autoName(nk,t.value);
       render();
-      const lab={matrix:"Matrix",stand:"Stand",dest:"Destination"}[f];
-      setStatus(`${lab} “${t.value||"—"}” set on ${n} selected ${STRIP_PLURAL[k]}`
-        +(named?` (strip “${t.value}” named automatically).`:"."));
-      return;
-    }
-    if(nk&&autoName(nk,t.value)){
-      render();
-      setStatus(`Matrix strip “${t.value}” named automatically so the assignment is built.`);
+      setStatus(`${f==="stand"?"Stand":"Destination"} “${t.value||"—"}” set on ${n} selected ${STRIP_PLURAL[k]}.`);
       return;
     }
     renderWarnings(); if(f==="name"){refreshNameHighlights(k);if(k==="ch")refreshPorts();}
@@ -2797,7 +2753,7 @@ document.addEventListener("click",e=>{
   // it; Shift-click extends a range from the anchor; Ctrl/Cmd-click toggles
   // one row; clicking the only selected row again deselects. Esc clears.
   const td=e.target.closest&&e.target.closest("tr[data-ri] > td");
-  if(td&&!e.target.closest("input,select,button,textarea,label,.chips")){
+  if(td&&!e.target.closest("input,select,button,textarea,label")){
     const tr=td.parentElement,k=tr.dataset.rk,i=+tr.dataset.ri;
     if(e.shiftKey&&lastSel[k]>=0){
       const a=Math.min(lastSel[k],i),b=Math.max(lastSel[k],i);
