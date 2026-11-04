@@ -804,6 +804,16 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 .cfmbox{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:18px 20px;max-width:480px;box-shadow:0 12px 40px rgba(0,0,0,.45);}
 #cfmText{font-size:13px;line-height:1.55;margin-bottom:14px;white-space:pre-line;}
 .cfmbtns{display:flex;gap:8px;justify-content:flex-end;}
+.stpdlg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;}
+.stpdlg .cfmbox{max-width:780px;width:100%;max-height:86vh;display:flex;flex-direction:column;}
+.stphead{font-size:13px;line-height:1.5;}
+.stpscroll{overflow:auto;margin:10px 0 12px;border-top:1px solid var(--line);}
+.stpscroll table{width:100%;border-collapse:collapse;font-size:12px;}
+.stpscroll td{padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:middle;}
+.stpimg{width:52px;}.stpimg img{width:48px;height:32px;object-fit:contain;display:block;}
+.stpscroll select{max-width:230px;}
+.stpscroll td.stpins{color:var(--fg);white-space:normal;overflow-wrap:anywhere;}.stppos,.stpmem{color:var(--dim);font-size:11px;}
+.stpremember{font-size:12px;color:var(--dim);margin-bottom:12px;display:flex;gap:6px;align-items:center;}
 .noteswrap{display:flex;flex-direction:column;gap:12px;max-width:680px;}
 .noteswrap label{display:flex;flex-direction:column;gap:5px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);font-weight:500;}
 .noteswrap input{font-size:14px;padding:8px 10px;}
@@ -1023,7 +1033,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
     <span class="hint">Click a library item to place it, drag to position, label it with the input it belongs to.
     Drawn from the audience; position zones use stage left/right (performer's view).</span>
     <span class="headops">
-      <button class="small" id="inputsToStage" title="Add a stage item for every named input that has none">Inputs → stage</button>
+      <button class="small" id="inputsToStage" title="Add a stage item for every named input that has none — the picture is guessed from the name / Mic / Stand (or what you picked before), one item per instrument (kit, piano, keys); you check it in a preview. Swap a wrong picture later with Picture in the item's inspector: the links stay">Inputs → stage</button>
       <button class="small" id="stagePng">Export PNG</button>
       <button class="small danger" id="stageClear">Clear stage</button></span></div>
   <div class="sbwrap">
@@ -1040,6 +1050,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
         <span class="hint">· depth <span id="stageD"></span> m (items are drawn at their real size — the chair is 50 cm)</span></div>
       <div id="stage"><div class="stagelabel">A U D I E N C E</div><div class="stagesize" id="stageSizeLab"></div></div>
       <div id="sinsp" class="sinsp" hidden>
+        <label id="siImgWrap" title="Swap the picture — the item keeps its linked inputs / aux, Position and caption">Picture <select id="siImg" class="small"></select></label>
         <label id="siCmWrap">Width <input type="number" id="siCm" min="5" max="1200" step="1" style="width:68px"> cm</label>
         <label id="siRsWrap" hidden>Riser size <select id="siRsize">
           <option value="" hidden>—</option>
@@ -3501,6 +3512,9 @@ function renderInspector(){
   const riser=!multi&&it&&it.img==="riser";
   // Single-item fields hide in group mode.
   $("#siCmWrap").hidden=multi||riser;
+  $("#siImgWrap").hidden=multi||riser;
+  if(!multi&&!riser&&document.activeElement!==$("#siImg")&&$("#siImg").dataset.for!==it.img){
+    $("#siImg").innerHTML=stageImgOptions(it.img,false);$("#siImg").dataset.for=it.img;}
   $("#siRsWrap").hidden=multi||!riser;
   $("#siNoteWrap").hidden=multi||!riser;
   $("#siRotWrap").hidden=multi; // a constellation rotates by steps only
@@ -3954,6 +3968,18 @@ $("#siPos").addEventListener("input",()=>{
 });
 $("#siPos").addEventListener("change",()=>render()); // persist + refresh the datalist
 $("#siFlip").onclick=()=>{const it=stg().items[stageSel];if(!it)return;it.flip=!it.flip;render();};
+// Swap the picture only: links (ins / label / auxl), Position, caption and rotation stay. The new
+// picture is remembered for the linked inputs, so the next Inputs → stage picks it (see stageProposal).
+$("#siImg").addEventListener("change",e=>{
+  const it=stg().items[stageSel],v=e.target.value;if(!it||!v||it.img===v)return;
+  it.img=v;it.cm=libCm(v)||it.cm;
+  const {chs}=linkedRowsFor([stageSel]);
+  if(chs.size){const all=lsStagePicks();for(const c of chs.values())all[c.name.trim().toUpperCase()]=v;
+    try{localStorage.setItem("lv1.stagePicks",JSON.stringify(all));}catch(_){/* not remembered */}}
+  e.target.blur();render();
+  setStatus(`Picture changed to “${v.startsWith("custom:")?((stg().custom[v.slice(7)]||lsCustoms()[v.slice(7)]||{}).name||v):libName(v)}” — links and patch kept`+
+    (chs.size?`; remembered for ${[...chs.values()].map(c=>c.name.trim()).join(", ")}.`:"."));
+});
 $("#siDup").onclick=()=>{const it=stg().items[stageSel];if(!it)return;
   // A duplicate is a NEW instrument: it starts outside the position, without
   // the original's input/aux links, and gets its own add-to-IO-list offer.
@@ -4090,23 +4116,185 @@ function zoneCoords(text){
   if(/\bUS|UP ?STAGE/.test(t))y=1/6;else if(/\bDS|DOWN ?STAGE/.test(t))y=5/6;else if(/\bMS|MID/.test(t))y=0.5;
   return {x,y};
 }
-$("#inputsToStage").onclick=()=>{
-  const have=new Set(stg().items.flatMap(it=>[it.label.trim(),...(it.ins||[])])
+/* ---------- Inputs → stage ----------
+   Every named input without a stage item gets a picture, chosen by
+   1. the picture picked for that name before (remembered in this browser),
+   2. its name (STAGE_RULES: instrument families, house + common names),
+   3. its Mic / Stand (wireless, headset, DI, Clip, Baby, Tall).
+   Inputs of one instrument share ONE item, per Position: kit pieces -> one kit
+   (picture by rack-tom count), PNO + PNO Pickup -> one piano, keyboards on one
+   Position -> double keys, Leslie Top / Bottom -> one Leslie. A preview lists
+   every item with its inputs; each picture can be changed or skipped first. */
+const STAGE_RULES=[ // [family, name test] — first match wins
+  ["kit",/^(KICK|KIK|KD|BD|BASS ?DRUM|SN(R|ARE)?|HH|HI ?-?HATS?|HATS?|TOMS?|RACK|FLR|FLOOR|FT|OH|O\/H|OVERHEADS?|RIDE|CRASH|CYM|SPLASH|CHINA)\b/],
+  ["perc",/^(PERC|CONGAS?|BONGOS?|DJEMBE|CAJON|TIMB(ALES?)?|SURDO|DARBUKA|TARABUKA|DOUMBEK|TAMB|SHAKER|COWBELL|CHIMES?|GLOCK|MARIMBA|VIB(ES|RAPHONE)?|XYLO|TIMPANI|GONG|TRIANGLE|SPD|PAD|DRUM ?MACHINE|808)/],
+  ["piano",/^(PNO|PIANO|GRAND)/],
+  ["leslie",/^LESLIE/],
+  ["organ",/^(HAMMOND|B3|ORGAN)/],
+  ["keys",/^(KEYS?|KBD|KB|SYNTH|SYN|NORD|RHODES|WURLI?|CLAV|MOOG|PROPHET|FANTOM|KRONOS|MONTAGE)\b/],
+  ["accordion",/^ACCORD/],
+  ["ubass",/^(C ?BASS|UPRIGHT|DOUBLE ?BASS|CONTRA ?BASS|STRING ?BASS)/],
+  ["bass",/^(BASS|BS|BGT|B ?GTR?)\b/],
+  ["agtr",/^(GT ?AC|AC ?GT|AGT|AG|ACG|ACOU|AC ?GTR|ACOUSTIC)/],
+  ["gtr12",/^(GT ?12|12 ?STR)/],
+  ["gtr",/^(GT|GTR|GUIT|EGT|EG|E ?GTR|EL ?GT)/],
+  ["violin",/^(VIOLIN|VLN|VL)\b/],["viola",/^(VIOLA|VLA)\b/],["cello",/^(CELLO|VC)\b/],
+  ["mandolin",/^MANDO/],["banjo",/^BANJO/],["uke",/^UKE?/],["oud",/^OUD/],["bouzouki",/^BOUZ/],["charango",/^CHARANGO/],
+  ["harmonica",/^(HARMONICA|HARP ?MIC|BLUES ?HARP)/],["harp",/^HARP/],
+  ["trumpet",/^(TRUMPET|TPT|TRP|FLUGEL)/],["cornet",/^CORNET/],["trombone",/^(TROMBONE|TBN|TBONE|T ?BONE)/],
+  ["sopsax",/^SOP(RANO)? ?SAX/],["barisax",/^BARI/],["altosax",/^ALTO/],["sax",/^(SAX|TENOR|TSX|ASX)/],
+  ["bassclar",/^BASS ?CLAR/],["clarinet",/^(CLARINET|CLAR|CL)\b/],["flute",/^(FLUTE|FL)\b/],["piccolo",/^PICC/],
+  ["oboe",/^OBOE/],["bassoon",/^BASSOON/],["horn",/^(FR(ENCH)? ?HORN|HORN)/],["euphonium",/^EUPH/],["tuba",/^TUBA/],
+  ["dj",/^DJ/],
+  ["playback",/^(PB|PLAY ?BACK|TRACKS?|STEMS?|CLICK|LAPTOP|PC|MAC|COMP|SAMPLER|ABLETON|SPX|SFX|VIDEO|TC|TIME ?CODE)\b/],
+  ["vox",/^(VOX|VOC|VOCALS?|LEAD|LV|BV|BGV|BKG|BVS|CHOIR|MC|SPEECH|HOST|TALK|SPKR|SPEAKER|SINGER|RAP|PRESENTER)/],
+];
+const STAGE_IMG={ // family -> library picture (kit / keys / guitar / bass / vox are resolved in stageImgFor)
+  perc:"drums-percussion-conga-drum-percussion-1",piano:"keys-stands-grandpiano",leslie:"keys-stands-lesliel",
+  organ:"keys-stands-hammondb3back",accordion:"keys-stands-accordion",ubass:"strings-stringbass",
+  agtr:"strings-acousticguitar",gtr12:"strings-twelvestring",violin:"strings-violin",viola:"strings-viola",cello:"strings-cello",
+  mandolin:"strings-mandolin",banjo:"strings-banjo",uke:"strings-ukulele",oud:"strings-oudra",bouzouki:"strings-bouzouki",
+  charango:"strings-charangora",harmonica:"winds-harmonica",harp:"strings-harpla",trumpet:"winds-trumpetla",cornet:"winds-cornetla",
+  trombone:"winds-trombone",sopsax:"winds-sopranosax",barisax:"winds-baritonesaxr",altosax:"winds-altosaxla",sax:"winds-saxla",
+  bassclar:"winds-bassclarinetla",clarinet:"winds-clarinetla",flute:"winds-flutela",piccolo:"winds-piccolol",oboe:"winds-oboela",
+  bassoon:"winds-bassoonla",horn:"winds-frenchhornla",euphonium:"winds-euphonium",tuba:"winds-tubala",
+  dj:"monitors-mxr-pa-dj-dj-setupb",playback:"monitors-mxr-pa-dj-laptoplb",
+};
+const PERC_IMG=[[/CONGAS/,"drums-percussion-conga-double"],[/CONGA/,"drums-percussion-conga-drum-percussion-1"],[/BONGO/,"drums-percussion-bongos"],
+  [/DJEMBE/,"drums-percussion-djembe"],[/CAJON/,"drums-percussion-cajonla"],[/TIMB/,"drums-percussion-timbale"],[/SURDO/,"drums-percussion-surdo"],
+  [/DARBUKA|TARABUKA|DOUMBEK/,"drums-percussion-tarabuka"],[/TAMB|SHAKER/,"drums-percussion-tambourine"],[/COWBELL/,"drums-percussion-cowbell"],
+  [/CHIME/,"drums-percussion-chimes"],[/GLOCK/,"drums-percussion-glock"],[/MARIMBA|VIB|XYLO/,"drums-percussion-marimba"],
+  [/TIMPANI/,"drums-percussion-timpani2"],[/GONG/,"drums-percussion-gong"],[/TRIANGLE/,"drums-percussion-triangle"],
+  [/SPD|PAD/,"drums-percussion-percussionpad"],[/MACHINE|808/,"drums-percussion-drummachine"]];
+const KIT_PIECE=[[/^(KICK|KIK|KD|BD|BASS ?DRUM)/,"drums-percussion-bassdrum"],[/^SN/,"drums-percussion-snare"],[/^(HH|HI|HAT)/,"drums-percussion-hihat"],
+  [/^(FLR|FLOOR|FT)/,"drums-percussion-floortom"],[/^(OH|O\/H|OVER|RIDE|CRASH|CYM|SPLASH|CHINA)/,"drums-percussion-crash"],[/^(TOM|RACK)/,"drums-percussion-floortom"]];
+// Stage zones per family when the Position names no zone (x: stage left = the drawing's right; y: upstage = top)
+const STAGE_ZONE={kit:[.5,.22],perc:[.72,.22],bass:[.3,.3],ubass:[.3,.3],gtr:[.74,.42],gtr12:[.74,.42],agtr:[.26,.5],
+  piano:[.86,.36],keys:[.86,.36],organ:[.86,.36],leslie:[.86,.36],dj:[.9,.15],playback:[.9,.15],vox:[.5,.8],other:[.5,.6]};
+const stageZoneOf=f=>STAGE_ZONE[f]||(/^(violin|viola|cello|mandolin|banjo|uke|oud|bouzouki|charango|harp)$/.test(f)?[.2,.55]
+  :/^(trumpet|cornet|trombone|.*sax|.*clar.*|clarinet|flute|piccolo|oboe|bassoon|horn|euphonium|tuba|harmonica|accordion)$/.test(f)?[.22,.62]:STAGE_ZONE.other);
+const stageFamily=nm=>{const n=nm.toUpperCase();for(const [f,re] of STAGE_RULES)if(re.test(n))return f;return null;};
+function stageFallbackImg(c){ // no family from the name: the Mic / Stand columns say what stands there
+  const mic=(c.mic||"").toUpperCase(),stand=(c.stand||"").toUpperCase(),nm=c.name.toUpperCase();
+  if(/WIRELESS|\bWL\b|\bRF\b|HANDHELD|\b(UR|AD|ULX|SLX|QLX|EW|AXT)\d*/.test(mic))return "mic-di-power-wireless-mic";
+  if(/HEADSET|\bHS\b|4088|4066|D:FINE/.test(mic))return "mic-di-power-headsetmic";
+  if(/\bDI\b|^DI|D\.I/.test(mic)||/\bDI\b/.test(nm))return c.stereo?"mic-di-power-stereodi":"mic-di-power-di";
+  if(/CLIP|MAGNET|CLAMP/.test(stand))return "mic-di-power-clipon";
+  if(/BABY|SHORT/.test(stand))return "vocal-stands-boomlshortl";
+  return "vocal-stands-boom57";
+}
+function stageImgFor(fam,chs){ // the picture for one recognised group
+  const names=chs.map(c=>c.name.toUpperCase());
+  if(fam==="kit"){
+    if(chs.length===1)return (KIT_PIECE.find(([re])=>re.test(names[0]))||[,"drums-percussion-snare"])[1];
+    const racks=names.filter(n=>/^(TOM|RACK)/.test(n)).length;
+    return racks>=3?"drums-percussion-fourtoms":racks===2?"drums-percussion-threetoms":"drums-percussion-twotoms";
+  }
+  if(fam==="perc")return (PERC_IMG.find(([re])=>re.test(names[0]))||[,STAGE_IMG.perc])[1];
+  if(fam==="keys")return chs.length>1?"keys-stands-doublekey":"keys-stands-fantom";
+  const di=c=>/\bDI\b|^DI|D\.I/.test((c.mic||"").toUpperCase())||/\bDI\b/.test(c.name.toUpperCase());
+  const amp=c=>/AMP|CAB|\bMIC\b/.test(c.name.toUpperCase());
+  if(fam==="gtr")return amp(chs[0])||!di(chs[0])&&(chs[0].mic||"").trim()?"amps-fenderamp":"strings-electricguitar";
+  if(fam==="bass")return amp(chs[0])||!di(chs[0])&&(chs[0].mic||"").trim()?"amps-fourtens":"strings-p-bass";
+  if(fam==="vox"){const f=stageFallbackImg(chs[0]);
+    return /wireless|headset/.test(f)?f:"vocal-stands-center-vocal";}
+  return STAGE_IMG[fam]||stageFallbackImg(chs[0]);
+}
+const STAGE_GROUP=new Set(["kit","piano","leslie","keys"]); // families whose inputs on one Position form ONE instrument
+const STAGE_GLABEL={kit:"Drums",piano:"Piano",leslie:"Leslie",keys:"Keys"};
+function lsStagePicks(){try{return JSON.parse(localStorage.getItem("lv1.stagePicks")||"{}");}catch(_){return {};}}
+function stageProposal(missing){ // -> [{img, fam, chs:[channel rows], label}]
+  const picks=lsStagePicks(),groups=[],byKey=new Map();
+  for(const c of missing){
+    const nm=c.name.trim(),fam=stageFamily(nm)||"other",pos=(c.pos||"").trim().toUpperCase();
+    // keys group only on a shared Position (or Top / Bottom pairs); kit, piano, Leslie also without one
+    const grp=STAGE_GROUP.has(fam)&&(fam!=="keys"||pos||/TOP|BOTTOM|BOT|UPPER|LOWER/.test(nm.toUpperCase()));
+    const key=grp?fam+"|"+pos:null;
+    if(key&&byKey.has(key)){byKey.get(key).chs.push(c);continue;}
+    const g={fam,chs:[c]};groups.push(g);if(key)byKey.set(key,g);
+  }
+  for(const g of groups){
+    const mem=g.chs.map(c=>picks[c.name.trim().toUpperCase()]).find(Boolean); // step 5: a remembered pick wins
+    g.img=mem||stageImgFor(g.fam,g.chs);g.remembered=!!mem;
+    g.label=g.chs.length>1?(STAGE_GLABEL[g.fam]||""):"";
+  }
+  return groups;
+}
+function stageLayout(groups){ // anchor per Position (zone words, else the family zone); items of one anchor spread sideways
+  const slots=new Map();
+  for(const g of groups){
+    const pos=(g.chs[0].pos||"").trim(),key=pos?"p:"+pos.toUpperCase():"f:"+g.fam;
+    if(!slots.has(key)){const z=pos&&/\b(SL|SR|US|DS|MS)\b|STAGE (LEFT|RIGHT)|UP ?STAGE|DOWN ?STAGE|MID/i.test(pos)?zoneCoords(pos):null;
+      const [x,y]=z?[z.x,z.y]:stageZoneOf(g.fam);slots.set(key,{x,y,items:[]});}
+    slots.get(key).items.push(g);
+  }
+  const used=new Map(); // anchors that land on the same spot step sideways
+  for(const s of slots.values()){
+    const k=s.x.toFixed(2)+","+s.y.toFixed(2),n=used.get(k)||0;used.set(k,n+1);
+    const x0=s.x+(n%2?1:-1)*Math.ceil(n/2)*0.14,dx=0.08;
+    s.items.forEach((g,i)=>{g.x=Math.min(0.95,Math.max(0.05,x0+(i-(s.items.length-1)/2)*dx));
+      g.y=Math.min(0.92,Math.max(0.08,s.y+(i%2)*0.04));});
+  }
+}
+function stageImgOptions(sel,skip=true){ // library (+ my images) as <optgroup>s; skip: the "no stage item" choice first
+  const cats=[...new Set(STAGELIB.map(e=>e.cat))];
+  const custom=Object.entries({...lsCustoms(),...stg().custom});
+  return (skip?`<option value="-"${sel==="-"?" selected":""}>— skip (no stage item) —</option>`:"")+
+    cats.map(cat=>`<optgroup label="${esc(cat)}">${STAGELIB.filter(e=>e.cat===cat).map(e=>
+      `<option value="${esc(e.id)}"${e.id===sel?" selected":""}>${esc(e.name)}</option>`).join("")}</optgroup>`).join("")+
+    (custom.length?`<optgroup label="My images">${custom.map(([id,c])=>
+      `<option value="custom:${esc(id)}"${"custom:"+id===sel?" selected":""}>${esc(c.name||id)}</option>`).join("")}</optgroup>`:"");
+}
+function stagePreview(groups){ // modal: one row per proposed item -> resolves the chosen picture per row (or null = cancel)
+  return new Promise(res=>{
+    const d=document.createElement("div");d.className="stpdlg";
+    d.innerHTML=`<div class="cfmbox" role="dialog" aria-modal="true" aria-label="Inputs to stage">
+      <div class="stphead"><b>Inputs → stage</b> — ${groups.length} item${groups.length===1?"":"s"} for ${groups.reduce((s,g)=>s+g.chs.length,0)} input${groups.reduce((s,g)=>s+g.chs.length,0)===1?"":"s"}. Change any picture, or skip it.</div>
+      <div class="stpscroll"><table><tbody>${groups.map((g,i)=>`<tr>
+        <td class="stpimg"><img alt="" src="${g.img==="-"?"":esc(imgSrc(g.img))}"></td>
+        <td><select data-g="${i}">${stageImgOptions(g.img)}</select>${g.remembered?' <span class="stpmem" title="Picked for this input before">remembered</span>':""}</td>
+        <td class="stpins">${g.chs.map(c=>esc(c.name.trim())).join(", ")}${(g.chs[0].pos||"").trim()?` <span class="stppos">@ ${esc(g.chs[0].pos.trim())}</span>`:""}</td></tr>`).join("")}</tbody></table></div>
+      <label class="stpremember"><input type="checkbox" checked> Remember these pictures for these input names (this browser)</label>
+      <div class="cfmbtns"><button class="small" data-r="0">Cancel</button><button class="primary" data-r="1">Add to stage</button></div></div>`;
+    d.addEventListener("change",e=>{const s=e.target.closest("select[data-g]");if(!s)return;
+      const im=s.closest("tr").querySelector("img");im.src=s.value==="-"?"":imgSrc(s.value);});
+    const done=ok=>{const picks=ok?[...d.querySelectorAll("select[data-g]")].map(s=>s.value):null;
+      const remember=d.querySelector(".stpremember input").checked;
+      d.remove();document.removeEventListener("keydown",key,true);res(picks&&{picks,remember});};
+    const key=e=>{if(e.key==="Escape"){e.preventDefault();done(false);}};
+    d.addEventListener("click",e=>{const b=e.target.closest("[data-r]");if(b)done(b.dataset.r==="1");});
+    document.addEventListener("keydown",key,true);
+    document.body.append(d);d.querySelector('[data-r="1"]').focus();
+  });
+}
+$("#inputsToStage").onclick=async()=>{
+  const have=new Set(stg().items.flatMap(it=>[it.label||"",...(it.ins||[])])
     .map(s=>s.trim().toUpperCase()).filter(Boolean));
   const missing=state.channels.filter(c=>c.name.trim()&&!c.ds&&!have.has(c.name.trim().toUpperCase()));
   if(!missing.length){setStatus("Every named input already has a stage item.");return;}
-  const mic=STAGELIB.find(e=>/boom57/.test(e.id))||STAGELIB.find(e=>e.cat==="Vocal Stands")||STAGELIB[0];
-  if(!mic){setStatus("The image library hasn't loaded yet.",true);return;}
-  let n=0;
-  for(const c of missing){
-    const p=zoneCoords(c.pos);
-    stg().items.push({img:mic.id,x:Math.min(0.95,p.x+(n%5)*0.02),y:Math.min(0.92,p.y+(n%3)*0.03),
-      cm:mic.cm||65,rot:0,flip:false,label:c.name.trim(),
-      ...(c.pos.trim()?{pos:c.pos.trim()}:{})}); // same Position = one constellation
-    n++;
+  if(!STAGELIB.length){setStatus("The image library hasn't loaded yet.",true);return;}
+  const groups=stageProposal(missing);
+  const r=await stagePreview(groups);
+  if(!r){setStatus("Inputs → stage cancelled — nothing added.");return;}
+  groups.forEach((g,i)=>g.img=r.picks[i]);
+  if(r.remember){
+    const all=lsStagePicks();
+    for(const g of groups)for(const c of g.chs)all[c.name.trim().toUpperCase()]=g.img;
+    try{localStorage.setItem("lv1.stagePicks",JSON.stringify(all));}catch(_){/* quota / blocked: just not remembered */}
   }
+  const put=groups.filter(g=>g.img!=="-");
+  stageLayout(put);
+  const first=stg().items.length;
+  for(const g of put){
+    const pos=(g.chs[0].pos||"").trim();
+    stg().items.push({img:g.img,x:g.x,y:g.y,cm:libCm(g.img)||65,rot:0,flip:false,label:g.label,
+      ins:g.chs.map(c=>c.name.trim()),...(pos?{pos}:{})}); // same Position = one constellation
+  }
+  mSel=new Set(put.map((_,i)=>first+i));stageSel=put.length?first:-1;
   render();
-  setStatus(`${n} stage item${n===1?"":"s"} added from the input list (generic mic stand — swap images as needed).`);
+  const n=put.reduce((s,g)=>s+g.chs.length,0),skipped=groups.length-put.length;
+  setStatus(`${put.length} stage item${put.length===1?"":"s"} added for ${n} input${n===1?"":"s"}`+
+    (skipped?` (${skipped} skipped)`:"")+" — they are selected: drag them into place.");
 };
 /* Render the stage to a bitmap (used by Export PNG and the vendor PDF).
    It reproduces the on-screen stage (#stage + .sitem/.slab/.rbox CSS) at a
