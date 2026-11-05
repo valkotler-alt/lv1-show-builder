@@ -621,6 +621,8 @@ td input::placeholder{color:var(--dim);opacity:.55;font-style:italic;}
 .xsn{display:inline-block;font-size:10px;font-weight:700;padding:1px 4px;border-radius:4px;background:var(--brand);color:#fff;vertical-align:1px;cursor:help;}
 .pw-rr{position:absolute;left:0;display:flex;}
 .pw-rg{cursor:grab;margin-right:5px;letter-spacing:-2px;color:#9a9a9a;font-size:.85em;flex:none;}
+.pw-rr.sel>.pw-rc{background:#1d6577;color:#fff;}
+.pw-rr.sel.hot>.pw-rc{background:#2a7f93;}
 .pw-rr.dragging{opacity:.45;}
 .pw-rr.dropbefore::after,.pw-rr.dropafter::after{content:"";position:absolute;left:0;right:0;height:3px;background:#38C9FF;z-index:2;pointer-events:none;}
 .pw-rr.dropbefore::after{top:-1px;}
@@ -1512,8 +1514,26 @@ let pendingCfg=null; // two-click confirm when switching config would drop named
 const sel={ch:new Set(),grp:new Set(),fx:new Set(),aux:new Set(),mtx:new Set()};
 const lastSel={ch:-1,grp:-1,fx:-1,aux:-1,mtx:-1}; // anchor row for Shift-click range select
 const clearSel=k=>{if(k){sel[k].clear();lastSel[k]=-1;}else Object.keys(sel).forEach(x=>{sel[x].clear();lastSel[x]=-1;});};
-function refreshSel(k){ // sync the row highlight to sel[k] without a re-render
+function refreshSel(k){ // sync the row highlight to sel[k] (lists and PATCH rows) without a re-render
   document.querySelectorAll(`tr[data-rk="${k}"]`).forEach(tr=>{tr.classList.toggle("selon",sel[k].has(+tr.dataset.ri));});
+  document.querySelectorAll("#pw .pw-rr").forEach(el=>{const r=PW.rows[+el.dataset.pwr];if(r&&r.kind===k)el.classList.toggle("sel",pwRowSel(r));});
+}
+// Row selection: a click selects the row; Shift-click extends a range from the
+// anchor; Ctrl/Cmd-click toggles one row; clicking the only selected row again deselects.
+function selClick(k,i,e){
+  if(e.shiftKey&&lastSel[k]>=0){
+    const a=Math.min(lastSel[k],i),b=Math.max(lastSel[k],i);
+    if(!(e.ctrlKey||e.metaKey))sel[k]=new Set();
+    for(let j=a;j<=b;j++)sel[k].add(j);
+    const s=document.getSelection&&document.getSelection();if(s)s.removeAllRanges();
+  }else if(e.ctrlKey||e.metaKey){
+    if(sel[k].has(i))sel[k].delete(i);else sel[k].add(i);
+    lastSel[k]=i;
+  }else{
+    if(sel[k].size===1&&sel[k].has(i)){sel[k]=new Set();lastSel[k]=-1;}
+    else{sel[k]=new Set([i]);lastSel[k]=i;}
+  }
+  refreshSel(k);
 }
 document.addEventListener("keydown",e=>{ // Esc clears every list selection
   if(e.key!=="Escape"||!$("#cfm").hidden)return;
@@ -2447,9 +2467,12 @@ $("#pw").addEventListener("dragend",e=>{
   const card=e.target.closest&&e.target.closest("[data-iocard]");if(card)card.draggable=false;
   ioDrag=null;ioClearMarks();
 });
-/* PATCH rows: drag a strip by its ⋮⋮ grip (name cell) above / below another strip of the same type —
-   the same reorder as the INPUTS / OUTPUTS "#" cell (moveRows); the grid scrolls at its top / bottom edge. */
+/* PATCH rows: click a strip's header to select it (Shift / Ctrl like the lists — the same selection);
+   drag by its ⋮⋮ grip (name cell) above / below another strip of the same type — the same reorder as
+   the INPUTS / OUTPUTS "#" cell (moveRows): a selected strip takes the whole selection along.
+   The grid scrolls at its top / bottom edge. */
 let pwRowDrag=null;
+const pwRowSel=r=>!!PW_LISTS[r.kind]&&sel[r.kind].has(PW_LISTS[r.kind]().indexOf(r.o));
 const pwStripRows=o=>[...$("#pw .pw-rhin").children].filter(el=>PW.rows[+el.dataset.pwr].o===o);
 const pwRowAt=e=>{const el=pwRowDrag&&e.target.closest&&e.target.closest("#pw .pw-rr"),r=el&&PW.rows[+el.dataset.pwr];
   if(!r||r.kind!==pwRowDrag.kind)return null;
@@ -2460,8 +2483,10 @@ $("#pw").addEventListener("mousedown",e=>{if(e.target.closest("[data-pwrg]"))e.t
 document.addEventListener("mouseup",()=>{document.querySelectorAll('#pw .pw-rr[draggable="true"]').forEach(el=>el.draggable=false);});
 $("#pw").addEventListener("dragstart",e=>{
   const el=e.target.closest&&e.target.closest(".pw-rr");if(!el||!el.draggable)return;
-  const r=PW.rows[+el.dataset.pwr];pwRowDrag={kind:r.kind,o:r.o};
-  pwStripRows(r.o).forEach(x=>x.classList.add("dragging"));
+  const r=PW.rows[+el.dataset.pwr],list=PW_LISTS[r.kind]();
+  const objs=new Set(pwRowSel(r)&&sel[r.kind].size>1?[...sel[r.kind]].map(i=>list[i]):[r.o]);
+  pwRowDrag={kind:r.kind,o:r.o,objs};
+  document.querySelectorAll("#pw .pw-rr").forEach(x=>{if(objs.has(PW.rows[+x.dataset.pwr].o))x.classList.add("dragging");});
   e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain","patch-row");
 });
 $("#pw").addEventListener("dragover",e=>{
@@ -2473,7 +2498,7 @@ $("#pw").addEventListener("dragover",e=>{
   pwSync();
   const t=pwRowAt(e);
   document.querySelectorAll("#pw .pw-rr.dropbefore,#pw .pw-rr.dropafter").forEach(el=>el.classList.remove("dropbefore","dropafter"));
-  if(!t||t.r.o===pwRowDrag.o){e.dataTransfer.dropEffect="none";return;}
+  if(!t||pwRowDrag.objs.has(t.r.o)){e.dataTransfer.dropEffect="none";return;}
   e.dataTransfer.dropEffect="move";
   (t.after?t.L[t.L.length-1]:t.L[0]).classList.add(t.after?"dropafter":"dropbefore");
 });
@@ -2481,9 +2506,9 @@ $("#pw").addEventListener("drop",e=>{
   if(!pwRowDrag)return;
   e.preventDefault();
   const t=pwRowAt(e),d=pwRowDrag;pwRowDrag=null;pwRowMarks();
-  if(!t||t.r.o===d.o)return;
+  if(!t||d.objs.has(t.r.o))return;
   const list=PW_LISTS[d.kind]();
-  moveRows(d.kind,list.indexOf(d.o),list.indexOf(t.r.o),t.after,true);
+  moveRows(d.kind,list.indexOf(d.o),list.indexOf(t.r.o),t.after);
 });
 $("#pw").addEventListener("dragend",e=>{
   const el=e.target.closest&&e.target.closest(".pw-rr");if(el)el.draggable=false;
@@ -2749,7 +2774,7 @@ function pwRender(){
       const grip=kind==="name"&&PW_LISTS[r.kind]&&(ri===0||PW.rows[ri-1].o!==r.o)?`<span class="pw-rg" data-pwrg title="Drag to reorder">⋮⋮</span>`:""; // on a strip's first leg
       return `<div class="pw-rc${cls}" style="${st}"${attr}>${grip}${esc(t)}</div>`;
     }).join("");
-    return `<div class="pw-rr" data-pwr="${ri}" style="top:${ri*cell}px;height:${cell}px">${cells}</div>`;
+    return `<div class="pw-rr${pwRowSel(r)?" sel":""}" data-pwr="${ri}" style="top:${ri*cell}px;height:${cell}px">${cells}</div>`;
   }).join("");
   const prev=host.querySelector(".pw-cells"),sx=prev?prev.scrollLeft:0,sy=prev?prev.scrollTop:0;
   host.innerHTML=`<div class="pw-top"><div class="pw-main">${mains.map(([k,t])=>`<button data-pwmain="${k}" class="${PW.main===k?"on":""}">${esc(t)}</button>`).join("")}</div>
@@ -2854,6 +2879,8 @@ $("#pw").addEventListener("click",e=>{
     if(all.length)pwApply(all,false,true);return;}
   const cb=t.closest("[data-pwcolor]");if(cb){pwColorPick(cb,PW.rows[+cb.dataset.pwcolor]);return;}
   const ib=t.closest("[data-pwipf]");if(ib){const r=PW.rows[+ib.dataset.pwipf];r.o.ipf=(tapOf(r.s)+1)%4;render();return;}
+  const rr=t.closest(".pw-rr");if(rr&&e.detail<2&&!t.closest("input")){const r=PW.rows[+rr.dataset.pwr]; // a strip header: select (not a dblclick's 2nd click)
+    if(r&&PW_LISTS[r.kind])selClick(r.kind,PW_LISTS[r.kind]().indexOf(r.o),e);return;}
 });
 $("#pw").addEventListener("dblclick",e=>{
   const t=e.target;
@@ -2966,25 +2993,11 @@ function focusBack(k,i,f){const el=document.getElementById(`${k}-${i}-${f}`);if(
 document.addEventListener("click",e=>{
   const av=e.target.closest&&e.target.closest("[data-asgk]");
   if(av){const k=av.dataset.asgk,o=listFor[k]()[+av.dataset.asgi];if(o)pwFocus(k,o,av.dataset.asgt);return;}
-  // Row selection: click a row (its # cell or any non-field space) selects
-  // it; Shift-click extends a range from the anchor; Ctrl/Cmd-click toggles
-  // one row; clicking the only selected row again deselects. Esc clears.
+  // Row selection: click a row (its # cell or any non-field space); Esc clears.
   const td=e.target.closest&&e.target.closest("tr[data-ri] > td");
   if(td&&!e.target.closest("input,select,button,textarea,label")){
-    const tr=td.parentElement,k=tr.dataset.rk,i=+tr.dataset.ri;
-    if(e.shiftKey&&lastSel[k]>=0){
-      const a=Math.min(lastSel[k],i),b=Math.max(lastSel[k],i);
-      if(!(e.ctrlKey||e.metaKey))sel[k]=new Set();
-      for(let j=a;j<=b;j++)sel[k].add(j);
-      const s=document.getSelection&&document.getSelection();if(s)s.removeAllRanges();
-    }else if(e.ctrlKey||e.metaKey){
-      if(sel[k].has(i))sel[k].delete(i);else sel[k].add(i);
-      lastSel[k]=i;
-    }else{
-      if(sel[k].size===1&&sel[k].has(i)){sel[k]=new Set();lastSel[k]=-1;}
-      else{sel[k]=new Set([i]);lastSel[k]=i;}
-    }
-    refreshSel(k);
+    const tr=td.parentElement,k=tr.dataset.rk;
+    selClick(k,+tr.dataset.ri,e);
     if(k==="ch"||k==="aux")syncStageSelection();
     return;
   }
@@ -3147,9 +3160,9 @@ function insertStrip(k,i){
    whole selection (kept in order). Patches / captions re-flow on render;
    stage links are by name, so they survive any reorder. */
 let rowDrag=null;
-function moveRows(k,from,target,after,one){ // one: just this row (PATCH, where the list selection is not shown)
+function moveRows(k,from,target,after){
   const list=listFor[k]();
-  const idxs=(!one&&sel[k].has(from)&&sel[k].size>1)?[...sel[k]].sort((a,b)=>a-b):[from];
+  const idxs=(sel[k].has(from)&&sel[k].size>1)?[...sel[k]].sort((a,b)=>a-b):[from];
   if(idxs.includes(target))return;
   let at=target+(after?1:0);
   const moving=idxs.map(x=>list[x]);
