@@ -786,6 +786,12 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 .laybar button .lc{display:block;font:400 10px var(--font-num);color:var(--dim);letter-spacing:0;margin-top:2px;text-transform:none;}
 .laybar button.on{background:var(--brand);border-color:var(--brand);color:#fff;}
 .laybar button.on .lc{color:rgba(255,255,255,.75);}
+.laybar button{position:relative;cursor:grab;}
+.laybar button .grip{position:absolute;top:5px;left:4px;color:var(--dim);font-size:10px;line-height:1;letter-spacing:-2px;pointer-events:none;}
+.laybar button.on .grip{color:rgba(255,255,255,.75);}
+.laybar button.dragging{opacity:.4;}
+.laybar button.dropb{box-shadow:-3px 0 0 var(--accent);}
+.laybar button.dropa{box-shadow:3px 0 0 var(--accent);}
 .laycard{border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--shadow);padding:12px 14px;margin-bottom:14px;}
 .layhead{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-bottom:10px;}
 .layname{display:inline-flex;gap:8px;align-items:center;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);font-weight:500;}
@@ -1027,7 +1033,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 <section style="--seccolor:var(--accent)" data-tab="layers" id="laySec">
   <div class="sechead"><h2>Custom layers</h2><span class="count" id="layCount"></span>
     <span class="hint">LV1's 8 custom layers (main Overview screen) — 16 strips each, any strip type, each strip once per layer.
-    Click a strip below to add / remove it · drag it onto a slot to place it · drag slots to reorder.</span></div>
+    Click a strip below to add / remove it · drag it onto a slot to place it · drag slots to reorder · drag a layer tab (⋮⋮) to reorder the layers.</span></div>
   <div class="laybar" id="layBar"></div>
   <div class="laycard">
     <div class="layhead">
@@ -1999,7 +2005,7 @@ function renderLayers(){
   if(!$("#laySlots"))return;
   const L=state.layers,cur=L[layerSel];
   const used=l=>l.strips.filter(Boolean).length;
-  $("#layBar").innerHTML=L.map((l,i)=>`<button data-li="${i}"${i===layerSel?' class="on"':""}>${esc(l.name.trim()||`Layer ${i+1}`)}<span class="lc">${used(l)} / ${LAYER_SLOTS}</span></button>`).join("");
+  $("#layBar").innerHTML=L.map((l,i)=>`<button data-li="${i}" draggable="true" title="Drag ⋮⋮ to reorder the layers"${i===layerSel?' class="on"':""}><span class="grip">⋮⋮</span>${esc(l.name.trim()||`Layer ${i+1}`)}<span class="lc">${used(l)} / ${LAYER_SLOTS}</span></button>`).join("");
   if(document.activeElement!==$("#layName"))$("#layName").value=cur.name;
   $("#layName").placeholder=`Page-${layerSel+1} (LV1 default)`;
   $("#layCount").textContent=`${L.filter(l=>l.name.trim()||used(l)).length} in use / ${LAYER_COUNT}`;
@@ -2082,21 +2088,34 @@ $("#layFill").addEventListener("change",e=>{
   setStatus(`${g}: added ${added} strip${added===1?"":"s"}`+(want.length>todo.length?`, ${want.length-todo.length} already on the layer`:"")+
     (left?` — layer full, ${left} not added.`:"."),left>0);
 });
-let layDrag=null; // {si} from a slot | {k,n} from the picker
+let layDrag=null; // {si} from a slot | {k,n} from the picker | {li} a layer tab (reorder)
+const layTabAt=e=>layDrag&&layDrag.li!==undefined&&e.target.closest("#layBar [data-li]");
 $("#laySec").addEventListener("dragstart",e=>{
+  const b=e.target.closest("#layBar [data-li]");
+  if(b){layDrag={li:+b.dataset.li};e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain","layer");b.classList.add("dragging");return;}
   const c=e.target.closest(".lcell.full,.lpchip");if(!c)return;
   layDrag=c.classList.contains("lcell")?{si:+c.dataset.si}:{k:c.dataset.lk,n:c.dataset.ln};
   e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain","layer");
   if(layDrag.si!==undefined)c.classList.add("dragging");
 });
 $("#laySec").addEventListener("dragover",e=>{
-  const c=layDrag&&e.target.closest(".lcell");if(!c)return;
+  const b=layTabAt(e);
+  if(b){e.preventDefault();const r=b.getBoundingClientRect(),after=e.clientX>r.left+r.width/2;
+    document.querySelectorAll("#layBar .dropb,#layBar .dropa").forEach(x=>x!==b&&x.classList.remove("dropb","dropa"));
+    b.classList.toggle("dropa",after);b.classList.toggle("dropb",!after);return;}
+  const c=layDrag&&layDrag.li===undefined&&e.target.closest(".lcell");if(!c)return;
   e.preventDefault();
   document.querySelectorAll(".lcell.dragover").forEach(x=>x!==c&&x.classList.remove("dragover"));
   c.classList.add("dragover");
 });
 $("#laySec").addEventListener("drop",e=>{
-  const c=layDrag&&e.target.closest(".lcell");if(!c)return;
+  const b=layTabAt(e);
+  if(b){e.preventDefault(); // move the dragged layer before / after this one; the selection stays on its layer
+    const L=state.layers,from=layDrag.li,r=b.getBoundingClientRect();let to=+b.dataset.li+(e.clientX>r.left+r.width/2?1:0);
+    if(from<to)to--;
+    if(to!==from){const cur=L[layerSel],[x]=L.splice(from,1);L.splice(to,0,x);layerSel=L.indexOf(cur);render();}
+    return;}
+  const c=layDrag&&layDrag.li===undefined&&e.target.closest(".lcell");if(!c)return;
   e.preventDefault();
   const at=+c.dataset.si,s=state.layers[layerSel].strips;
   if(layDrag.si!==undefined){if(layDrag.si!==at){[s[layDrag.si],s[at]]=[s[at],s[layDrag.si]];render();}}
@@ -2104,7 +2123,7 @@ $("#laySec").addEventListener("drop",e=>{
 });
 $("#laySec").addEventListener("dragend",()=>{
   layDrag=null;
-  document.querySelectorAll(".lcell.dragover,.lcell.dragging").forEach(x=>x.classList.remove("dragover","dragging"));
+  document.querySelectorAll(".lcell.dragover,.lcell.dragging,#layBar .dragging,#layBar .dropb,#layBar .dropa").forEach(x=>x.classList.remove("dragover","dragging","dropb","dropa"));
 });
 function renderSimple(kind,list,tableSel){
   const tb=$(tableSel+" tbody"); const dups=dupNames(list); const R=kind==="mtx"?resolveOut():null;
