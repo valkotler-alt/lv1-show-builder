@@ -3157,6 +3157,7 @@ document.addEventListener("keydown",e=>{
     if(nx){e.preventDefault();nx.focus();nx.select();}
     return;
   }
+  if(e.key==="Enter"&&t.tagName==="INPUT"&&t.dataset?.k&&["name","mic","pos","notes"].includes(t.dataset.f)){e.preventDefault();t.blur();return;} // Enter closes a list cell's text entry
   if(t.dataset?.f==="rkSearch"&&e.key==="Enter"){ // Enter adds the first visible match
     const first=[...t.closest(".addwrap").querySelectorAll(".pitem")].find(b=>b.style.display!=="none");
     if(first)rackAdd(t.dataset.k,t.dataset.i,first.dataset.n);
