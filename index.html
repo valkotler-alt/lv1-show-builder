@@ -2773,7 +2773,7 @@ function pwRender(){
       else if(kind==="dev"){t=r.dev;cls=" l";}
       else if(kind==="type")t=r.x.type==="Out"?"":r.x.type;
       else if(kind==="num")t=r.x.lbl;
-      const grip=kind==="name"&&PW_LISTS[r.kind]&&(ri===0||PW.rows[ri-1].o!==r.o)?`<span class="pw-rg" data-pwrg title="Drag to reorder">⋮⋮</span>`:""; // on a strip's first leg
+      const grip=kind==="name"&&PW_LISTS[r.kind]&&(ri===0||PW.rows[ri-1].o!==r.o)?`<span class="pw-rg" data-pwrg title="Drag to reorder (a selected strip takes the selection along) · Delete key removes the selected strips">⋮⋮</span>`:""; // on a strip's first leg
       return `<div class="pw-rc${cls}" style="${st}"${attr}>${grip}${esc(t)}</div>`;
     }).join("");
     return `<div class="pw-rr${pwRowSel(r)?" sel":""}" data-pwr="${ri}" style="top:${ri*cell}px;height:${cell}px">${cells}</div>`;
@@ -3146,7 +3146,7 @@ async function deleteSelected(kinds){
   kinds=kinds.filter(k=>sel[k].size);if(!kinds.length)return;
   const rows=kinds.map(k=>[k,[...sel[k]].sort((a,b)=>b-a)]);
   const n=rows.reduce((t,[,ix])=>t+ix.length,0);
-  const names=rows.flatMap(([k,ix])=>ix.map(i=>listFor[k]()[i].name.trim()||DEFNAME[k](i))).reverse();
+  const names=rows.flatMap(([k,ix])=>[...ix].reverse().map(i=>listFor[k]()[i].name.trim()||DEFNAME[k](i)));
   const nm=k=>new Set((rows.find(r=>r[0]===k)||[,[]])[1].map(i=>listFor[k]()[i].name.trim()).filter(Boolean));
   const io=new Set([...nm("ch"),...nm("aux")].map(x=>x.toUpperCase())),G=nm("grp"),M=nm("mtx"),notes=[];
   if(io.size&&stg().items.some(it=>[...(it.ins||[]),it.label||"",it.auxl||""].some(x=>io.has(x.trim().toUpperCase()))))
@@ -3160,11 +3160,12 @@ async function deleteSelected(kinds){
   for(const [k,ix] of rows)for(const i of ix)await resetStrip(k,i,"delete",true);
   setStatus(`Deleted ${what} — the following rows moved up`+(kinds.some(k=>k==="ch"||k==="aux")?" and were re-patched.":"."));
 }
-document.addEventListener("keydown",e=>{ // Delete / Backspace on INPUTS / OUTPUTS: delete the selected rows
+document.addEventListener("keydown",e=>{ // Delete / Backspace on INPUTS / OUTPUTS / PATCH: delete the selected rows
   if(e.key!=="Delete"&&e.key!=="Backspace")return;
-  const tab=document.body.dataset.tab;if(tab!=="in"&&tab!=="out")return;
+  const tab=document.body.dataset.tab;if(!["in","out","io"].includes(tab))return;
   if(/INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName||"")||!$("#cfm").hidden)return;
-  const kinds=tab==="in"?["ch"]:["grp","fx","aux","mtx"];
+  const kinds=tab==="in"?["ch"]:tab==="out"?["grp","fx","aux","mtx"]
+    :[...new Set(PW.rows.map(r=>r.kind))].filter(k=>PW_LISTS[k]); // PATCH: the strip types this view shows
   if(kinds.some(k=>sel[k].size)){e.preventDefault();deleteSelected(kinds);}
 });
 /* Add a strip BELOW row i in a fixed-size LV1 bank: the new row is named
@@ -3224,6 +3225,11 @@ document.addEventListener("dragstart",e=>{
   tr.classList.add("rowdragging");
 });
 document.addEventListener("dragover",e=>{
+  if(rowDrag){ // scroll the page near the window's top (below the sticky tab bar) / bottom edge
+    const top=$("#tabbar").getBoundingClientRect().bottom,z=60;
+    const dy=e.clientY<top+z?-Math.ceil((top+z-e.clientY)/3):e.clientY>innerHeight-z?Math.ceil((e.clientY-innerHeight+z)/3):0;
+    if(dy)scrollBy(0,dy);
+  }
   const tr=rowTarget(e);if(!tr)return;
   e.preventDefault();e.dataTransfer.dropEffect="move";
   const r=tr.getBoundingClientRect(),after=e.clientY>r.top+r.height/2;
@@ -4348,7 +4354,7 @@ $("#siDel").onclick=deleteSelection;
 document.addEventListener("keydown",e=>{
   if(e.key!=="Delete"&&e.key!=="Backspace")return;
   if(/INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName||""))return;
-  if(["in","out"].includes(document.body.dataset.tab))return; // the lists delete their own rows
+  if(["in","out","io"].includes(document.body.dataset.tab))return; // the lists / PATCH delete their own rows
   if(mSel.size){deleteSelection();e.preventDefault();}
 });
 $("#stageClear").onclick=()=>{
