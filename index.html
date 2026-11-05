@@ -2798,6 +2798,11 @@ function pwRender(){
 function pwLayout(){ // size the scroll space, sync the headers, draw
   const host=$("#pw"),sc=host&&host.querySelector(".pw-cells");if(!sc)return;
   const cell=pwCell(),sp=sc.firstElementChild,cv=sp.firstElementChild;
+  // Measure the viewport only once the grid's own size has settled the scrollbars: measured before, the
+  // canvas came out a scrollbar wider / taller than the view, and the sticky canvas then sat that far
+  // off the headers when scrolled to the right / bottom end.
+  cv.style.width=cv.style.height="0px";
+  sp.style.width=PW.cols.length*cell+"px";sp.style.height=PW.rows.length*cell+"px";
   const vw=sc.clientWidth,vh=sc.clientHeight;
   sp.style.width=Math.max(vw,PW.cols.length*cell)+"px";sp.style.height=Math.max(vh,PW.rows.length*cell)+"px";
   const dpr=window.devicePixelRatio||1;
