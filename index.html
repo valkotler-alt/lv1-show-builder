@@ -2717,8 +2717,21 @@ function pwRename(el,r){
     if(r.link!==undefined){if(ok&&v!==r.o.name.trim())renameLink(r.link,v);} // a link strip ("" = back to "Link N")
     else if(ok&&v&&v!==r.o.name.trim()){renameRefs(kind,r.o.name,v);r.o.name=v;}
     render();};
-  inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();fin(true);}else if(e.key==="Escape"){e.preventDefault();fin(false);}});
+  inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();fin(true);}else if(e.key==="Escape"){e.preventDefault();fin(false);}
+    else if(e.key==="Tab"){e.preventDefault();const row=el.dataset.pwname!==undefined;fin(true);pwRenameStep(row,+(row?el.dataset.pwname:el.dataset.pwcname),e.shiftKey?-1:1);}});
   inp.addEventListener("blur",()=>fin(true));
+}
+function pwRenameStep(row,i,step){ // Tab / Shift+Tab: rename the next strip below (a column: to the right) / above
+  const list=row?PW.rows:PW.cols,attr=row?"pwname":"pwcname",cur=list[i];
+  let j=i+step;
+  while(j>=0&&j<list.length&&((cur&&cur.o&&list[j].o===cur.o)||!$(`#pw [data-${attr}="${j}"]`)))j+=step; // the R leg is the same strip
+  if(j<0||j>=list.length)return;
+  while(step<0&&j>0&&list[j].o&&list[j-1].o===list[j].o)j--; // up into a stereo strip: its L leg
+  const sc=$("#pw .pw-cells"),cell=pwCell(),p=j*cell;
+  if(row){if(p<sc.scrollTop)sc.scrollTop=p;else if(p+cell>sc.scrollTop+sc.clientHeight)sc.scrollTop=p+cell-sc.clientHeight;}
+  else if(p<sc.scrollLeft)sc.scrollLeft=p;else if(p+cell>sc.scrollLeft+sc.clientWidth)sc.scrollLeft=p+cell-sc.clientWidth;
+  pwSync();
+  $(`#pw [data-${attr}="${j}"]`).dispatchEvent(new MouseEvent("dblclick",{bubbles:true}));
 }
 function pwColorPick(el,r){
   if(!r||!r.o)return;
