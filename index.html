@@ -3039,7 +3039,7 @@ document.addEventListener("click",e=>{
   if(f==="stereo"){list[i].stereo=!list[i].stereo;render();return;}
   if(f==="postFx"){list[i].postFx=!list[i].postFx;render();return;}
   if(f==="reset"){resetStrip(k,i);return;}
-  if(f==="del"){resetStrip(k,i,"delete");return;}
+  if(f==="del"){if(sel[k].has(i)&&sel[k].size>1)deleteSelected([k]);else resetStrip(k,i,"delete");return;}
   if(f==="ins"){insertStrip(k,i);return;}
   if(f==="split"){addSplit(i);return;}
   if(f==="g2l"){groupToLinkDlg(i);return;}
@@ -3063,8 +3063,8 @@ function addSplit(i){
    and the list in sync: the instrument is removed from the stage (or, when
    it has other linked inputs — a drum kit — just unlinked), after an
    OK/Cancel prompt naming exactly what goes. */
-async function resetStrip(k,i,mode){
-  const del=mode==="delete";
+async function resetStrip(k,i,mode,sure){ // sure: already confirmed (deleteSelected) — no dialogs
+  const del=mode==="delete",ask=sure?async()=>true:askConfirm;
   const list=listFor[k]();if(!list[i])return;
   if((k==="ch"||k==="aux")&&typeof stg==="function"){
     const nm=(list[i].name||"").trim().toUpperCase();
@@ -3087,7 +3087,7 @@ async function resetStrip(k,i,mode){
         const lines=[];
         if(removals.length)lines.push(`remove ${removals.map(h=>dn(h.it)).join(", ")} from the stage`);
         if(unlinks.length)lines.push(`unlink it from ${unlinks.map(h=>dn(h.it)).join(", ")} (the instrument stays on stage)`);
-        const ok=await askConfirm(`${del?"Deleting":"Resetting"} ${k==="ch"?"input":"aux"} “${list[i].name.trim()}” will also ${lines.join(", and ")}.`);
+        const ok=await ask(`${del?"Deleting":"Resetting"} ${k==="ch"?"input":"aux"} “${list[i].name.trim()}” will also ${lines.join(", and ")}.`);
         if(!ok)return;
         if(removals.length){
           for(const h of removals.sort((a,b)=>b.x-a.x))stg().items.splice(h.x,1);
@@ -3111,7 +3111,7 @@ async function resetStrip(k,i,mode){
                   ...state.groups.filter((g,j)=>j!==i&&g.dest===name),
                   ...state.fx.filter(f=>f.dest===name)];
       if(refs.length){
-        const ok=await askConfirm(`Deleting group “${name}” re-routes ${refs.length} strip${refs.length===1?"":"s"} that feed it to MASTER.`,"OK — delete");
+        const ok=await ask(`Deleting group “${name}” re-routes ${refs.length} strip${refs.length===1?"":"s"} that feed it to MASTER.`,"OK — delete");
         if(!ok)return;
         for(const c of state.channels)if(c.group===name)c.group="";
         for(const g of state.groups)if(g.dest===name)g.dest="MASTER";
@@ -3124,7 +3124,7 @@ async function resetStrip(k,i,mode){
       const refs=[...state.channels.filter(c=>c.matrix===name),
                   ...state.groups.filter(g=>(g.matrix||[]).includes(name))];
       if(refs.length){
-        const ok=await askConfirm(`Deleting matrix “${name}” removes it as a feed from ${refs.length} strip${refs.length===1?"":"s"}.`,"OK — delete");
+        const ok=await ask(`Deleting matrix “${name}” removes it as a feed from ${refs.length} strip${refs.length===1?"":"s"}.`,"OK — delete");
         if(!ok)return;
         for(const c of state.channels)if(c.matrix===name)c.matrix="";
         for(const g of state.groups)g.matrix=(g.matrix||[]).filter(m=>m!==name);
@@ -3140,6 +3140,33 @@ async function resetStrip(k,i,mode){
   }
   list[i]=DEF[k]();clearSel(k);rackOpen=null;render();
 }
+/* Delete every selected row of these banks after ONE confirm (bottom-up, so the
+   remaining indices hold); the per-row stage-link / re-route rules still apply. */
+async function deleteSelected(kinds){
+  kinds=kinds.filter(k=>sel[k].size);if(!kinds.length)return;
+  const rows=kinds.map(k=>[k,[...sel[k]].sort((a,b)=>b-a)]);
+  const n=rows.reduce((t,[,ix])=>t+ix.length,0);
+  const names=rows.flatMap(([k,ix])=>ix.map(i=>listFor[k]()[i].name.trim()||DEFNAME[k](i))).reverse();
+  const nm=k=>new Set((rows.find(r=>r[0]===k)||[,[]])[1].map(i=>listFor[k]()[i].name.trim()).filter(Boolean));
+  const io=new Set([...nm("ch"),...nm("aux")].map(x=>x.toUpperCase())),G=nm("grp"),M=nm("mtx"),notes=[];
+  if(io.size&&stg().items.some(it=>[...(it.ins||[]),it.label||"",it.auxl||""].some(x=>io.has(x.trim().toUpperCase()))))
+    notes.push("Linked stage items are removed or unlinked.");
+  if(G.size&&[...state.channels.map(c=>c.group),...state.groups.map(g=>g.dest),...state.fx.map(f=>f.dest)].some(x=>G.has(x)))
+    notes.push("Strips feeding a deleted group go to MASTER.");
+  if(M.size&&[...state.channels.map(c=>c.matrix),...state.groups.flatMap(g=>g.matrix||[])].some(x=>M.has(x)))
+    notes.push("Strips feeding a deleted matrix lose that feed.");
+  const what=kinds.length===1?`${n} ${n===1?STRIP_NOUN[kinds[0]]:STRIP_PLURAL[kinds[0]]}`:`${n} strips`;
+  if(!await askConfirm(`Delete ${what}: ${names.slice(0,12).join(", ")}${names.length>12?` … +${names.length-12} more`:""}?`+[...notes,"The following rows move up."].map(x=>" "+x).join(""),"Delete"))return;
+  for(const [k,ix] of rows)for(const i of ix)await resetStrip(k,i,"delete",true);
+  setStatus(`Deleted ${what} — the following rows moved up`+(kinds.some(k=>k==="ch"||k==="aux")?" and were re-patched.":"."));
+}
+document.addEventListener("keydown",e=>{ // Delete / Backspace on INPUTS / OUTPUTS: delete the selected rows
+  if(e.key!=="Delete"&&e.key!=="Backspace")return;
+  const tab=document.body.dataset.tab;if(tab!=="in"&&tab!=="out")return;
+  if(/INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName||"")||!$("#cfm").hidden)return;
+  const kinds=tab==="in"?["ch"]:["grp","fx","aux","mtx"];
+  if(kinds.some(k=>sel[k].size)){e.preventDefault();deleteSelected(kinds);}
+});
 /* Add a strip BELOW row i in a fixed-size LV1 bank: the new row is named
    (so it is patched right away) and the following rows shift down; the
    bank absorbs it by dropping its last UNNAMED strip. */
@@ -3217,7 +3244,7 @@ document.addEventListener("dragend",e=>{
 });
 function ioOpsCell(kind,i){
   return `<td class="rowops iocol"><button class="small" data-k="${kind}" data-i="${i}" data-f="ins" title="Add a new ${STRIP_NOUN[kind]} below this row">＋</button></td>
-    <td class="rowops iocol"><button class="small danger" data-k="${kind}" data-i="${i}" data-f="del" title="Delete this row (following rows move up)">✕</button></td>`;
+    <td class="rowops iocol"><button class="small danger" data-k="${kind}" data-i="${i}" data-f="del" title="Delete this row (following rows move up) — on a selected row: every selected row; Delete key too">✕</button></td>`;
 }
 /* Rack insert picker: mousedown (not click) so the search input's blur
    doesn't hide the list before the pick lands. */
@@ -4321,6 +4348,7 @@ $("#siDel").onclick=deleteSelection;
 document.addEventListener("keydown",e=>{
   if(e.key!=="Delete"&&e.key!=="Backspace")return;
   if(/INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName||""))return;
+  if(["in","out"].includes(document.body.dataset.tab))return; // the lists delete their own rows
   if(mSel.size){deleteSelection();e.preventDefault();}
 });
 $("#stageClear").onclick=()=>{
