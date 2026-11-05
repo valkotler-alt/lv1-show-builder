@@ -1111,6 +1111,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
           <option value="l">Align left</option><option value="c">Align center</option><option value="r">Align right</option>
           <option value="t">Align top</option><option value="m">Align middle</option><option value="b">Align bottom</option>
           <option value="dh">Distribute horizontally</option><option value="dv">Distribute vertically</option></select>
+        <button class="small" id="siPatch">Add Patch</button>
         <button class="small" id="siFlip">Flip</button>
         <button class="small" id="siDup">Duplicate</button>
         <button class="small danger" id="siDel">Delete</button>
@@ -3757,6 +3758,11 @@ function renderInspector(){
   $("#siRotWrap").hidden=multi; // a constellation rotates by steps only
   $("#siFlip").hidden=multi||riser;
   $("#siDup").hidden=multi;
+  const tpl=!multi&&it&&TPL[it.img],linked=tpl&&(it.ins&&it.ins.length||it.auxl);
+  $("#siPatch").hidden=!tpl;
+  if(tpl){$("#siPatch").disabled=!!linked;
+    $("#siPatch").title=linked?"Already linked to "+(it.auxl||it.ins.join(", "))
+      :tpl.ins?"Add this instrument's inputs to the input list":"Add this wedge's aux to the output list";}
   $("#siAlign").hidden=!multi;
   for(const o of $("#siAlign").options)if(o.value[0]==="d")o.disabled=mSel.size<3; // spacing needs 3+
   // Caption block: one row per caption line — tick + value side by side.
@@ -3972,12 +3978,11 @@ function addStageItem(ref,x,y){ // x, y: stage fractions (default: centre stage)
   stg().items.push(it);
   stageSel=stg().items.length-1;
   mSel=new Set([stageSel]);
-  offerTemplate(it,ref);
   render();
+  if(TPL[ref])setStatus(`${libName(ref)} placed — “Add Patch” in the inspector adds its ${TPL[ref].ins?"inputs":"aux"}.`);
 }
-/* Instrument -> input-list correlation: placing an item with a template
-   offers (never silently adds) its inputs / aux — as a MODAL Add/Skip
-   dialog, so the decision cannot be skipped by clicking elsewhere. */
+/* Instrument -> input-list correlation: the inspector's "Add Patch" (shown for
+   items with a template) offers its inputs / aux as a MODAL Add/Skip dialog. */
 async function offerTemplate(it,ref){
   const t=TPL[ref];
   if(!t)return;
@@ -4250,13 +4255,13 @@ $("#siImg").onclick=e=>{
 };
 $("#siDup").onclick=()=>{const it=stg().items[stageSel];if(!it)return;
   // A duplicate is a NEW instrument: it starts outside the position, without
-  // the original's input/aux links, and gets its own add-to-IO-list offer.
+  // the original's input/aux links (its own "Add Patch" adds new ones).
   const copy={...it};delete copy.pos;delete copy.ins;
   if(copy.auxl){delete copy.auxl;copy.label="";} // a copied wedge offers a new aux
   stg().items.push({...copy,x:Math.min(1,it.x+0.05),y:Math.min(1,it.y+0.05)});
   stageSel=stg().items.length-1;mSel=new Set([stageSel]);
-  offerTemplate(stg().items[stageSel],copy.img);
   render();};
+$("#siPatch").onclick=()=>{const it=stg().items[stageSel];if(it)offerTemplate(it,it.img);};
 /* ---- OK/Cancel confirm dialog (window.confirm is blocked in the artifact
    iframe). Resolves true on OK, false on Cancel / Escape. ---- */
 let cfmRes=null;
