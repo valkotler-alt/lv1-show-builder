@@ -574,7 +574,7 @@ td input::placeholder{color:var(--dim);opacity:.55;font-style:italic;}
 .pw button{font-family:inherit;}
 .pw-top{display:flex;gap:8px;margin-bottom:8px;}
 .pw-main{display:flex;gap:8px;padding:8px;background:#262626;border-radius:6px;align-items:center;flex:none;}
-.pw-main button,.pw-sub>button[data-pwsub]{width:92px;height:54px;min-width:0;padding:2px;background:#2e2e2e;border:1px solid #0c0c0c;color:#e7e7e7;font-weight:700;font-size:12.5px;line-height:1.15;white-space:pre-line;border-radius:3px;}
+.pw-main button,.pw-sub>button[data-pwsub],.pw-sub>button[data-g2l]{width:92px;height:54px;min-width:0;padding:2px;background:#2e2e2e;border:1px solid #0c0c0c;color:#e7e7e7;font-weight:700;font-size:12.5px;line-height:1.15;white-space:pre-line;border-radius:3px;}
 .pw-main button.on,.pw-sub>button.on{background:#22b5d4;color:#08232b;border-color:#38C9FF;}
 .pw-main button:disabled{opacity:.45;}
 .pw-devs{display:flex;gap:8px;overflow-x:auto;padding:8px;background:#262626;border-radius:6px;flex:1;min-width:0;align-items:center;}
@@ -634,6 +634,10 @@ td input::placeholder{color:var(--dim);opacity:.55;font-style:italic;}
 .pw-dlgbox label{display:flex;gap:6px;align-items:center;font-size:12px;color:#bdbdbd;}
 .pw-dlgbox input{width:auto;min-width:0;}
 .pw-dlgbtns{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;}
+.g2l label{margin:8px 0;font-size:13px;color:#e7e7e7;}
+.g2l label select{flex:1;}
+.g2l .g2lmsg{margin:12px 0 0;font-size:12.5px;}
+.g2l .g2lwarn{display:block;margin-bottom:6px;color:#ffb454;}
 .pw-pal{position:absolute;z-index:61;display:grid;grid-template-columns:repeat(8,20px);gap:3px;padding:6px;background:#2b2b2b;border:1px solid #555;border-radius:6px;}
 .pw-pal button{width:20px;height:20px;min-width:0;padding:0;border:1px solid #111;border-radius:3px;}
 .pw-pal .none{background:#474747;color:#e7e7e7;font-size:11px;}
@@ -1805,7 +1809,7 @@ function renderGroups(){
       <td><button class="pfbtn small ${g.postFx?"post":""}" id="grp-${i}-pf" data-k="grp" data-i="${i}" data-f="postFx">${g.postFx?"POST":"PRE"}</button></td>
       ${asgCell("grp",i,g,"x")}
       ${rackCell("grp",i,g.rack)}
-      ${opsCell("grp",i)}${ioOpsCell("grp",i)}</tr>`+rackRow("grp",i,g.rack,13,g.stereo);
+      ${opsCell("grp",i,`<button class="small" data-k="grp" data-i="${i}" data-f="g2l" title="Group members → Link: assign this group's members to a link, renamed after the group">→ Link</button>`)}${ioOpsCell("grp",i)}</tr>`+rackRow("grp",i,g.rack,13,g.stereo);
   }).join("")||emptyRow(13,"This mixer configuration has no group strips.");
   $("#grpCount").textContent=state.groups.length?`${named(state.groups).length} named / ${cfg().grp} strips`:"";
 }
@@ -1880,6 +1884,45 @@ function linkMembers(){ // label -> [strip names], over every strip type
 function renameLink(i,name){ // a link strip's name (PATCH › INTERNAL column header); every reference follows
   const before=linkLabel(i);state.links[i]=name;
   const after=linkLabel(i);if(after!==before)renameRefs("lnk",before,after);
+}
+/* Group members -> link (OUTPUTS › Groups "→ Link", PATCH › INTERNAL "Group → Link"): every strip assigned to
+   the group becomes the link's members and the link takes the group's name; what was on the link is removed. */
+const grpLabel=i=>state.groups[i].name.trim()||DEFNAME.grp(i);
+const asgMembers=key=>pwAllStrips(["ch","grp","fx","aux","main","center","mono","cue","mtx"]).filter(s=>s&&asgOf(s.kind,s.o).has(key));
+function groupToLink(gi,li){
+  const gname=grpLabel(gi),members=asgMembers("g:"+gname),old="l:"+linkLabel(li);
+  for(const s of asgMembers(old)){const S=asgOf(s.kind,s.o);S.delete(old);setAsg(s.kind,s.o,S);}
+  renameLink(li,gname);
+  for(const s of members){const S=asgOf(s.kind,s.o);S.add("l:"+gname);setAsg(s.kind,s.o,S);}
+  render();setStatus(`Link ${li+1} is “${gname}” now, with the ${members.length} member${members.length===1?"":"s"} of the group.`);
+}
+function groupToLinkDlg(gi){
+  if(!state.groups.length)return;
+  if(gi===undefined)gi=Math.max(0,state.groups.findIndex((g,i)=>asgMembers("g:"+grpLabel(i)).length));
+  const list=ss=>ss.slice(0,6).map(s=>s.name).join(", ")+(ss.length>6?` and ${ss.length-6} more`:"");
+  const d=document.createElement("div");d.className="pw-dlg";
+  d.innerHTML=`<div class="pw-dlgbox g2l" role="dialog" aria-modal="true"><p><b>Group members → Link</b></p>
+    <label>Group <select data-g>${state.groups.map((g,i)=>`<option value="${i}"${i===gi?" selected":""}>${i+1}. ${esc(grpLabel(i))}</option>`).join("")}</select></label>
+    <label>Link <select data-l>${linkLabels().map((l,i)=>`<option value="${i}">${i+1}. ${esc(l)} (${asgMembers("l:"+l).length})</option>`).join("")}</select></label>
+    <p class="g2lmsg"></p>
+    <div class="pw-dlgbtns"><button class="small" data-r="0">Cancel</button><button class="small primary" data-r="1">Ok</button></div></div>`;
+  const gs=d.querySelector("[data-g]"),ls=d.querySelector("[data-l]"),ok=d.querySelector('[data-r="1"]'),msg=d.querySelector(".g2lmsg");
+  const pickLink=()=>{const n=grpLabel(+gs.value),L=linkLabels(),j=L.indexOf(n); // the link already named after the group, else the first empty one
+    ls.value=String(j>=0?j:Math.max(0,L.findIndex((l,i)=>!(state.links[i]||"").trim()&&!asgMembers("l:"+l).length)));};
+  const upd=()=>{const g=+gs.value,li=+ls.value,n=grpLabel(g),mem=asgMembers("g:"+n),j=linkLabels().indexOf(n),
+      was=asgMembers("l:"+linkLabel(li)).filter(s=>!mem.some(m=>m.o===s.o)); // members that leave the link
+    let h,bad=false;
+    if(!mem.length){h=`Group “${esc(n)}” has no members.`;bad=true;}
+    else if(j>=0&&j!==li){h=`Link ${j+1} is already named “${esc(n)}”: pick that link to update it.`;bad=true;}
+    else h=(was.length?`<span class="g2lwarn">⚠ This overwrites link ${li+1} “${esc(linkLabel(li))}”: ${was.length} member${was.length===1?"":"s"} not in the group (${esc(list(was))}) will be removed from it.</span>`:"")+
+      `Link ${li+1} will be named “${esc(n)}” and get the group's ${mem.length} member${mem.length===1?"":"s"}: ${esc(list(mem))}.`;
+    msg.innerHTML=h;ok.disabled=bad;};
+  const done=v=>{d.remove();document.removeEventListener("keydown",key,true);if(v)groupToLink(+gs.value,+ls.value);};
+  const key=e=>{if(e.key==="Escape"){e.preventDefault();done(false);}};
+  gs.addEventListener("change",()=>{pickLink();upd();});ls.addEventListener("change",upd);
+  d.addEventListener("click",e=>{const b=e.target.closest("[data-r]");if(b&&!b.disabled)done(b.dataset.r==="1");});
+  document.addEventListener("keydown",key,true);
+  pickLink();upd();document.body.append(d);gs.focus();
 }
 /* ---------- custom layers ----------
    state.layers: 8 x {name, strips[16]}; a slot is null or [kind, name].
@@ -2542,7 +2585,7 @@ function pwRender(){
   const isAsg=v.rows==="asg",colSel=isAsg?[]:pwSelOf(PW.main);
   const mains=[["input","INPUT"],["output","OUTPUT"],["internal","INTERNAL"],["d2d","DEVICE\nTO DEVICE"]];
   const subs=PW.main==="d2d"?state.io.map((d,k)=>devBtn(d,k,pwSelOf("d2dRows").includes(d.id),"d2dRows")).join("")
-    :isAsg?`<button data-pwsub="internal" class="on" disabled>All</button>`
+    :isAsg?`<button data-pwsub="internal" class="on" disabled>All</button>`+(state.groups.length?`<button data-g2l title="Group members → Link: assign a group's members to a link, renamed after the group">Group →\nLink…</button>`:"")
     :(PW.main==="input"?["inputA","inputB"]:["direct","busses"]).map(s=>`<button data-pwsub="${s}" class="${(PW.main==="input"?PW.sub.input:PW.sub.output)===s?"on":""}">${esc(PW_VIEWS[s].label)}</button>`).join("");
   // header geometry: device / [gain / 48V in the Input views] / type / channel number;
   // Internal: strip type / name (vertical) / number
@@ -2682,6 +2725,7 @@ $("#pw").addEventListener("click",e=>{
   const t=e.target;
   const mb=t.closest("[data-pwmain]");if(mb&&!mb.disabled){PW.main=mb.dataset.pwmain;PW.hover={r:-1,c:-1};pwRender();return;}
   const sb=t.closest("[data-pwsub]");if(sb){PW.sub[PW.main]=sb.dataset.pwsub;PW.hover={r:-1,c:-1};pwRender();return;}
+  if(t.closest("[data-g2l]")){groupToLinkDlg();return;}
   const xd=t.closest("[data-iodel]");if(xd){ioRemove(+xd.dataset.iodel);return;}
   if(t.closest("[data-iogrip]"))return; // the grip drags, it does not toggle
   const db=t.closest("[data-pwdev]");
@@ -2866,6 +2910,7 @@ document.addEventListener("click",e=>{
   if(f==="del"){resetStrip(k,i,"delete");return;}
   if(f==="ins"){insertStrip(k,i);return;}
   if(f==="split"){addSplit(i);return;}
+  if(f==="g2l"){groupToLinkDlg(i);return;}
 });
 /* Digital split of input row i: the first free strip BELOW the last named
    input (so no existing channel moves), same input, own processing, off
