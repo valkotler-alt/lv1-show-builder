@@ -2396,10 +2396,12 @@ function pwNameIt(kind,o,fromInput){ // an unnamed strip that gets patched takes
   o.name=DEFNAME[kind](PW_LISTS[kind]().indexOf(o));
   if(kind==="ch"&&!fromInput)o.inA=(o.inA||[]).length?o.inA:[0,0]; // named from an output / internal view: no Auto input
 }
+// strips whose mono / stereo the Patch window toggles (double-click the M/S cell, as in LV1); a split has its source's format
+const pwMsEdit=r=>["ch","grp","fx","aux","mtx"].includes(r.kind)&&!!r.o&&!(r.kind==="ch"&&r.o.ds);
 function pwBuild(){
   const v=pwView(),rows=[],cols=[];
   if(v.rows==="asg"){ // Internal: strips x Groups / Main / Matrix / Link / Mute groups
-    for(const s of pwAllStrips(["ch","grp","fx","aux","main","center","mono","cue","mtx"]))rows.push({...s,ms:""});
+    for(const s of pwAllStrips(["ch","grp","fx","aux","main","center","mono","cue","mtx"]))rows.push({...s,ms:pwMsEdit(s)?(s.o.stereo?"ST":"M"):""});
     state.groups.forEach((g,i)=>{const n=g.name.trim()||DEFNAME.grp(i);cols.push({key:"g:"+n,t:"g",lbl:String(i+1),name:n,unnamed:!g.name.trim(),o:g,kind:"grp"});});
     cols.push({key:"LR",t:"main",lbl:"LR",name:"Main L/R"});
     if(cfg().mains>1){cols.push({key:"C",t:"main",lbl:"C",name:"Center"});cols.push({key:"M",t:"main",lbl:"M",name:"Mono"});}
@@ -2546,7 +2548,7 @@ function pwRender(){
   // Internal: strip type / name (vertical) / number
   const knobs=v.rows==="in"&&cell>=25, H=isAsg?{dev:22,gain:0,p48:0,type:Math.max(60,cell*2.6),num:22}:{dev:22,gain:knobs?54:0,p48:knobs?22:0,type:20,num:22};
   const chh=H.dev+H.gain+H.p48+H.type+H.num;
-  const RL=isAsg?[["color",14],["name",220]]:v.rows==="in"?[["color",14],["name",186],["ms",34]]:v.rows==="devin"?[["dev",140],["type",70],["num",40]]:[["color",14],["name",150],["ipf",42],["ms",34]];
+  const RL=isAsg?[["color",14],["name",220],["ms",34]]:v.rows==="in"?[["color",14],["name",186],["ms",34]]:v.rows==="devin"?[["dev",140],["type",70],["num",40]]:[["color",14],["name",150],["ipf",42],["ms",34]];
   const rhw=RL.reduce((a,[,w])=>a+w,0),font=Math.round(Math.min(13,Math.max(9,cell*.4)));
   // column header cells
   const hc=[];let y=0;
@@ -2580,7 +2582,7 @@ function pwRender(){
       if(kind==="color"){const col=r.o&&r.o.color!=null?palCss(r.o.color):PW_KIND_COL[r.kind]||"#474747";st+=`;background:${col}`;
         if(["ch","grp","fx","aux","mtx"].includes(r.kind))attr=` data-pwcolor="${ri}" title="Strip colour"`;}
       else if(kind==="name"){t=r.name;cls=" l"+(r.unnamed?" un":"");if(["ch","grp","fx","aux","mtx"].includes(r.kind))attr=` data-pwname="${ri}" title="${r.unnamed?"Unnamed (not built until named or patched) — ":""}Double-click to rename"`;}
-      else if(kind==="ms"){t=r.ms;if(v.rows==="in"&&!r.ch.ds)attr=` data-pwms="${ri}" title="Double-click: mono / stereo"`;}
+      else if(kind==="ms"){t=r.ms;if(pwMsEdit(r))attr=` data-pwms="${ri}" title="Double-click: mono / stereo"`;}
       else if(kind==="ipf"){const tp=tapOf(r.s);t=IPF_TEXT[tp];st+=`;background:${IPF_COL[tp]};color:#111`;attr=` data-pwipf="${ri}" title="Output tap (click: INP, PRE, PST, PSP)"`;}
       else if(kind==="dev"){t=r.dev;cls=" l";}
       else if(kind==="type")t=r.x.type==="Out"?"":r.x.type;
@@ -2602,9 +2604,9 @@ function pwRender(){
         <div class="pw-cells" tabindex="0"><div class="pw-space"><canvas></canvas></div></div>
       </div></div>
     <div class="pw-foot" id="pwFoot">${!isAsg&&!state.io.length?"No I/O devices: add one above.":PW.rows.length?"":v.rows==="in"?"No named inputs yet: name channels on the INPUTS tab.":v.rows==="devin"?"Pick the source devices on the left.":"No named strips with outputs."}</div>`;
+  pwLayout(); // size the scroll space first: restoring the scroll into the empty new grid would clamp it to the top
   const sc=host.querySelector(".pw-cells");
-  sc.scrollLeft=sx;sc.scrollTop=sy;
-  pwLayout();
+  sc.scrollLeft=sx;sc.scrollTop=sy;pwSync();
 }
 function pwLayout(){ // size the scroll space, sync the headers, draw
   const host=$("#pw"),sc=host&&host.querySelector(".pw-cells");if(!sc)return;
@@ -2694,8 +2696,8 @@ $("#pw").addEventListener("click",e=>{
 });
 $("#pw").addEventListener("dblclick",e=>{
   const t=e.target;
-  const ms=t.closest("[data-pwms]");if(ms){const r=PW.rows[+ms.dataset.pwms];if(r&&r.ch&&!r.ch.ds){r.ch.stereo=!r.ch.stereo;render();
-    setStatus(`${r.ch.name.trim()} is ${r.ch.stereo?"stereo":"mono"} now.`);}return;}
+  const ms=t.closest("[data-pwms]");if(ms){const r=PW.rows[+ms.dataset.pwms];if(r&&pwMsEdit(r)){r.o.stereo=!r.o.stereo;render();
+    setStatus(`${r.name.trim()} is ${r.o.stereo?"stereo":"mono"} now.`);}return;}
   const nm=t.closest("[data-pwname]");if(nm){pwRename(nm,PW.rows[+nm.dataset.pwname]);return;}
   const cn=t.closest("[data-pwcname]");if(cn){const c=PW.cols[+cn.dataset.pwcname];
     if(c.link!==undefined)pwRename(cn,{o:{name:state.links[c.link]},link:c.link});else pwRename(cn,c);}
