@@ -738,11 +738,12 @@ td .rgrip{color:var(--dim);font-size:11px;letter-spacing:-2px;margin-right:5px;}
 #palGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;max-height:430px;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;background:#ffffff;border-radius:6px;padding:4px;}
 #palGrid .menuempty{color:#777;}
 .palcat{grid-column:1/-1;font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);font-weight:500;margin-top:6px;}
-.palit{display:flex;flex-direction:column;align-items:center;gap:2px;border:1px solid transparent;border-radius:6px;padding:4px 2px;cursor:pointer;font-size:9px;color:#555;text-align:center;background:none;}
+.palit{display:flex;flex-direction:column;align-items:center;gap:2px;border:1px solid transparent;border-radius:6px;padding:4px 2px;cursor:grab;font-size:9px;color:#555;text-align:center;background:none;}
 .palit:hover{border-color:var(--accent);background:#eeeeee;}
 .palit img{width:100%;max-width:56px;height:42px;object-fit:contain;pointer-events:none;}
 .palit span{max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
 .sbmain{flex:1;min-width:0;}
+#stage.palover{outline:3px dashed var(--accent);outline-offset:-3px;}
 #stage{position:relative;width:100%;aspect-ratio:16/9;background:#ffffff;border:2px solid var(--line);border-radius:10px;box-shadow:var(--shadow);overflow:hidden;touch-action:none;}
 .stagelabel{position:absolute;bottom:4px;left:50%;transform:translateX(-50%);font-size:10px;letter-spacing:.35em;color:#b5b0a6;pointer-events:none;}
 .stagesize{position:absolute;bottom:4px;right:8px;font:500 10px var(--font-num);color:#b5b0a6;pointer-events:none;}
@@ -1073,7 +1074,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 
 <section style="--seccolor:var(--grp)" id="stageSec" data-tab="stage">
   <div class="sechead"><h2>Stage plot</h2><span class="count" id="stageCount"></span>
-    <span class="hint">Click a library item to place it, drag to position, label it with the input it belongs to.
+    <span class="hint">Drag a library item onto the stage to place it, drag it to position, label it with the input it belongs to.
     Drawn from the audience; position zones use stage left/right (performer's view).</span>
     <span class="headops">
       <button class="small" id="inputsToStage" title="Add a stage item for every named input that has none — the picture is guessed from the name / Mic / Stand (or what you picked before), one item per instrument (kit, piano, keys); you check it in a preview. Swap a wrong picture later with Picture in the item's inspector: the links stay">Inputs → stage</button>
@@ -3633,11 +3634,11 @@ function renderPalette(q){
   let html="";
   if((!cat||cat==="Shapes")&&(!q||"riser shapes".includes(q)))
     html+=`<div class="palcat">Shapes</div>
-      <button class="palit" data-add="riser" title="Riser / platform outline"><span class="palshape"></span><span>Riser</span></button>`;
+      <button class="palit" draggable="true" data-add="riser" title="Riser / platform outline — drag onto the stage"><span class="palshape"></span><span>Riser</span></button>`;
   let lastCat=null;
   for(const e of hits){
     if(e.cat!==lastCat){html+=`<div class="palcat">${esc(e.cat)}</div>`;lastCat=e.cat;}
-    html+=`<button class="palit" data-add="${esc(e.id)}" title="${esc(e.name)}">
+    html+=`<button class="palit" draggable="true" data-add="${esc(e.id)}" title="${esc(e.name)} — drag onto the stage">
       <img loading="lazy" src="${esc(e.data||STAGELIB_BASE+e.id+".png")}"><span>${esc(e.name)}</span></button>`;
   }
   $("#palGrid").innerHTML=html||'<div class="menuempty">no matches</div>';
@@ -3964,10 +3965,10 @@ function libCm(ref){
   if(ref.startsWith("custom:")){const c=stg().custom[ref.slice(7)]||lsCustoms()[ref.slice(7)];return (c&&c.cm)||0;}
   const e=STAGELIB.find(x=>x.id===ref);return (e&&e.cm)||0;
 }
-function addStageItem(ref){
+function addStageItem(ref,x,y){ // x, y: stage fractions (default: centre stage)
   const it=ref==="riser"
-    ?{img:"riser",x:0.5,y:0.4,rot:0,flip:false,label:"",rw:240,rd:240}
-    :{img:ref,x:0.5,y:0.55,rot:0,flip:false,label:"",cm:libCm(ref)||100};
+    ?{img:"riser",x:x??0.5,y:y??0.4,rot:0,flip:false,label:"",rw:240,rd:240}
+    :{img:ref,x:x??0.5,y:y??0.55,rot:0,flip:false,label:"",cm:libCm(ref)||100};
   stg().items.push(it);
   stageSel=stg().items.length-1;
   mSel=new Set([stageSel]);
@@ -4025,9 +4026,27 @@ function applyTemplate(it,t){
     setStatus(`Added aux “${name}” → ${t.aux[2]}.`);
   }
 }
-document.addEventListener("click",e=>{
-  const p=e.target.closest("[data-add]");
-  if(p)addStageItem(p.dataset.add);
+/* Library → stage: drag an item onto the stage; it lands where it is dropped. */
+let palDrag=null;
+$("#palGrid").addEventListener("dragstart",e=>{
+  const p=e.target.closest("[data-add]");if(!p)return;
+  palDrag=p.dataset.add;
+  e.dataTransfer.effectAllowed="copy";e.dataTransfer.setData("text/plain","stage-item");
+  const img=p.querySelector("img");if(img)e.dataTransfer.setDragImage(img,img.width/2,img.height/2);
+});
+$("#palGrid").addEventListener("click",e=>{if(e.target.closest("[data-add]"))setStatus("Drag the item onto the stage to place it.");});
+$("#palGrid").addEventListener("dragend",()=>{palDrag=null;$("#stage").classList.remove("palover");});
+$("#stage").addEventListener("dragover",e=>{
+  if(!palDrag)return;
+  e.preventDefault();e.dataTransfer.dropEffect="copy";$("#stage").classList.add("palover");
+});
+$("#stage").addEventListener("dragleave",e=>{if(!$("#stage").contains(e.relatedTarget))$("#stage").classList.remove("palover");});
+$("#stage").addEventListener("drop",e=>{
+  if(!palDrag)return;
+  e.preventDefault();
+  const ref=palDrag,r=$("#stage").getBoundingClientRect(),cl=v=>Math.min(1,Math.max(0,v));
+  palDrag=null;$("#stage").classList.remove("palover");
+  addStageItem(ref,cl((e.clientX-r.left)/r.width),cl((e.clientY-r.top)/r.height));
 });
 /* Selection + drag (pointer events; coordinates as stage fractions).
    Click selects the whole group of the clicked item; Alt-click just that
