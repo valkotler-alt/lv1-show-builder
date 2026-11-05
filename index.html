@@ -637,7 +637,16 @@ td input::placeholder{color:var(--dim);opacity:.55;font-style:italic;}
 .g2l label{margin:8px 0;font-size:13px;color:#e7e7e7;}
 .g2l label select{flex:1;}
 .g2l .g2lmsg{margin:12px 0 0;font-size:12.5px;}
-.g2l .g2lwarn{display:block;margin-bottom:6px;color:#ffb454;}
+.g2l .g2lmsg .g2lwarn{display:block;margin-bottom:6px;}
+.g2l .g2lwarn{color:#ffb454;}
+.g2l .g2lok{color:#4cd07d;}
+.g2ltbl{max-width:min(760px,calc(100vw - 32px));width:100%;box-sizing:border-box;}
+.g2lscroll{max-height:60vh;overflow:auto;}
+.g2ltbl table{border-collapse:collapse;width:100%;font-size:12.5px;}
+.g2ltbl th,.g2ltbl td{padding:4px 8px;border-bottom:1px solid #444;text-align:left;background:none;color:#e7e7e7;white-space:nowrap;}
+.g2ltbl th{position:sticky;top:0;background:#2b2b2b;color:#bdbdbd;font-weight:600;}
+.g2ltbl td:nth-child(3){white-space:normal;min-width:120px;}
+.g2ltbl td.un{color:#888;font-style:italic;}
 .pw-pal{position:absolute;z-index:61;display:grid;grid-template-columns:repeat(8,20px);gap:3px;padding:6px;background:#2b2b2b;border:1px solid #555;border-radius:6px;}
 .pw-pal button{width:20px;height:20px;min-width:0;padding:0;border:1px solid #111;border-radius:3px;}
 .pw-pal .none{background:#474747;color:#e7e7e7;font-size:11px;}
@@ -970,6 +979,7 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 
 <section style="--seccolor:var(--grp)" data-tab="out">
   <div class="sechead"><h2>Groups</h2><span class="count" id="grpCount"></span>
+    <button class="small" id="btnAllG2L" type="button" title="Group 1 → Link 1, Group 2 → Link 2… for every group with members: each link takes its group's members and name">All groups → Links</button>
     <span class="hint">Pre/Post FX is the LV1 group processing point. Destination MASTER = LR. Destination, Link, Mute and Matrix feeds are assigned on PATCH › INTERNAL: click one to open the group's row there.</span></div>
   <div class="tblwrap"><table id="grpTable">
     <thead><tr><th>#</th><th>Name</th><th>M/ST</th><th>Color</th><th>Destination</th><th>Link</th><th>Mute</th><th>FX point</th><th>Matrix feeds</th><th>Rack</th><th></th><th class="iocol"></th><th class="iocol"></th></tr></thead>
@@ -1889,18 +1899,58 @@ function renameLink(i,name){ // a link strip's name (PATCH › INTERNAL column h
    the group becomes the link's members and the link takes the group's name; what was on the link is removed. */
 const grpLabel=i=>state.groups[i].name.trim()||DEFNAME.grp(i);
 const asgMembers=key=>pwAllStrips(["ch","grp","fx","aux","main","center","mono","cue","mtx"]).filter(s=>s&&asgOf(s.kind,s.o).has(key));
-function groupToLink(gi,li){
-  const gname=grpLabel(gi),members=asgMembers("g:"+gname),old="l:"+linkLabel(li);
-  for(const s of asgMembers(old)){const S=asgOf(s.kind,s.o);S.delete(old);setAsg(s.kind,s.o,S);}
-  renameLink(li,gname);
-  for(const s of members){const S=asgOf(s.kind,s.o);S.add("l:"+gname);setAsg(s.kind,s.o,S);}
-  render();setStatus(`Link ${li+1} is “${gname}” now, with the ${members.length} member${members.length===1?"":"s"} of the group.`);
+const g2lList=ss=>ss.slice(0,6).map(s=>s.name).join(", ")+(ss.length>6?` and ${ss.length-6} more`:"");
+function groupsToLinks(pairs){ // [[group, link]]: each link takes its group's members and name
+  const plan=pairs.map(([gi,li])=>({li,name:grpLabel(gi),mem:asgMembers("g:"+grpLabel(gi))})),mine=new Set(pairs.map(p=>p[1]));
+  for(const p of plan){const k="l:"+linkLabel(p.li);for(const s of asgMembers(k)){const S=asgOf(s.kind,s.o);S.delete(k);setAsg(s.kind,s.o,S);}}
+  linkLabels().forEach((l,j)=>{if(!mine.has(j)&&plan.some(p=>p.name===l))renameLink(j,"");}); // another link with a group's name: back to "Link N"
+  for(const p of plan)renameLink(p.li,"\u0001"+p.li); // through unique names, so swapped names never merge
+  for(const p of plan)renameLink(p.li,p.name);
+  for(const p of plan)for(const s of p.mem){const S=asgOf(s.kind,s.o);S.add("l:"+p.name);setAsg(s.kind,s.o,S);}
+  render();
 }
-function groupToLinkDlg(gi){
-  if(!state.groups.length)return;
-  if(gi===undefined)gi=Math.max(0,state.groups.findIndex((g,i)=>asgMembers("g:"+grpLabel(i)).length));
-  const list=ss=>ss.slice(0,6).map(s=>s.name).join(", ")+(ss.length>6?` and ${ss.length-6} more`:"");
+function groupToLink(gi,li){
+  const n=asgMembers("g:"+grpLabel(gi)).length;groupsToLinks([[gi,li]]);
+  setStatus(`Link ${li+1} is “${grpLabel(gi)}” now, with the ${n} member${n===1?"":"s"} of the group.`);
+}
+async function allGroupsToLinks(){ // one click: Group N -> Link N for every group that has members
+  const pairs=state.groups.map((g,i)=>[i,i]).filter(([i])=>i<LINK_COUNT&&asgMembers("g:"+grpLabel(i)).length);
+  if(!pairs.length){setStatus("No group has members yet.");return false;}
+  const warn=[];
+  for(const [gi,li] of pairs){const mem=asgMembers("g:"+grpLabel(gi)),was=asgMembers("l:"+linkLabel(li)).filter(s=>!mem.some(m=>m.o===s.o));
+    if(was.length)warn.push(`⚠ Link ${li+1} “${linkLabel(li)}” loses ${g2lList(was)}.`);}
+  linkLabels().forEach((l,j)=>{if(!pairs.some(p=>p[1]===j)&&pairs.some(([gi])=>grpLabel(gi)===l))warn.push(`Link ${j+1} “${l}” goes back to “Link ${j+1}” (its members stay).`);});
+  const ok=await askConfirm(`Copy the members of ${pairs.length} group${pairs.length===1?"":"s"} to their links (Group 1 → Link 1, Group 2 → Link 2…)? Each link is renamed after its group; groups without members are skipped.`+
+    (warn.length?"\n\nThis overwrites what is on those links:\n"+warn.join("\n"):""),"OK — copy","Cancel");
+  if(!ok)return false;
+  groupsToLinks(pairs);setStatus(`${pairs.length} link${pairs.length===1?"":"s"} now hold${pairs.length===1?"s":""} the members of their groups.`);
+  return true;
+}
+$("#btnAllG2L").onclick=allGroupsToLinks;
+const topDlg=d=>d===[...document.querySelectorAll(".pw-dlg")].pop();
+function groupsLinksDlg(){ // PATCH › INTERNAL: every group with its members and link, "→ Link" per row, all at once
   const d=document.createElement("div");d.className="pw-dlg";
+  const fill=()=>{const L=linkLabels();
+    d.innerHTML=`<div class="pw-dlgbox g2l g2ltbl" role="dialog" aria-modal="true"><p><b>Group members → Links</b></p>
+      <div class="g2lscroll"><table><thead><tr><th>#</th><th>Group</th><th>Members</th><th>Link</th><th></th></tr></thead><tbody>${state.groups.map((g,i)=>{
+        const n=grpLabel(i),mem=asgMembers("g:"+n),j=L.indexOf(n),lm=j>=0?asgMembers("l:"+n):[];
+        const sync=j>=0&&lm.length===mem.length&&mem.every(m=>lm.some(s=>s.o===m.o));
+        return `<tr><td class="num">${i+1}</td><td${g.name.trim()?"":' class="un"'}>${esc(n)}</td><td title="${esc(mem.map(s=>s.name).join(", "))}">${mem.length?`${mem.length} · ${esc(g2lList(mem))}`:"—"}</td>
+          <td>${j>=0?`${j+1}. ${esc(n)}${sync?' <span class="g2lok" title="The link has exactly the group\'s members">✓</span>':' <span class="g2lwarn" title="The link\'s members differ from the group\'s">≠</span>'}`:"—"}</td>
+          <td><button class="small" data-g2lrow="${i}"${mem.length?"":" disabled"}>→ Link</button></td></tr>`;}).join("")}</tbody></table></div>
+      <div class="pw-dlgbtns"><button class="small" data-g2lall title="Group 1 → Link 1, Group 2 → Link 2… for every group with members">All groups → Links</button><span style="flex:1"></span><button class="small primary" data-r="0">Close</button></div></div>`;};
+  const done=()=>{d.remove();document.removeEventListener("keydown",key,true);};
+  const key=e=>{if(e.key==="Escape"&&topDlg(d)&&$("#cfm").hidden){e.preventDefault();done();}};
+  d.addEventListener("click",async e=>{const t=e.target;
+    if(t.closest("[data-r]")){done();return;}
+    const r=t.closest("[data-g2lrow]");if(r){groupToLinkDlg(+r.dataset.g2lrow,fill);return;}
+    if(t.closest("[data-g2lall]")&&await allGroupsToLinks())fill();});
+  document.addEventListener("keydown",key,true);
+  fill();document.body.append(d);
+}
+function groupToLinkDlg(gi,after){
+  if(!state.groups.length)return;
+  const list=g2lList,d=document.createElement("div");d.className="pw-dlg";
   d.innerHTML=`<div class="pw-dlgbox g2l" role="dialog" aria-modal="true"><p><b>Group members → Link</b></p>
     <label>Group <select data-g>${state.groups.map((g,i)=>`<option value="${i}"${i===gi?" selected":""}>${i+1}. ${esc(grpLabel(i))}</option>`).join("")}</select></label>
     <label>Link <select data-l>${linkLabels().map((l,i)=>`<option value="${i}">${i+1}. ${esc(l)} (${asgMembers("l:"+l).length})</option>`).join("")}</select></label>
@@ -1917,8 +1967,8 @@ function groupToLinkDlg(gi){
     else h=(was.length?`<span class="g2lwarn">⚠ This overwrites link ${li+1} “${esc(linkLabel(li))}”: ${was.length} member${was.length===1?"":"s"} not in the group (${esc(list(was))}) will be removed from it.</span>`:"")+
       `Link ${li+1} will be named “${esc(n)}” and get the group's ${mem.length} member${mem.length===1?"":"s"}: ${esc(list(mem))}.`;
     msg.innerHTML=h;ok.disabled=bad;};
-  const done=v=>{d.remove();document.removeEventListener("keydown",key,true);if(v)groupToLink(+gs.value,+ls.value);};
-  const key=e=>{if(e.key==="Escape"){e.preventDefault();done(false);}};
+  const done=v=>{d.remove();document.removeEventListener("keydown",key,true);if(v)groupToLink(+gs.value,+ls.value);if(after)after();};
+  const key=e=>{if(e.key==="Escape"&&topDlg(d)){e.preventDefault();done(false);}};
   gs.addEventListener("change",()=>{pickLink();upd();});ls.addEventListener("change",upd);
   d.addEventListener("click",e=>{const b=e.target.closest("[data-r]");if(b&&!b.disabled)done(b.dataset.r==="1");});
   document.addEventListener("keydown",key,true);
@@ -2585,7 +2635,7 @@ function pwRender(){
   const isAsg=v.rows==="asg",colSel=isAsg?[]:pwSelOf(PW.main);
   const mains=[["input","INPUT"],["output","OUTPUT"],["internal","INTERNAL"],["d2d","DEVICE\nTO DEVICE"]];
   const subs=PW.main==="d2d"?state.io.map((d,k)=>devBtn(d,k,pwSelOf("d2dRows").includes(d.id),"d2dRows")).join("")
-    :isAsg?`<button data-pwsub="internal" class="on" disabled>All</button>`+(state.groups.length?`<button data-g2l title="Group members → Link: assign a group's members to a link, renamed after the group">Group →\nLink…</button>`:"")
+    :isAsg?`<button data-pwsub="internal" class="on" disabled>All</button>`+(state.groups.length?`<button data-g2l title="Group members → Links: every group with its members and link; copy one or all">Groups →\nLinks…</button>`:"")
     :(PW.main==="input"?["inputA","inputB"]:["direct","busses"]).map(s=>`<button data-pwsub="${s}" class="${(PW.main==="input"?PW.sub.input:PW.sub.output)===s?"on":""}">${esc(PW_VIEWS[s].label)}</button>`).join("");
   // header geometry: device / [gain / 48V in the Input views] / type / channel number;
   // Internal: strip type / name (vertical) / number
@@ -2725,7 +2775,7 @@ $("#pw").addEventListener("click",e=>{
   const t=e.target;
   const mb=t.closest("[data-pwmain]");if(mb&&!mb.disabled){PW.main=mb.dataset.pwmain;PW.hover={r:-1,c:-1};pwRender();return;}
   const sb=t.closest("[data-pwsub]");if(sb){PW.sub[PW.main]=sb.dataset.pwsub;PW.hover={r:-1,c:-1};pwRender();return;}
-  if(t.closest("[data-g2l]")){groupToLinkDlg();return;}
+  if(t.closest("[data-g2l]")){groupsLinksDlg();return;}
   const xd=t.closest("[data-iodel]");if(xd){ioRemove(+xd.dataset.iodel);return;}
   if(t.closest("[data-iogrip]"))return; // the grip drags, it does not toggle
   const db=t.closest("[data-pwdev]");
