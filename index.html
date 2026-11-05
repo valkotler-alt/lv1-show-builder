@@ -620,6 +620,11 @@ td input::placeholder{color:var(--dim);opacity:.55;font-style:italic;}
 .pw-devs .pw-sbtn{width:92px;height:54px;min-width:0;background:#22b5d4;color:#08232b;border:1px solid #38C9FF;font-weight:700;font-size:12.5px;line-height:1.15;white-space:pre-line;border-radius:3px;}
 .xsn{display:inline-block;font-size:10px;font-weight:700;padding:1px 4px;border-radius:4px;background:var(--brand);color:#fff;vertical-align:1px;cursor:help;}
 .pw-rr{position:absolute;left:0;display:flex;}
+.pw-rg{cursor:grab;margin-right:5px;letter-spacing:-2px;color:#9a9a9a;font-size:.85em;flex:none;}
+.pw-rr.dragging{opacity:.45;}
+.pw-rr.dropbefore::after,.pw-rr.dropafter::after{content:"";position:absolute;left:0;right:0;height:3px;background:#38C9FF;z-index:2;pointer-events:none;}
+.pw-rr.dropbefore::after{top:-1px;}
+.pw-rr.dropafter::after{bottom:-2px;}
 .pw-rc{box-sizing:border-box;flex:none;background:#474747;border-right:1px solid #111;border-bottom:1px solid #111;font-weight:700;display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
 .pw-rc.l{justify-content:flex-start;padding-left:6px;}
 .pw-rc[data-pwcolor],.pw-rc[data-pwipf]{cursor:pointer;}
@@ -2442,6 +2447,48 @@ $("#pw").addEventListener("dragend",e=>{
   const card=e.target.closest&&e.target.closest("[data-iocard]");if(card)card.draggable=false;
   ioDrag=null;ioClearMarks();
 });
+/* PATCH rows: drag a strip by its ⋮⋮ grip (name cell) above / below another strip of the same type —
+   the same reorder as the INPUTS / OUTPUTS "#" cell (moveRows); the grid scrolls at its top / bottom edge. */
+let pwRowDrag=null;
+const pwStripRows=o=>[...$("#pw .pw-rhin").children].filter(el=>PW.rows[+el.dataset.pwr].o===o);
+const pwRowAt=e=>{const el=pwRowDrag&&e.target.closest&&e.target.closest("#pw .pw-rr"),r=el&&PW.rows[+el.dataset.pwr];
+  if(!r||r.kind!==pwRowDrag.kind)return null;
+  const L=pwStripRows(r.o),top=L[0].getBoundingClientRect().top,bot=L[L.length-1].getBoundingClientRect().bottom;
+  return {r,L,after:e.clientY>(top+bot)/2};};
+const pwRowMarks=()=>document.querySelectorAll("#pw .pw-rr.dropbefore,#pw .pw-rr.dropafter,#pw .pw-rr.dragging").forEach(el=>el.classList.remove("dropbefore","dropafter","dragging"));
+$("#pw").addEventListener("mousedown",e=>{if(e.target.closest("[data-pwrg]"))e.target.closest(".pw-rr").draggable=true;});
+document.addEventListener("mouseup",()=>{document.querySelectorAll('#pw .pw-rr[draggable="true"]').forEach(el=>el.draggable=false);});
+$("#pw").addEventListener("dragstart",e=>{
+  const el=e.target.closest&&e.target.closest(".pw-rr");if(!el||!el.draggable)return;
+  const r=PW.rows[+el.dataset.pwr];pwRowDrag={kind:r.kind,o:r.o};
+  pwStripRows(r.o).forEach(x=>x.classList.add("dragging"));
+  e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain","patch-row");
+});
+$("#pw").addEventListener("dragover",e=>{
+  if(!pwRowDrag)return;
+  const rh=e.target.closest&&e.target.closest("#pw .pw-rh");if(!rh)return;
+  e.preventDefault();
+  const b=rh.getBoundingClientRect(),sc=$("#pw .pw-cells"),cell=pwCell(); // edge scroll
+  if(e.clientY<b.top+cell)sc.scrollTop-=cell;else if(e.clientY>b.bottom-cell)sc.scrollTop+=cell;
+  pwSync();
+  const t=pwRowAt(e);
+  document.querySelectorAll("#pw .pw-rr.dropbefore,#pw .pw-rr.dropafter").forEach(el=>el.classList.remove("dropbefore","dropafter"));
+  if(!t||t.r.o===pwRowDrag.o){e.dataTransfer.dropEffect="none";return;}
+  e.dataTransfer.dropEffect="move";
+  (t.after?t.L[t.L.length-1]:t.L[0]).classList.add(t.after?"dropafter":"dropbefore");
+});
+$("#pw").addEventListener("drop",e=>{
+  if(!pwRowDrag)return;
+  e.preventDefault();
+  const t=pwRowAt(e),d=pwRowDrag;pwRowDrag=null;pwRowMarks();
+  if(!t||t.r.o===d.o)return;
+  const list=PW_LISTS[d.kind]();
+  moveRows(d.kind,list.indexOf(d.o),list.indexOf(t.r.o),t.after,true);
+});
+$("#pw").addEventListener("dragend",e=>{
+  const el=e.target.closest&&e.target.closest(".pw-rr");if(el)el.draggable=false;
+  pwRowDrag=null;pwRowMarks();
+});
 
 /* ---------- PATCH tab: the LV1 patch window ----------
    Modelled on LV1's Patch page (MixerGUI/TopBar/PatchTab: IPatchTab,
@@ -2699,7 +2746,8 @@ function pwRender(){
       else if(kind==="dev"){t=r.dev;cls=" l";}
       else if(kind==="type")t=r.x.type==="Out"?"":r.x.type;
       else if(kind==="num")t=r.x.lbl;
-      return `<div class="pw-rc${cls}" style="${st}"${attr}>${esc(t)}</div>`;
+      const grip=kind==="name"&&PW_LISTS[r.kind]&&(ri===0||PW.rows[ri-1].o!==r.o)?`<span class="pw-rg" data-pwrg title="Drag to reorder">⋮⋮</span>`:""; // on a strip's first leg
+      return `<div class="pw-rc${cls}" style="${st}"${attr}>${grip}${esc(t)}</div>`;
     }).join("");
     return `<div class="pw-rr" data-pwr="${ri}" style="top:${ri*cell}px;height:${cell}px">${cells}</div>`;
   }).join("");
@@ -3099,9 +3147,9 @@ function insertStrip(k,i){
    whole selection (kept in order). Patches / captions re-flow on render;
    stage links are by name, so they survive any reorder. */
 let rowDrag=null;
-function moveRows(k,from,target,after){
+function moveRows(k,from,target,after,one){ // one: just this row (PATCH, where the list selection is not shown)
   const list=listFor[k]();
-  const idxs=(sel[k].has(from)&&sel[k].size>1)?[...sel[k]].sort((a,b)=>a-b):[from];
+  const idxs=(!one&&sel[k].has(from)&&sel[k].size>1)?[...sel[k]].sort((a,b)=>a-b):[from];
   if(idxs.includes(target))return;
   let at=target+(after?1:0);
   const moving=idxs.map(x=>list[x]);
