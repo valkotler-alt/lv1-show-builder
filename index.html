@@ -1976,9 +1976,12 @@ async function openPlugUi(k,i,x){
   const cc=(st?(v.s||v.x||v.m):(v.m||v.x||v.s))||pack.ccs[0];
   const P=pack.params[cc],noedit=!ix.defaults[cc];
   // view-only variants (default preset without RealWorld values) show the ParamXML initial values
+  // ParamXML value of a param: ResetValue, else InitialValue (engine conversion) -- also what an "R" token means
+  const iniv=q=>{const iv=q.reset&&typeof q.reset[1]==="number"?q.reset:q.init;if(!iv||iv[1]===null||typeof iv[1]!=="number")return null;
+      return iv[0]==="state"?puRW(q,iv[1]):iv[0]==="double"?puRW(q,iv[1]*PU_GRAN):iv[1];};
   const defs=noedit?P.map(q=>{const iv=q.init;if(!iv||iv[1]===null||typeof iv[1]!=="number")return null;
       return iv[0]==="state"?puRW(q,iv[1]):iv[0]==="double"?puRW(q,iv[1]*PU_GRAN):iv[1];})
-    :ix.defaults[cc].map(t=>t==="*"?null:+t);
+    :ix.defaults[cc].map((t,j)=>t==="*"?null:t==="R"?(P[j]?iniv(P[j]):null):+t);
   const p=(r.params||[])[x]||{};
   closePlugUi();
   PU={k,i,x,name,cc,pack,P,noedit,pIdx:Object.fromEntries(P.map((q,j)=>[q.n,j])),defs,
@@ -7311,6 +7314,2169 @@ PU_GRAPHS["RVerb:groups"]=()=>{
   const all=["Damp-Hi","Damp-Low","EQ Wide-Hi","EQ Wide-Low"],tab=puVal("PARAM_SCREEN_TAB");
   const show=tab===1?(puVal("PARAM_DISPLAY_DUMPING_HF")===0?"Damp-Hi":"Damp-Low"):tab===3?(puVal("PARAM_DISPLAY_EQ_HF")===0?"EQ Wide-Hi":"EQ Wide-Low"):null;
   return {hide:all.filter(g=>g!==show),show:show?[show]:[]};
+};
+
+// API-2500 display functions — Plugins/API/API_2500/Code/Plugin/API_2500Alg.cpp (PrepareDisplayFunctionsMapSelf :2502)
+// All four switch on (int32)RealWorld (toggle scales, RW = index 0..6). INF_SYMBOL = "Inf" (Waves-incs.h).
+PU_DISP["API-2500:DisplayRatio"] = v => ["1.5:1","2:1","3:1","4:1","6:1","10:1","Inf"][Math.trunc(v)] ?? ""; // :2692 (no default case)
+PU_DISP["API-2500:DisplayAttack"] = v => ["0.03","0.1","0.3","1","3","10","30"][Math.trunc(v)] ?? "0.03"; // :2661 (default = case 0)
+PU_DISP["API-2500:DisplayRelease"] = v => ["0.05","0.1","0.2","0.5","1","2","Var"][Math.trunc(v)] ?? "0.05"; // :2724
+PU_DISP["API-2500:DisplayLink"] = v => ["IND","50%","60%","70%","80%","90%","100%"][Math.trunc(v)] ?? "IND"; // :2831
+
+// API-550 — Plugins/API/API_550/Code/Plugin/API_550Alg.cpp (map :98-102)
+PU_DISP["API-550:DisplayFreq"] = v => (+v).toFixed(1) + "Hz"; // :2081 DisplayFloat1 + "Hz"
+PU_DISP["API-550:DisplayKHzFreq"] = v => (+v).toFixed(1) + "kHz"; // :2091
+// :2101 compares the Float1 text with "800" (never true for the 0.8..12.5 kHz list) -> always kHz
+PU_DISP["API-550:DisplayMFBFreq"] = v => (+v).toFixed(1) + ((+v).toFixed(1) === "800" ? "Hz" : "kHz");
+PU_DISP["API-550:DisplayGain"] = v => (v > 0 ? "+" : "") + (+v).toFixed(0) + " dB"; // :2117
+
+// ARPlates — Plugins/AbbeyRoad/ARPlates/Code/Plugin/ARPlatesAlg.cpp (map :1036-1041)
+PU_DISP["ARPlates:DisplayAnalog"] = v => v != 0 ? (+v).toFixed(1) : "Off"; // :2492
+// :2508 > -48 -> Float1, > -144 -> Float0, else NEGATIVE_INF_SYMBOL ("-Inf", Waves-incs.h:30); no unit
+PU_DISP["ARPlates:DisplayInputOutput"] = v => v > -48 ? (+v).toFixed(1) : v > -144 ? (+v).toFixed(0) : "-Inf";
+
+// Abbey Road Chambers — Plugins/AbbeyRoad/ARChambers/Code/Plugin/ARChambersAlg.cpp (map :1619-1635)
+PU_DISP["Abbey Road Chambers:DisplayAnalog"] = v => v != 0 ? (+v).toFixed(1) : "Off  "; // :4225 (trailing spaces as in C++)
+PU_DISP["Abbey Road Chambers:DisplayMix"] = v => (+v).toFixed(0) + " %"; // :4274
+PU_DISP["Abbey Road Chambers:DisplayInputOutput"] = v => // :4241
+  v > -48 ? (+v).toFixed(1) + " dB" : v > -144 ? (+v).toFixed(0) + " dB" : "-Inf";
+PU_DISP["Abbey Road Chambers:DisplayChamberFilter"] = v => v == 1 ? "Flat" : (+v).toFixed(0) + " Hz"; // :4044
+PU_DISP["Abbey Road Chambers:DisplayHighCut"] = v => v == 14 ? "Flat" : (+v).toFixed(2) + " kHz"; // :4032
+PU_DISP["Abbey Road Chambers:DisplayFeedBack"] = v => v == 0 ? "Off" : (+v).toFixed(1) + " %"; // :4262 kFeedbackAmountOffValue = 0
+
+// Abbey Road RS124 — Plugins/AbbeyRoad/RS124/Code/Plugin/RS124Alg.cpp (map in PrepareDisplayFunctionsMapSelf)
+PU_DISP["Abbey Road RS124:DisplayRecovery"] = v => (+v + 1).toFixed(0); // :2153 DisplayFloat0(dRW + 1)
+
+// Abbey Road Studio 3 — Plugins/Nx/NxStudioBase/NxStudioBaseAlg.cpp (map :1080)
+PU_DISP["Abbey Road Studio 3:DisplayLevel"] = v => (+v).toFixed(1) + " dB"; // DisplayLevel :1688 = DisplayFloat1 << " dB"
+
+// Abbey Road Vinyl — Plugins/AbbeyRoad/ARVinyl/Code/Plugin/ARVinylAlg.cpp (map :1486); consts ARVinylConsts.h
+PU_DISP["Abbey Road Vinyl:DisplayFloat1_dB"] = v => (+v).toFixed(1) + "dB"; // :1641 (no space)
+PU_DISP["Abbey Road Vinyl:NoiseAndCrackleLevel"] = v => v == -48 ? "-INF" : (+v).toFixed(1) + "dB"; // :2327, kPlayBackMinGain = -48
+PU_DISP["Abbey Road Vinyl:DisplayRate"] = v => v == 0 ? "Off" : (+v).toFixed(1); // :1729, kRateLevelOff = 0
+PU_DISP["Abbey Road Vinyl:DisplayWowDepthOff"] = v => v == -50 ? "Off" : (+v).toFixed(1); // :1701, kWowLevelOff = -50
+PU_DISP["Abbey Road Vinyl:DisplayViewMode"] = v => { const i = Math.trunc(v); return i === 0 ? "Time" : i === 1 ? "Bars" : (+v).toFixed(0); }; // :2500 eW_ViewMode_Time/Bars
+
+// Aphex AX — Plugins/Misc/Aphex/Code/Plugin/AphexAlg.cpp; Noise_Reduction_Minimum_level = -48.9 (AphexConsts.h:36)
+PU_DISP["Aphex AX:DisplayNoiseReduction"] = v => v < -48.9 ? "Off" : v == 0 ? "Orig." : (+v).toFixed(1); // :3034
+
+// Atlas Reverb — Plugins/Renaissance/Reverb/Code/Plugin/ReverbAlg.cpp (map :6264-6286)
+PU_DISP["Atlas Reverb:DisplayReverbTime"] = v => v < 10 ? (+v).toFixed(2) : (+v).toFixed(1); // :7049
+PU_DISP["Atlas Reverb:DisplayWetDry"] = v => Math.trunc(v) === 100 ? (+v).toFixed(0) + " " : (+v).toFixed(1); // :7523
+PU_DISP["Atlas Reverb:DisplaySize"] = v => Math.min(100, 1 + 99 * (v - 0.5) * 0.90909).toFixed(1); // :7359 size -> %
+
+// AudioTrack — Plugins/Gold/AudioTrack/Code/Plugin/AudioTrackAlg.cpp (map :1401); enum BELL,LP_SHELV,HP_SHELV,LP,HP (AudioTrackConsts.h:51)
+// band 1-3: case LP literally shows "Hi-Pass" (sic, as in C++); band 4 shows "Low-Pass". default -> "Bell".
+PU_DISP["AudioTrack:DisplayFilterType"] = v => ["Bell","Low-Shelf","Hi-Shelf","Hi-Pass"][Math.trunc(v)] ?? "Bell"; // :181
+PU_DISP["AudioTrack:DisplayFilterTypeBand4"] = v => ["Bell","Low-Shelf","Hi-Shelf","Low-Pass"][Math.trunc(v)] ?? "Bell"; // :205
+PU_DISP["AudioTrack:DisplayGate"] = v => v <= -80 ? "-Inf" : (+v).toFixed(1); // :149
+PU_DISP["AudioTrack:DisplayFloor"] = v => v <= -80 ? "-Inf" : (+v).toFixed(1); // :128
+PU_DISP["AudioTrack:DisplayInput"] = v => v <= -400 ? "-Inf" : (+v).toFixed(1); // :117
+PU_DISP["AudioTrack:DisplayAttack"] = v => (+v).toFixed(v < 10 ? 2 : v < 1000 ? 1 : 0); // :1571
+PU_DISP["AudioTrack:DisplayRelease"] = v => v == 10000 ? "10K" : (+v).toFixed(0); // :1589
+PU_DISP["AudioTrack:DisplayCompRatio"] = v => (+v).toFixed(v < 10 ? 2 : 1); // :1557
+
+// BB Tubes — Plugins/Magma/BB_Tubes/Code/Plugin/BB_TubesAlg.cpp (map :906)
+PU_DISP["BB Tubes:DisplayUpSampleType"] = v => { const i = Math.trunc(v); return i === 0 ? "Off" : i === 1 ? "X2" : i === 2 ? "X4" : "X8"; }; // :947
+PU_DISP["BB Tubes:DisplayFloat0_Percent"] = v => (+v).toFixed(0) + "%"; // :917
+
+/* Bass Rider display functions (Plugins/Misc/BassRider/Code/Plugin/BassRiderAlg.cpp) */
+// DisplayBadGate (:548): ScaleState/10 with 1 decimal (state 0..1000 -> 0.0..100.0)
+PU_DISP["Bass Rider:DisplayBadGate"] = (v, q) => (puState(q, v) / 10).toFixed(1);
+
+/* Berzerk Distortion display functions (Plugins/Distortion/BerzerkDistortion/Code/Plugin/BerzerkDistortionAlg.cpp) */
+// DisplayFlavour (:4106) by eCreativeInternalPreset_* order (BerzerkDistortionConsts.h:14), default "Unknown"
+PU_DISP["Berzerk Distortion:DisplayFlavour"] = v =>
+  ["Buzzed", "Trippy", "Dizzy", "Frenzy", "Squashed", "Freaky", "Clipped", "Loony", "Fuzzed", "Crushed"][Math.trunc(v)] ?? "Unknown";
+// DisplayNote (:4335) kcNotes[int(dRW)] (BerzerkDistortionConsts.h:150)
+PU_DISP["Berzerk Distortion:DisplayNote"] = v =>
+  ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][Math.trunc(v)] ?? "";
+
+// Brauer Motion — Plugins/Brauer/BrauerMotion/Code/Plugin/BrauerMotionAlg.cpp (map :6702); consts BrauerMotionConsts.h
+PU_DISP["Brauer Motion:DisplayGainOff"] = v => v == -48 ? "Off" : (+v).toFixed(1) + " dB"; // :7304, kdGainOffdB = -48
+PU_DISP["Brauer Motion:DisplayDynamicFreqHz"] = v => (+v).toFixed(0) + " Hz"; // :7417
+PU_DISP["Brauer Motion:DisplayTrigger"] = v => ["Off","Simple","1-Shot","Re-Trigger","S-Trig Reverse","AtoB"][Math.trunc(v)] ?? "Unknown"; // :6885 eTriggerStates
+PU_DISP["Brauer Motion:DisplayLPOff"] = v => v == 21357 ? "Off" : (+v).toFixed(0) + "Hz"; // :7348, kdLPOffHz = 21357
+PU_DISP["Brauer Motion:DisplayHPOffHz"] = v => v == 16 ? "Off" : (+v).toFixed(0) + "Hz"; // :7319, kdHPOffHz = 16
+PU_DISP["Brauer Motion:DisplayPath"] = v => ["Classic","Circle","Circle Phase","X Lights"][Math.trunc(v)] ?? ""; // :7059 kInternalPresetName (BrauerMotionAlg.h:18)
+PU_DISP["Brauer Motion:DisplayPercent"] = v => (+v).toFixed(1) + " %"; // :7425
+// :7363 kBarsDiscriteValueArray (Consts.h:541); 0 bars -> "None"
+PU_DISP["Brauer Motion:DisplayBars"] = v => { const b = [0,1,2,3,4,5,6,7,8,12,15,16,20,24,28,32][Math.trunc(v)]; return b === undefined ? "" : b === 0 ? "None" : String(b); };
+// :7383 kBeatsDiscriteValueArray {0.01,1.02,1.04,1.08,1.16,1.32,1.64}: int part = num, fraction*100 = den
+PU_DISP["Brauer Motion:DisplayBeats"] = v => { const i = Math.trunc(v); return i === 0 ? "None" : i >= 1 && i <= 6 ? "1 / " + (1 << i) : ""; };
+
+/* Butch Vig Vocals display functions (Plugins/Artist/Butch_Vig_Vocals/Code/Plugin/Butch_Vig_VocalsAlg.cpp) */
+// DisplayMinValueHzAsOff (:181): state 0 -> "Off", else DisplayFloat1WithHz
+PU_DISP["Butch Vig Vocals:DisplayMinValueHzAsOff"] = (v, q) => Math.round(puState(q, v)) === 0 ? "Off" : (+v).toFixed(1) + " Hz";
+// DisplayMinValuePercentAsOff (:195): state 0 -> "Off", else Float1 + " %"
+PU_DISP["Butch Vig Vocals:DisplayMinValuePercentAsOff"] = (v, q) => Math.round(puState(q, v)) === 0 ? "Off" : (+v).toFixed(1) + " %";
+// DisplayMinValueKHzAsOffInt (:210): state 0 -> "Off", else DisplayFloat0WithKHz (" KHz")
+PU_DISP["Butch Vig Vocals:DisplayMinValueKHzAsOffInt"] = (v, q) => Math.round(puState(q, v)) === 0 ? "Off" : (+v).toFixed(0) + " KHz";
+// DisplayMaxValueHzAsOff (:224): round(state) == GRAN -> "Off", else DisplayFloat1WithHz
+PU_DISP["Butch Vig Vocals:DisplayMaxValueHzAsOff"] = (v, q) => Math.round(puState(q, v)) === PU_GRAN ? "Off" : (+v).toFixed(1) + " Hz";
+
+// C1 — Plugins/Gold/C1/Code/Plugin/C1Alg.cpp (enums C1Alg.h:192-236)
+PU_DISP["C1:DisplayFloor"] = v => v != 0 ? (20 * Math.log10(Math.abs(v))).toFixed(1) + (v < 0 ? " N" : "") : "-Inf"; // :315
+PU_DISP["C1:DisplayGate"] = (v, q) => puState(q, v) ? (+v).toFixed(1) : "-Inf"; // :270 (ScaleState 0 -> -Inf)
+PU_DISP["C1:DisplayGateMode"] = v => Math.trunc(v) === 1 ? "Expander" : "Gate"; // :360
+PU_DISP["C1:DisplayMakeup"] = v => Math.trunc(v) === 1 ? "Peak Ref" : "Low Ref"; // :502
+PU_DISP["C1:DisplaySideChain"] = v => ["Wideband", "Sidechain", "Split"][Math.trunc(v)] ?? "Wideband"; // :453
+PU_DISP["C1:DisplayTypes"] = v => [" Low-Pass", " Band-Pass", " Hi-Pass", " Band-Reject"][Math.trunc(v)] ?? " Low-Pass"; // :428 (leading space is in the C++)
+PU_DISP["C1:DisplaySideChainSource"] = v => ["Stereo", "L -> R", "R -> L"][Math.trunc(v)] ?? "Stereo"; // :337
+
+/* C4 display functions (Plugins/Gold/C4/Code/Plugin/C4Alg.cpp) */
+// DisplayKnee (:31): 0 -> Soft, >=0.75 -> Hard, else Float2
+PU_DISP["C4:DisplayKnee"] = v => v == 0 ? "Soft" : v >= 0.75 ? "Hard" : (+v).toFixed(2);
+// DisplayArc (:14): 1 -> Manual, default ARC
+PU_DISP["C4:DisplayArc"] = v => Math.trunc(v) === 1 ? "Manual" : "ARC";
+// DisplayMode (:43): 1 -> Opto, default Electro
+PU_DISP["C4:DisplayMode"] = v => Math.trunc(v) === 1 ? "Opto" : "Electro";
+
+/* C6 display functions (Plugins/Misc/C6/Code/Plugin/C6Alg.cpp) */
+// DisplayKnee (:47): 0 -> Soft, >=0.75 -> Hard, else Float2
+PU_DISP["C6:DisplayKnee"] = v => v == 0 ? "Soft" : v >= 0.75 ? "Hard" : (+v).toFixed(2);
+// DisplayArc (:30): 1 -> Manual, default ARC
+PU_DISP["C6:DisplayArc"] = v => Math.trunc(v) === 1 ? "Manual" : "ARC";
+// DisplayMode (:59): 1 -> Opto, default Electro
+PU_DISP["C6:DisplayMode"] = v => Math.trunc(v) === 1 ? "Opto" : "Electro";
+// DisplaySideChainSelector (:75): nonzero -> External
+PU_DISP["C6:DisplaySideChainSelector"] = v => Math.trunc(v) ? "External" : "Internal";
+// DisplaySplitOrWideBand (:93): nonzero -> Wide
+PU_DISP["C6:DisplaySplitOrWideBand"] = v => Math.trunc(v) ? "Wide" : "Split";
+
+// CLA EchoSphere — same alg as CLA Epic: Plugins/Artist/CLA_Epic/Code/Plugin/CLA_EpicAlg.cpp; SyncInds in CLA_EpicConsts.h:128
+PU_DISP["CLA EchoSphere:DisplayLvl"] = v => v == -48 ? "-INF" : (+v).toFixed(1); // :1516
+// :1489 DisplayRTValues(values) — index when < size, else DisplayFloat1; :1497/:1498 plate lists
+const claEchoRT = a => v => (v >= 0 && Math.trunc(v) < a.length) ? a[Math.trunc(v)] : (+v).toFixed(1);
+PU_DISP["CLA EchoSphere:DisplayPlateRTLow"] = claEchoRT(["0.25", "1", "4"]);
+PU_DISP["CLA EchoSphere:DisplayPlateRTHigh"] = claEchoRT(["0.25", "1", "4"]);
+// :1433 — "1/4 " carries a trailing space in the C++; default -> DisplayFloat1
+PU_DISP["CLA EchoSphere:DisplaySyncValues"] = v => ["1/16 Triplet", "1/32 Dotted", "1/16", "1/8 Triplet", "1/16 Dotted", "1/8", "1/4 Triplet",
+  "1/8 Dotted", "1/4 ", "1/2 Triplet", "1/4 Dotted", "1/2", "1/1 Triplet", "1/2 Dotted", "1"][Math.trunc(v)] ?? (+v).toFixed(1);
+
+// CLA Epic — Plugins/Artist/CLA_Epic/Code/Plugin/CLA_EpicAlg.cpp (map :1532); consts CLA_EpicConsts.h
+PU_DISP["CLA Epic:DisplayLvl"] = v => v == -48 ? "-INF" : (+v).toFixed(1); // :1516
+// :1433, SyncInds (Consts.h:128). Note "1/4 " carries a trailing space in the C++.
+PU_DISP["CLA Epic:DisplaySyncValues"] = v => ["1/16 Triplet","1/32 Dotted","1/16","1/8 Triplet","1/16 Dotted","1/8","1/4 Triplet","1/8 Dotted",
+  "1/4 ","1/2 Triplet","1/4 Dotted","1/2","1/1 Triplet","1/2 Dotted","1"][Math.trunc(v)] ?? (+v).toFixed(1);
+PU_DISP["CLA Epic:DisplaySpaceDecay"] = v => v == 3.5 ? "non-lin" : (+v).toFixed(2) + " ms"; // :1418, kReverbSpaceDecayMaxValue = 3.5
+// :1489 DisplayRTValues: index into the per-reverb list, else DisplayFloat1 (lists :1497-1504)
+const claEpicRT = a => v => (v >= 0 && Math.trunc(v) < a.length) ? a[Math.trunc(v)] : (+v).toFixed(1);
+PU_DISP["CLA Epic:DisplayPlateRTLow"]  = claEpicRT(["0.25","1","4"]);
+PU_DISP["CLA Epic:DisplayPlateRTHigh"] = claEpicRT(["0.25","1","4"]);
+PU_DISP["CLA Epic:DisplayRoomRTLow"]   = claEpicRT(["0.25","1","1.5"]);
+PU_DISP["CLA Epic:DisplayRoomRTHigh"]  = claEpicRT(["0.25","1","1.5"]);
+PU_DISP["CLA Epic:DisplayHallRTLow"]   = claEpicRT(["0.25","1","2"]);
+PU_DISP["CLA Epic:DisplayHallRTHigh"]  = claEpicRT(["0.25","1","2"]);
+PU_DISP["CLA Epic:DisplaySpaceRTLow"]  = claEpicRT(["0.25","1","1.5"]);
+PU_DISP["CLA Epic:DisplaySpaceRTHigh"] = claEpicRT(["0.25","1","1.6"]);
+
+// CLA Nx — Plugins/Nx/NxStudioBase/NxStudioBaseAlg.cpp (map :1076-1081)
+PU_DISP["CLA Nx:DisplayLevel"] = v => (+v).toFixed(1) + " dB"; // :1688
+PU_DISP["CLA Nx:DisplayAmbienceTrim"] = v => (+v).toFixed(0) + " %"; // :1697
+
+// CLA Unplugged — Plugins/Artist/CLA_Unplugged/Code/Plugin/WCCLA_Unplugged_ALG.cpp (map :541)
+// DisplayPreDelay :584 indexes by ScaleState (toggleRanges -> state = index); out of range leaves the text empty.
+PU_DISP["CLA Unplugged:DisplayPreDelay"] = (v, q) => { const s = puState(q, v);
+  return s >= 0 ? (["64T","64","64D","32T","32","32D","16T","16","16D","8T","8","8D","4T","4"][Math.trunc(s)] ?? "") : ""; };
+
+// CLA-76 — Plugins/CLA/CLA_76/Code/Plugin/CLA_76Alg.cpp (map :1450); RealWorld is attenuation 60..0
+PU_DISP["CLA-76:Display1176Gain"] = v => v >= 60 ? "-Inf" : v == 0 ? (+v).toFixed(1) : (-Math.abs(v)).toFixed(1);
+
+// Center — Plugins/Misc/Center/Code/Plugin/CenterAlg.cpp
+PU_DISP["Center:DisplayFloat0_Off"] = v => v > -30 ? (+v).toFixed(1) + " dB" : "Off"; // :293 (despite the name: Float1 + " dB")
+
+// Curves AQ — Plugins/Restoration/Curves/Code/Plugin/CurvesAlg.cpp; kdGainOutMindB = -48 (CurvesConsts.h:1260)
+PU_DISP["Curves AQ:DisplayGainOut"] = v => v == -48 ? "-Inf" : (+v).toFixed(1) + "dB"; // :16316
+PU_DISP["Curves AQ:DisplayFloat1WithPrecent"] = v => (+v).toFixed(1) + "%"; // :16542
+// :16582 — fixed-width two-sided label (space counts as in the C++ literals)
+PU_DISP["Curves AQ:DisplayStaticToDynamic"] = v => v < 0 ? "100%" + " ".repeat(35) + (100 + +v).toFixed(1) + "%"
+  : v > 0 ? (100 - v).toFixed(1) + "%" + " ".repeat(36) + "100%" : "100%" + " ".repeat(33) + "100%";
+
+// Curves Equator — Plugins/Restoration/Curves/Code/Plugin/CurvesAlg.cpp; kdGainOutMindB = -48 (CurvesConsts.h:1260)
+PU_DISP["Curves Equator:DisplayGainOut"] = v => v == -48 ? "-Inf" : (+v).toFixed(1) + "dB"; // :16316
+PU_DISP["Curves Equator:DisplayFloat1WithPrecent"] = v => (+v).toFixed(1) + "%"; // :16542
+
+// Curves Resolve — Plugins/Restoration/Curves/Code/Plugin/CurvesAlg.cpp (map :8809); consts CurvesConsts.h
+PU_DISP["Curves Resolve:DisplayGainOut"] = v => v == -48 ? "-Inf" : (+v).toFixed(1) + "dB"; // :16316, kdGainOutMindB = -48
+PU_DISP["Curves Resolve:DisplayStrength"] = v => (+v).toFixed(0) + " %"; // :16550
+PU_DISP["Curves Resolve:DisplayFloat1WithPrecent"] = v => (+v).toFixed(1) + "%"; // :16542
+// :16666 cCurves_ALG::DisplayModMenu: PARAM_MOD_MENU_DISPLAY's text at this state (its DisplayStrings),
+// plus " *" when state > 0 and PARAM_MOD_MODIFIED_ASTERISK_DISPLAY is set.
+PU_DISP["Curves Resolve:DisplayModMenu"] = (v, q) => {
+  const s = puState(q, v), qd = puQ("PARAM_MOD_MENU_DISPLAY");
+  let t = qd && qd.dstr && qd.dstr[String(s)] !== undefined ? qd.dstr[String(s)] : (+s).toFixed(0);
+  if (s > 0 && puVal("PARAM_MOD_MODIFIED_ASTERISK_DISPLAY") > 0) t += " *";
+  return t;
+};
+
+// DPR-402 — Plugins/Harman/dpr402/Code/Plugin/dpr402Alg.cpp (map :2626-2648); enums dpr402Consts.h
+PU_DISP["DPR-402:DisplayFloat1_dB"] = v => (+v).toFixed(1) + " dB"; // :3239
+PU_DISP["DPR-402:DisplayNoiseOff"] = v => v == 0 ? "Off" : (+v).toFixed(1); // :3289 kNoiseLevelOff = 0
+PU_DISP["DPR-402:DisplayCompAttack"] = v => ["50 us","~100 us","200 us","~500 us","1 ms","~2.5 ms","5 ms","~10 ms",
+  "20 ms","~50 ms","100 ms"][Math.trunc(v)] ?? "50 us"; // :2840 eAttack0..10 (default -> eAttack0)
+PU_DISP["DPR-402:DisplayCompRelease"] = v => ["5 ms","~10 ms","20 ms","~50 ms","100 ms","~250 ms","500 ms","~1 sec",
+  "2 sec","~4 sec","Auto"][Math.trunc(v)] ?? "5 ms"; // :2884 eRelease0..10 (default -> eRelease0)
+PU_DISP["DPR-402:DisplayThresholdAndPeakLimLevel"] = v => v == 0 ? "Out" : (+v).toFixed(1) + " dB"; // :3314
+PU_DISP["DPR-402:DisplayCompression"] = v => v == 20 ? "Inf" : v == 1 ? "Out" : (+v).toFixed(1); // :3638
+PU_DISP["DPR-402:DisplayDeEss"] = v => v == 9 ? "Max" : v == 1 ? "Out" : (+v).toFixed(1) + " dB"; // :3656
+PU_DISP["DPR-402:DisplayDeEssFreq"] = v => (+v).toFixed(2) + " kHz"; // :3247
+PU_DISP["DPR-402:DisplayFloat1_Percent"] = v => (+v).toFixed(1) + "%"; // :3203
+PU_DISP["DPR-402:DisplayJumperMode"] = v => ["Normal Comp","HF Re-Emph Comp","HF Re-Emph Comp +","LF Re-Emph Comp",
+  "LF Re-Emph Comp +","Wide LF Cntrl Comp","Narrow LF Cntrl Comp","Expander Wide","Expander LF Only",
+  "Expander LF Cntrl","Exapnder HF Cntrl"][Math.trunc(v)] ?? ""; // :3011 eJumperMode01..11 (sic "Exapnder"); no default -> empty
+
+/* DTS Neural UpMix display functions (Plugins/Surround/dtsUM/Code/Plugin/dtsUMAlg.cpp) */
+// DisplayDepthAndWidth (:533): int(dRW) == 0 -> "Auto", else Float0 + " %"
+PU_DISP["DTS Neural UpMix:DisplayDepthAndWidth"] = v => { const p = Math.trunc(v); return p === 0 ? "Auto" : p.toFixed(0) + " %"; };
+
+// DeEsser — Plugins/Gold/DeEsser/Code/Plugin/DeEsserAlg.cpp (map :48)
+PU_DISP["DeEsser:DisplayMode"] = v => Math.trunc(v) ? "HighPass" : "BandPass"; // :56
+
+// Doppler — Plugins/FX/Doppler/Code/Plugin/DopplerAlg.cpp (map :97)
+PU_DISP["Doppler:Display_0_to_100"] = v => (v * 100).toFixed(0) + " %";
+
+// Doubler — Plugins/Transform/Doubler/Code/Plugin/DoublerAlg.cpp (map :169); kONE_CHANNEL,kSUM,kDIFF (DoublerConsts.h:10)
+PU_DISP["Doubler:DisplaySource1"] = v => ["L","L+R","L-R"][Math.trunc(v)] ?? ""; // :210
+PU_DISP["Doubler:DisplaySource2"] = v => ["R","R+L","R-L"][Math.trunc(v)] ?? ""; // :228
+
+// EMO-D5 — Plugins/EMO/EMO_D5/Code/Plugin/EMO_D5Alg.cpp; the EMO-D5 ccs (CDYM/CDYS/CDLM/CDLS) are not PSE -> DisplayGate (:1795)
+PU_DISP["EMO-D5:DisplayGate"] = (v, q) => puState(q, v) ? (+v).toFixed(1) : "-Inf";
+
+// EMO-IEM (Nx head tracker, ML4S) — Plugins/Misc/Nx/Code/Plugin/NxAlg.cpp (map :3575-3607) -> cHeadTrackDisplay in
+// NxDisplay.h; enums NxConsts.h. Each two-way switch has "default:" on its first case.
+const emoIemPick = (...s) => v => s[Math.trunc(v)] ?? s[0];
+PU_DISP["EMO-IEM:DisplayToggle"] = emoIemPick("Off", "On"); // NxDisplay.h:26
+// cNxALG::DisplaySensor (NxAlg.cpp:9367) shows the live tracking-sensor name — engine state the page lacks -> empty
+PU_DISP["EMO-IEM:DisplaySensor"] = () => "";
+PU_DISP["EMO-IEM:DisplayReload"] = () => "Reload Conf File"; // :271
+PU_DISP["EMO-IEM:DisplayChannel"] = emoIemPick("I", "II"); // :184
+PU_DISP["EMO-IEM:DisplayFormat"] = emoIemPick("LRC", "LCR"); // :255 eOutputFormatLRC/LCR
+PU_DISP["EMO-IEM:DisplayWallFilterType"] = emoIemPick("O1 LPF", "O2 LPF", "O2 NBPS", "O2 BPS"); // :200 kO1_LPF..kO2_BPS
+PU_DISP["EMO-IEM:DisplayCalib"] = () => ""; // :360 body commented out -> empty
+PU_DISP["EMO-IEM:DisplayPinnaMode"] = emoIemPick("PinnaV2", "Release"); // :416
+// :106 eEQCompOff..eEQCompFIR; default -> "Transparent" (eEQCompFull branch is #ifdef'd out)
+PU_DISP["EMO-IEM:DisplayEQCompMode"] = v => ["Off", "Transparent", "Transparent2", "Externalized", "FIR"][Math.trunc(v)] ?? "Transparent";
+PU_DISP["EMO-IEM:DisplayLockTracking"] = emoIemPick("Locked", "Tracking"); // :58
+PU_DISP["EMO-IEM:DisplayViewRotate"] = () => "<\\^/>"; // :506 constant label (C literal "<\\^/>" = <\^/>)
+PU_DISP["EMO-IEM:DisplayMode"] = emoIemPick("Moving Sources", "Moving Head"); // :223
+PU_DISP["EMO-IEM:DisplayInterpType"] = emoIemPick("Linear", "Lagrange"); // :239
+PU_DISP["EMO-IEM:DisplayMute"] = emoIemPick("On", "Mute"); // :90
+PU_DISP["EMO-IEM:DisplayRotationOrder"] = emoIemPick("RYP", "PYR", "RPY", "YPR", "YRP", "PRY", "FromExt"); // :294
+PU_DISP["EMO-IEM:DisplaySharedMemStat"] = emoIemPick("Bad", "Good"); // :367
+PU_DISP["EMO-IEM:DisplayPercentage"] = v => (+v).toFixed(0) + " %"; // :431
+PU_DISP["EMO-IEM:DisplayLibraryType"] = emoIemPick("FloatingPoint", "FixedPoint"); // :74
+PU_DISP["EMO-IEM:DisplayHeadType"] = emoIemPick("Geometric", "3D Object"); // :42
+PU_DISP["EMO-IEM:DisplaySensorFusionMode"] = emoIemPick("Simple", "Smart"); // :450
+PU_DISP["EMO-IEM:DisplayHeadphoneEQMode"] = emoIemPick("Off", "On", "SoloEQ"); // :397
+
+/* EMO-Q4 display functions (Plugins/EMO/EMO_Q4/Code/Plugin/EMO_Q4Alg.cpp PrepareDisplayFunctionsMapSelf) */
+/* DisplayFreqAndNote: Common_Sources/Modules/FFTAnalyzerModule/CommonFFTAnalyzerT.cpp:3412 (registered via mFFTAnalyzerModule)
+   "<Hz> Hz (<note><oct>[ +/-N Cents])" — note from log2(f) - 4.03136, cents rounded, C wraps up at >= 1150 cents */
+PU_DISP["EMO-Q4:DisplayFreqAndNote"] = v => {
+  if (!(v > 0)) return (+v).toFixed(0) + " Hz";
+  const l = Math.log2(v) - 4.03136;
+  let oct = Math.floor(l), c = Math.round(1200 * (l - oct)), n = "C";
+  if (c >= 1150) { c -= 1200; oct++; }
+  else if (c >= 50) { const j = Math.floor((c + 50) / 100); n = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][j]; c -= j * 100; }
+  return (+v).toFixed(0) + " Hz (" + n + oct + (c ? " " + (c > 0 ? "+" : "-") + Math.abs(c) + " Cents" : "") + ")";
+};
+
+/* EddieKramer BA display functions — static chainer base WCStaticChainer_ALG::PrepareDisplayFunctionsMapSelf
+   (Plugins/Chainers/Static_Chainers_Common/Code/Plugin/WCStaticChainerAlg.cpp:2241), via Plugins/Artist/EK_Bass/Code/Plugin/WCEK_Bass_ALG.cpp:234 */
+// DisplayOutputGain (WCStaticChainerAlg.cpp:2352): Float1 of 2.777777777778 * dRW
+PU_DISP["EddieKramer BA:DisplayOutputGain"] = v => (2.777777777778 * v).toFixed(1);
+// DisplayMinMax (WCStaticChainerAlg.cpp:2318): 100 -> "Max", 0 -> "Min", else Float1
+PU_DISP["EddieKramer BA:DisplayMinMax"] = v => v == 100 ? "Max" : v == 0 ? "Min" : (+v).toFixed(1);
+
+// EddieKramer DR — WCEK_Drums_ALG chains to WCStaticChainer_ALG::PrepareDisplayFunctionsMapSelf:
+// Plugins/Chainers/Static_Chainers_Common/Code/Plugin/WCStaticChainerAlg.cpp (map :2244). VU_DISPLAYED_20_DB = -20 (Waves-incs.h:58)
+PU_DISP["EddieKramer DR:DisplayFXControl"] = v => v == -20 ? "Min" : v == 0 ? "Max" : (5 * v + 100).toFixed(1); // :2359
+PU_DISP["EddieKramer DR:DisplayOutputGain"] = v => (2.777777777778 * v).toFixed(1); // :2352
+PU_DISP["EddieKramer DR:DisplayMinMax"] = v => v == 100 ? "Max" : v == 0 ? "Min" : (+v).toFixed(1); // :2318
+
+// EddieKramer FX — WCEK_FX_ALG chains to WCStaticChainer_ALG::PrepareDisplayFunctionsMapSelf:
+// Plugins/Chainers/Static_Chainers_Common/Code/Plugin/WCStaticChainerAlg.cpp (map :2244). VU_DISPLAYED_20_DB = -20 (Waves-incs.h:58)
+PU_DISP["EddieKramer FX:DisplayFXControl"] = v => v == -20 ? "Min" : v == 0 ? "Max" : (5 * v + 100).toFixed(1); // :2359
+PU_DISP["EddieKramer FX:DisplayOutputGain"] = v => (2.777777777778 * v).toFixed(1); // :2352
+PU_DISP["EddieKramer FX:DisplayMinMax"] = v => v == 100 ? "Max" : v == 0 ? "Min" : (+v).toFixed(1); // :2318
+
+/* EddieKramer GT display functions — static chainer base WCStaticChainer_ALG::PrepareDisplayFunctionsMapSelf
+   (Plugins/Chainers/Static_Chainers_Common/Code/Plugin/WCStaticChainerAlg.cpp:2241), via Plugins/Artist/EK_Guitar/Code/Plugin/WCEK_Guitar_ALG.cpp */
+// DisplayFXControl (WCStaticChainerAlg.cpp:2359): VU_DISPLAYED_20_DB (-20) -> "Min", 0 -> "Max", else Float1 of 5*dRW + 100
+PU_DISP["EddieKramer GT:DisplayFXControl"] = v => v == -20 ? "Min" : v == 0 ? "Max" : (5 * v + 100).toFixed(1);
+// DisplayOutputGain (WCStaticChainerAlg.cpp:2352): Float1 of 2.777777777778 * dRW
+PU_DISP["EddieKramer GT:DisplayOutputGain"] = v => (2.777777777778 * v).toFixed(1);
+// DisplayMinMax (WCStaticChainerAlg.cpp:2318): 100 -> "Max", 0 -> "Min", else Float1
+PU_DISP["EddieKramer GT:DisplayMinMax"] = v => v == 100 ? "Max" : v == 0 ? "Min" : (+v).toFixed(1);
+
+// EddieKramer VC — WCEK_Vocal_ALG adds only DisplayFlavor; the rest come from WCStaticChainer_ALG (Plugins/Chainers/Static_Chainers_Common/Code/Plugin/WCStaticChainerAlg.cpp); VU_DISPLAYED_20_DB = -20
+PU_DISP["EddieKramer VC:DisplayFXControl"] = v => v == -20 ? "Min" : v == 0 ? "Max" : (5 * v + 100).toFixed(1); // :2359
+PU_DISP["EddieKramer VC:DisplayOutputGain"] = v => (2.777777777778 * v).toFixed(1); // :2352
+PU_DISP["EddieKramer VC:DisplayMinMax"] = v => v == 100 ? "Max" : v == 0 ? "Min" : (+v).toFixed(1); // :2318
+
+// Enigma — Plugins/FX/Enigma/Code/Plugin/EnigmaAlg.cpp (map :26-32); enums EnigmaConsts.h
+// :94 TRIANGLE, SINEWAVE, SQUARE, SAW_DOWN, SAW_UP (no default -> empty)
+PU_DISP["Enigma:DisplayWaveType"] = v => ["Triangle", "Sine", "Square", "Saw-Down", "Saw-Up"][Math.trunc(v)] ?? "";
+PU_DISP["Enigma:Display3Digits"] = v => v < 10 ? (+v).toFixed(2) : v < 100 ? (+v).toFixed(1) : (+v).toFixed(0); // :140
+// :120 STEREO, MONO, MONO_AND_PHASE ("Mono+" + utf8_oslash_symbol); no default -> empty
+PU_DISP["Enigma:DisplayWetMode"] = v => ["Stereo", "Mono", "Mono+ø"][Math.trunc(v)] ?? "";
+PU_DISP["Enigma:DisplayMultiplier"] = v => "x" + (+v).toFixed(2); // :180
+
+/* F6 display functions (Plugins/EMO/F6/Code/Plugin/F6Alg.cpp + the FFT analyzer module) */
+// DisplayCutType (F6Alg.cpp:2680): eCut_6..eCut_24 (F6Consts.h:222); no default -> empty
+PU_DISP["F6:DisplayCutType"] = v => ["6", "12", "18", "24"][Math.trunc(v)] ?? "";
+// DisplayRTAMagnitude (CommonFFTAnalyzerT.cpp:3467): "RTA: " + DisplayFloat1_dB
+PU_DISP["F6:DisplayRTAMagnitude"] = v => "RTA: " + (+v).toFixed(1) + " dB";
+// DisplayAnalyzerOctave (CommonFFTAnalyzerT.cpp:3587): eAnalyzerOctave1_1..1_24, default "Unknown"
+PU_DISP["F6:DisplayAnalyzerOctave"] = v => ["Oct", "1/3", "1/6", "1/12", "1/24"][Math.trunc(v)] ?? "Unknown";
+/* DisplayFreqAndNote: Common_Sources/Modules/FFTAnalyzerModule/CommonFFTAnalyzerT.cpp:3412 (registered via mFFTAnalyzerModule)
+   "<Hz> Hz (<note><oct>[ +/-N Cents])" — note from log2(f) - 4.03136, cents rounded, C wraps up at >= 1150 cents */
+PU_DISP["F6:DisplayFreqAndNote"] = v => {
+  if (!(v > 0)) return (+v).toFixed(0) + " Hz";
+  const l = Math.log2(v) - 4.03136;
+  let oct = Math.floor(l), c = Math.round(1200 * (l - oct)), n = "C";
+  if (c >= 1150) { c -= 1200; oct++; }
+  else if (c >= 50) { const j = Math.floor((c + 50) / 100); n = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][j]; c -= j * 100; }
+  return (+v).toFixed(0) + " Hz (" + n + oct + (c ? " " + (c > 0 ? "+" : "-") + Math.abs(c) + " Cents" : "") + ")";
+};
+
+// Feedback Hunter — Plugins/Live/FeedbackHunter/Code/Plugin/FeedbackHunterAlg.cpp (map :2267)
+PU_DISP["Feedback Hunter:DisplayFloat0Percents"] = v => (+v).toFixed(0) + " %"; // :2537
+
+// GEQ — Plugins/Misc/GEQ/Code/Plugin/GEQAlg.cpp (eInputSelector in GEQConsts.h:29)
+// :12 DisplayBandGain functor: RW/100 * Scale param (6/12/18 dB), blank in calibration mode
+PU_DISP["GEQ:DisplayBandGain"] = v => {
+  const s = puVal("PARAM_SCALE"), cal = puVal("PARAM_CALIBRATION_MODE");
+  if (s === null || cal === null) return "";
+  return cal != 0 ? "" : (v / 100.0 * s).toFixed(1);
+};
+// :728 / :743 — index clamped to [0, eNumOfInputSelectors-1]; the mono list has 4 names (array of 8, rest null)
+const geqDispSel = a => v => a[Math.min(7, Math.max(0, Math.trunc(v)))] ?? "";
+PU_DISP["GEQ:DisplayInputSelector"] = geqDispSel(["Off", "L-In", "R-In", "LSC-In", "RSC-In", "L-Out", "R-Out", "L+R"]);
+PU_DISP["GEQ:DisplayInputSelectorMono"] = geqDispSel(["Off", "In", "SC-In", "Out"]);
+// :604 DisplayWithUnits(DisplayFloat1, "ms") — no space
+PU_DISP["GEQ:DisplayWithMS"] = v => (+v).toFixed(1) + "ms";
+// :71 DisplaySuggest functor + IsSuggestAvailable (:809) + routingTableStructForSuggest (:766).
+// Engine state the page lacks: mHasError assumed false, TC animation ("Wait...") assumed not running.
+// Valid routings: RTA1 L-In/L-Out vs RTA2 R-In/LSC/RSC -> mask 0; RTA1 R-In/R-Out vs RTA2 L-In/LSC/RSC -> mask 1.
+PU_DISP["GEQ:DisplaySuggest"] = () => {
+  const s0 = Math.trunc(puVal("PARAM_INPUT_SELCTOR0") ?? 0), s1 = Math.trunc(puVal("PARAM_INPUT_SELCTOR1") ?? 0);
+  const mask = (s0 === 1 || s0 === 5) && [2, 3, 4].includes(s1) ? 0 : (s0 === 2 || s0 === 6) && [1, 3, 4].includes(s1) ? 1 : -1;
+  const avail = +(puVal("PARAM_DIFF_MODE") ?? 0) !== 0 && +(puVal("PARAM_CALIBRATION_MODE") ?? 0) === 0 && mask >= 0;
+  if (!avail) return "N/A";
+  if (mask === 1) return "Suggest R";
+  return /M$/.test(PU.cc || "") ? "Suggest" : "Suggest L"; // mono ccs (SHQM/GQMM) have 1 output
+};
+
+// GTRAmp — Plugins/Guitar/GuitarAmp/Code/Plugin/GuitarAmpAlg.cpp (map :5623-5632)
+PU_DISP["GTRAmp:DisplayOutGain"] = v => v < 0 ? "Off" : (+v).toFixed(1); // :567
+PU_DISP["GTRAmp:DisplayTone"] = v => (v - 5).toFixed(1); // :467 0..10 knob shown as -5..+5
+
+// GTRToolRack — Plugins/Guitar/GTRToolRack/Code/Plugin/GTRToolRackAlg.cpp (map :3871); kModeCascade/Parallel/Split
+// (GTRToolRackConsts.h:86); no default -> empty
+PU_DISP["GTRToolRack:DisplayMode"] = v => ["Cascade", "Parallel", "Split"][Math.trunc(v)] ?? "";
+
+// GTRTuner — Plugins/Guitar/GTRTuner/Code/Plugin/GTRTunerAlg.cpp:71; enum order from GTRTunerAlg.h:12 (differs from the switch order)
+PU_DISP["GTRTuner:DisplayTuningMode"] = v => ["Chromatic", "Guitar", "Bass", "Drop D", "Open G", "Open D", "Open E", "Dbl Drop D", "Guitar Flat",
+  "Open C", "Open Dm", "DADGAD", "Open Am", "Open F#", "Open Dmaj7", "Open Cmaj7", "User Defined"][Math.trunc(v)] ?? "Chromatic";
+
+// H-Comp — Plugins/Hybrid/HComp/Code/Plugin/HCompAlg.cpp (note enum HCompConsts.h:35)
+PU_DISP["H-Comp:DisplayAttack"] = v => v < 10 ? (+v).toFixed(2) : v < 100 ? (+v).toFixed(1) : (+v).toFixed(0); // :120
+PU_DISP["H-Comp:DisplayReleaseBPM"] = v => ["1/64T", "1/64", "1/64D", "1/32T", "1/32", "1/32D", "1/16T", "1/16", "1/16D", "1/8T", "1/8", "1/8D",
+  "1/4T", "1/4", "1/4D", "1/2T", "1/2", "1/2D", "1B", "2B"][Math.trunc(v)] ?? ""; // :210 (no default case)
+
+// H-Delay — Plugins/Hybrid/HBDelay/Code/Plugin/HBDelayAlg.cpp (map :68-77)
+// :260 DisplayFreq: >= 10k -> x0.001 Float1 "k", >= 1k -> x0.001 Float2 "k", else Float0
+const hDelayDispFreq = f => f >= 1000 ? (f >= 10000 ? (f * 0.001).toFixed(1) : (f * 0.001).toFixed(2)) + "k" : (+f).toFixed(0);
+PU_DISP["H-Delay:DisplayHiFreq"] = v => v > 20000 ? "Off" : hDelayDispFreq(v) + "Hz"; // :281
+PU_DISP["H-Delay:DisplayLoFreq"] = v => v < 20 ? "Off" : hDelayDispFreq(v) + "Hz"; // :296
+PU_DISP["H-Delay:DisplayRate"] = v => v >= 1000 ? (v * 0.001).toFixed(2) + "k" // :323
+  : v >= 100 ? (+v).toFixed(0) : v >= 10 ? (+v).toFixed(1) : (+v).toFixed(2);
+
+// H-EQ — Plugins/Hybrid/HEq/Code/Plugin/HEqAlg.cpp (map :236); enums HEqConsts.h:606 (USV..DIG2) / :619 (Analog_Off, Analog_USV..)
+PU_DISP["H-EQ:DisplayBand"] = v => ["US Vint","UK Vint 1","UK Vint 2","US Modrn","UK Modrn","Digital 1","Digital 2"][Math.trunc(v)] ?? "US Vint"; // :7736
+PU_DISP["H-EQ:DisplayBandAnalog"] = v => ["Off","US Vint","UK Vint 1","UK Vint 2","US Modrn","UK Modrn"][Math.trunc(v)] ?? "US Vint"; // :7766 (default -> US Vint)
+PU_DISP["H-EQ:DisplayPercents"] = v => (+v).toFixed(0) + " %"; // :7961
+
+// H-Reverb — Plugins/Hybrid/HRev/Code/Plugin/HRevAlg.cpp (map :2620-2640); consts HRevConsts.h
+PU_DISP["H-Reverb:DisplayCompRouting"] = v => ["Duck","Comp","DeEss"][Math.trunc(v)] ?? "Duck"; // :4444 eCompressorModes
+PU_DISP["H-Reverb:DisplayLPHP"] = v => Math.trunc(v) === 1 ? "Reso Hpf" : "Reso Lpf"; // :4490
+PU_DISP["H-Reverb:DisplayEchoType"] = v => ["6Tap 8th FB","2Tap 3/4","4Tap 3/4","6Tap RollUp","6Tap 32th 123","6Tap St 246","2Tap St 8th"][Math.trunc(v)] ?? "6Tap 8th FB"; // :4586
+PU_DISP["H-Reverb:DisplayGainMute"] = v => Math.trunc(v) <= -59.95 ? "Off" : (+v).toFixed(1); // :4329, kfMuteGain = -59.95 (compared after int cast)
+// :4666, snap-grid enum HRevConsts.h:364 (ONETWENTYEIGHTS_NOTE = 0 .. FOUR_BARS = 22); unknown -> empty
+PU_DISP["H-Reverb:DisplayGrid"] = v => ["1/128","1/96","3/256","1/64","1/48","3/128","1/32","1/24","3/64","1/16","1/12","3/32",
+  "1/8","1/6","3/16","1/4","1/3","3/8","1/2","1B","2B","3B","4B"][Math.trunc(v)] ?? "";
+PU_DISP["H-Reverb:DisplayERType"] = v => (v + 1).toFixed(0); // :4618 DisplayFloat0(RW + 1)
+
+/* IMPusher display functions (Plugins/Artist/IMPusher/Code/Plugin/IMPusherAlg.cpp) */
+// DisplayRBassFreq (:285): switch on int(ScaleState) over eRbassNote (IMPusherConsts.h:19); default Float1(state)
+PU_DISP["IMPusher:DisplayRBassFreq"] = (v, q) => {
+  const s = puState(q, v);
+  return ["D1", "D#1", "E", "F", "F#", "G", "G#", "A", "A#", "B", "C", "C#", "D2", "D#2"][Math.trunc(s)] ?? (+s).toFixed(1);
+};
+
+// IR-1 — Plugins/Misc/IR1/Code/Plugin/IR1DisplayFuncs.cpp; kUnifiedMaxIRTime = 6 s, IR_DESCRIPTION_WaveField = 100 (IR1Consts.h)
+PU_DISP["IR-1:DisplayWetDry"] = v => v >= 100 ? (+v).toFixed(0) : v >= 9.95 ? (+v).toFixed(1) : v >= 1.999 ? (+v).toFixed(2) : (+v).toFixed(3); // :321
+PU_DISP["IR-1:DisplayLevel"] = (v, q) => puState(q, v) == 0 ? "Off" : (+v).toFixed(1); // :264 (ScaleState 0 -> Off)
+PU_DISP["IR-1:DisplayMillisecInt"] = v => (+v).toFixed(0) + "ms"; // :54
+PU_DISP["IR-1:DisplayMillisecFloat1"] = v => (+v).toFixed(1) + "ms"; // :64
+PU_DISP["IR-1:DisplayConvLen"] = v => v <= 0 ? "" : v >= 6 ? "Full" : (+v).toFixed(2) + "s"; // :276
+PU_DISP["IR-1:DisplayReverbTime"] = v => v <= 0 ? "" : (v < 0.01 || v > 20) ? "NA" : (+v).toFixed(1) + "s"; // :22
+PU_DISP["IR-1:DisplayChannels"] = v => v <= 0 ? "" : v == 100 ? "Bformat" : (+v).toFixed(0); // :339
+PU_DISP["IR-1:DisplaySize"] = v => v < 0.01 ? "" : (v >= 1000000 || v < 1) ? "NA" : Math.ceil(v).toFixed(0); // :145
+PU_DISP["IR-1:DisplayDistance"] = v => v <= 0 ? "" : v > 300 ? "NA" : Math.ceil(v).toFixed(0) + "m"; // :247
+PU_DISP["IR-1:DisplaySeconds"] = v => v <= 0 ? "" : (+v).toFixed(2) + "s"; // :39
+PU_DISP["IR-1:DisplayCPUMode"] = v => ["Full CPU", "Low CPU"][Math.trunc(v)] ?? (+v).toFixed(0); // :74
+PU_DISP["IR-1:DisplayConvStart"] = v => v < 0 ? "" : (+v).toFixed(3) + "s"; // :293
+PU_DISP["IR-1:DisplayDryGain"] = v => v == -60 ? "-inf" : (+v).toFixed(1); // :375
+PU_DISP["IR-1:DisplayMute"] = v => ["Mute off", "Mute on"][Math.trunc(v)] ?? (+v).toFixed(0); // :387
+
+/* IR-L display functions (Plugins/Misc/IR1/Code/Plugin/IR1DisplayFuncs.cpp, registered in IR1Alg.cpp) */
+// DisplayWetDry (:321): 3-4 significant digits
+PU_DISP["IR-L:DisplayWetDry"] = v => (+v).toFixed(v >= 100 ? 0 : v >= 9.95 ? 1 : v >= 1.999 ? 2 : 3);
+// DisplayConvLen (:276): <=0 empty, >= kUnifiedMaxIRTime (6.0 s, IR1Consts.h:36) "Full", else Float2 + "s"
+PU_DISP["IR-L:DisplayConvLen"] = v => v <= 0 ? "" : v >= 6.0 ? "Full" : (+v).toFixed(2) + "s";
+// DisplayReverbTime (:22): <=0 empty, <0.01 or >20 "NA", else Float1 + "s"
+PU_DISP["IR-L:DisplayReverbTime"] = v => v <= 0 ? "" : v < 0.01 || v > 20 ? "NA" : (+v).toFixed(1) + "s";
+// DisplayChannels (:339): <=0 empty, IR_DESCRIPTION_WaveField (100) "Bformat", else Float0
+PU_DISP["IR-L:DisplayChannels"] = v => v <= 0 ? "" : v == 100 ? "Bformat" : (+v).toFixed(0);
+// DisplaySize (:145): <0.01 empty, >=1e6 or <1 "NA", else Float0(ceil)
+PU_DISP["IR-L:DisplaySize"] = v => v < 0.01 ? "" : v >= 1000000 || v < 1 ? "NA" : Math.ceil(v).toFixed(0);
+// DisplayDistance (:247): <=0 empty, >300 "NA", else Float0(ceil) + "m"
+PU_DISP["IR-L:DisplayDistance"] = v => v <= 0 ? "" : v > 300 ? "NA" : Math.ceil(v).toFixed(0) + "m";
+// DisplaySeconds (:39): <=0 empty, else Float2 + "s"
+PU_DISP["IR-L:DisplaySeconds"] = v => v <= 0 ? "" : (+v).toFixed(2) + "s";
+// DisplayCPUMode (:74): eCPU_BestQ / eCPU_LowCPU (IR1Consts.h:166), default Float0
+PU_DISP["IR-L:DisplayCPUMode"] = v => ["Full CPU", "Low CPU"][Math.trunc(v)] ?? (+v).toFixed(0);
+// DisplayMillisecFloat1 (:64) / DisplayMillisecInt (:54)
+PU_DISP["IR-L:DisplayMillisecFloat1"] = v => (+v).toFixed(1) + "ms";
+PU_DISP["IR-L:DisplayMillisecInt"] = v => (+v).toFixed(0) + "ms";
+// DisplayConvStart (:293): <0 empty, else Float3 + "s"
+PU_DISP["IR-L:DisplayConvStart"] = v => v < 0 ? "" : (+v).toFixed(3) + "s";
+
+// IRLive (IR1 code base, ccs CIE*) — Plugins/Misc/IR1/Code/Plugin/IR1Alg.cpp (map :2963), body IR1DisplayFuncs.cpp:321
+PU_DISP["IRLive:DisplayWetDry"] = v => (+v).toFixed(v >= 100 ? 0 : v >= 9.95 ? 1 : v >= 1.999 ? 2 : 3);
+
+// InPhase — Plugins/Misc/InPhase/Code/Plugin/InPhaseAlg.cpp (map :1300); kMatch_L_R, kMatch_LR_SCHAIN (InPhaseConsts.h:74)
+PU_DISP["InPhase:DisplayMatch"] = v => Math.trunc(v) === 1 ? "CH1/2" : "CH1"; // :2877
+PU_DISP["InPhase:DisplayMatch2"] = v => Math.trunc(v) === 1 ? "SideCh" : "CH2"; // :2897
+
+/* J37 display functions (Plugins/AbbeyRoad/TJ37/Code/Plugin/TJ37Alg.cpp; Off levels from TJ37Consts.h:152-157) */
+// DisplayFloat1_dB (:1340): Float1 + "dB" (no space)
+PU_DISP["J37:DisplayFloat1_dB"] = v => (+v).toFixed(1) + "dB";
+// DisplayHPOff (:1348): kHPOffFrequency 16 -> "Off", else Float1 + "Hz"
+PU_DISP["J37:DisplayHPOff"] = v => v == 16 ? "Off" : (+v).toFixed(1) + "Hz";
+// DisplayLPOff (:1361): kLPOffFrequency 21357 -> "Off"
+PU_DISP["J37:DisplayLPOff"] = v => v == 21357 ? "Off" : (+v).toFixed(1) + "Hz";
+// DisplayNoiseOff (:1400): kNoiseLevelOff -24 -> "Off", else Float1
+PU_DISP["J37:DisplayNoiseOff"] = v => v == -24 ? "Off" : (+v).toFixed(1);
+// DisplayWowDepthOff (:1387) / DisplayFlutterDepthOff (:1374): -50 -> "Off", else Float1 + "dB"
+PU_DISP["J37:DisplayWowDepthOff"] = v => v == -50 ? "Off" : (+v).toFixed(1) + "dB";
+PU_DISP["J37:DisplayFlutterDepthOff"] = v => v == -50 ? "Off" : (+v).toFixed(1) + "dB";
+// DisplayPercentOff (:1269): 0 -> "Off", else Float0 + "%"
+PU_DISP["J37:DisplayPercentOff"] = v => v == 0 ? "Off" : (+v).toFixed(0) + "%";
+// DisplayDelaydBOff (:1282): kDelayLeveldBOff -40 -> "Off", else Float1 + "dB"
+PU_DISP["J37:DisplayDelaydBOff"] = v => v == -40 ? "Off" : (+v).toFixed(1) + "dB";
+// DisplayDelayTimeSync (:1295): 0..18 note values, nothing otherwise
+PU_DISP["J37:DisplayDelayTimeSync"] = v =>
+  ["1/64T", "1/64", "1/32T", "1/64D", "1/32", "1/16T", "1/32D", "1/16", "1/8T", "1/16D", "1/8", "1/4T", "1/8D", "1/4",
+   "1/2T", "1/4D", "1/2", "1/2D", "Whole"][v] ?? "";
+
+/* JJP-Bass display functions — static chainer base WCStaticChainer_ALG::PrepareDisplayFunctionsMapSelf
+   (Plugins/Chainers/Static_Chainers_Common/Code/Plugin/WCStaticChainerAlg.cpp:2241), via Plugins/Artist/JJP_Bass/Code/Plugin/WCJJP_Bass_ALG.cpp:234 (own DisplayInputGain) */
+// DisplayInputGain (Plugins/Artist/JJP_Bass/Code/Plugin/WCJJP_Bass_ALG.cpp:331): Float1 of dRW / 0.36
+PU_DISP["JJP-Bass:DisplayInputGain"] = v => (v / 0.36).toFixed(1);
+// DisplayMinMax (WCStaticChainerAlg.cpp:2318): 100 -> "Max", 0 -> "Min", else Float1
+PU_DISP["JJP-Bass:DisplayMinMax"] = v => v == 100 ? "Max" : v == 0 ? "Min" : (+v).toFixed(1);
+
+// JJP-Cymb-Perc — WCJJP_Perc_ALG chains to WCStaticChainer_ALG::PrepareDisplayFunctionsMapSelf:
+// Plugins/Chainers/Static_Chainers_Common/Code/Plugin/WCStaticChainerAlg.cpp (map :2244)
+PU_DISP["JJP-Cymb-Perc:DisplayMinMax"] = v => v == 100 ? "Max" : v == 0 ? "Min" : (+v).toFixed(1); // :2318
+
+// JJP-Drums — WCJJP_Drums_ALG chains to WCStaticChainer_ALG::PrepareDisplayFunctionsMapSelf:
+// Plugins/Chainers/Static_Chainers_Common/Code/Plugin/WCStaticChainerAlg.cpp (map :2244)
+PU_DISP["JJP-Drums:DisplayMinMax"] = v => v == 100 ? "Max" : v == 0 ? "Min" : (+v).toFixed(1); // :2318
+PU_DISP["JJP-Drums:DisplayMinMaxWithFloat0"] = v => v == 100 ? "Max" : v == 0 ? "Min" : (+v).toFixed(0); // :2330
+
+// JJP-Guitars — WCJJP_Guitar_ALG adds only DisplayFlavor; DisplayMinMax from WCStaticChainer_ALG (Plugins/Chainers/Static_Chainers_Common/Code/Plugin/WCStaticChainerAlg.cpp:2318)
+PU_DISP["JJP-Guitars:DisplayMinMax"] = v => v == 100 ? "Max" : v == 0 ? "Min" : (+v).toFixed(1);
+
+/* JJP-Strings-Keys display functions — static chainer base WCStaticChainer_ALG::PrepareDisplayFunctionsMapSelf
+   (Plugins/Chainers/Static_Chainers_Common/Code/Plugin/WCStaticChainerAlg.cpp:2241), via Plugins/Artist/JJP_Strings/Code/Plugin/WCJJP_Strings_ALG.cpp:281 */
+// DisplayMinMax (WCStaticChainerAlg.cpp:2318): 100 -> "Max", 0 -> "Min", else Float1
+PU_DISP["JJP-Strings-Keys:DisplayMinMax"] = v => v == 100 ? "Max" : v == 0 ? "Min" : (+v).toFixed(1);
+
+// JJP-Vocals — WCJJP_Vocal_ALG adds only DisplayFlavor; these come from WCStaticChainer_ALG (Plugins/Chainers/Static_Chainers_Common/Code/Plugin/WCStaticChainerAlg.cpp)
+PU_DISP["JJP-Vocals:DisplayMinMax"] = v => v == 100 ? "Max" : v == 0 ? "Min" : (+v).toFixed(1); // :2318
+PU_DISP["JJP-Vocals:DisplayMinMaxWithFloat0"] = v => v == 100 ? "Max" : v == 0 ? "Min" : (+v).toFixed(0); // :2330
+
+// Kaleidoscopes — Plugins/FX/Kaleidoscopes/Code/Plugin/KaleidoscopesAlg.cpp; consts KaleidoscopesConsts.h
+// (kdHPFMinFreqOff 16 / kdLPFMaxFreqOff 22000 :127; kdHPOffHz 16 / kdLPOffHz 20000 :459)
+const kaleidoDispOffHz = off => v => v == off ? "Off" : (+v).toFixed(0) + " Hz";
+PU_DISP["Kaleidoscopes:DisplayPrePostLPOffHz"] = kaleidoDispOffHz(22000); // :6783
+PU_DISP["Kaleidoscopes:DisplayPrePostHPOffHz"] = kaleidoDispOffHz(16); // :6768
+PU_DISP["Kaleidoscopes:DisplayHPOffHz"] = kaleidoDispOffHz(16); // :6738
+PU_DISP["Kaleidoscopes:DisplayLPOffHz"] = kaleidoDispOffHz(20000); // :6753
+PU_DISP["Kaleidoscopes:DisplayUserLFO"] = v => ["Sine", "Triangle", "Absolute Sine", "Random", "Input", "Sidechain"][Math.trunc(v)] ?? "Sine"; // :6865
+PU_DISP["Kaleidoscopes:DisplayTrigger"] = v => ["Off", "Simple", "ReTrig", "OneShot"][Math.trunc(v)] ?? "Off"; // :6820
+PU_DISP["Kaleidoscopes:DisplayPercent"] = v => (+v).toFixed(0) + " %"; // :7016
+// :6635 kBarsBeatsDisplayValues (:124)
+PU_DISP["Kaleidoscopes:DisplayBarsBeats"] = v => ["16", "15", "14", "13", "12", "9", "8", "7", "6", "5", "4", "3", "2", "1", "1/2d", "1/2",
+  "1/4d", "1/2t", "1/4", "1/8d", "1/4t", "1/8", "1/16d", "1/8t", "1/16", "1/32d", "1/16t", "1/32", "1/64d", "1/32t", "1/64", "1/64t"][Math.trunc(v)] ?? "";
+PU_DISP["Kaleidoscopes:DisplayTriggerSustainMS"] = v => v == 0 ? "Off" : (+v).toFixed(1) + " ms"; // :7099 (DisplayFloat1WithMS)
+
+// KramerHLS — Plugins/EKModeling/KramerHLS/Code/Plugin/KramerHLSAlg.cpp; RealWorld is a 1-based index into a fixed list (blank when out of range)
+const kramerHlsDispList = a => v => a[Math.trunc(v) - 1] ?? "";
+PU_DISP["KramerHLS:DisplayMidBandFreq"] = kramerHlsDispList(["0.7", "1", "1.4", "2", "2.8", "3.5", "4.5", "6"]); // :1777
+PU_DISP["KramerHLS:DisplayLowFreq50HzGain"] = kramerHlsDispList(["400Hz", "250Hz", "120Hz", "60Hz", "0", "-3", "-6", "-9", "-12", "-15"]); // :1758
+PU_DISP["KramerHLS:DisplayHighBandGain"] = kramerHlsDispList(["-16", "-12", "-8", "-4", "0", "4", "8", "12"]); // :1796
+PU_DISP["KramerHLS:DisplayInGainKnob"] = kramerHlsDispList(["20", "30", "40", "50", "60", "70"]); // :1834
+
+// KramerPIE — Plugins/EKModeling/KramerPIE/Code/Plugin/KramerPIEAlg.cpp (map :1976)
+PU_DISP["KramerPIE:DisplayRatio"] = v => ["1:1","2:1","3:1","5:1","Limit"][Math.trunc(v)] ?? ""; // :2382 (no default)
+PU_DISP["KramerPIE:DisplayRelease"] = v => ["1","2","4","8","16","32"][Math.trunc(v)] ?? "1"; // :2408 (default = case 0)
+
+// KramerTape — Plugins/EKModeling/KramerTape/Code/Plugin/KramerTapeAlg.cpp (map :1207)
+PU_DISP["KramerTape:DisplayNoiseReduction"] = v => v < -40 ? "Off" : (+v).toFixed(1); // :291
+PU_DISP["KramerTape:DisplaySpeed"] = v => ["7.5ips","15ips"][Math.trunc(v)] ?? ""; // :201
+PU_DISP["KramerTape:DisplayBias"] = v => ["Nominal Bias","Over Bias"][Math.trunc(v)] ?? ""; // :261
+PU_DISP["KramerTape:DisplayPercentOff"] = v => v == 0 ? "Off" : (+v).toFixed(1); // :301
+
+// L1 — Plugins/Gold/L1/Code/Plugin/L1Alg.cpp (map :1551)
+PU_DISP["L1:DisplayRelease"] = v => v == 1000 ? "1000" : (+v).toFixed(2); // :237
+
+/* L2 display functions (Plugins/Masters/L2/Code/Plugin/L2Alg.cpp; enums L2Alg.h:10-45) */
+// DisplayQuantize (L2Alg.cpp:293-347): QUANTIZE_24..16, default "24 Bits"
+PU_DISP["L2:DisplayQuantize"] = v => ["24 Bits", "22 Bits", "20 Bits", "18 Bits", "16 Bits"][Math.trunc(v)] ?? "24 Bits";
+// DisplayIDRType (L2Alg.cpp:293-347): NO_DITHER / IDR1 / IDR2, default "None"
+PU_DISP["L2:DisplayIDRType"] = v => ["None", "Type1", "Type2"][Math.trunc(v)] ?? "None";
+// DisplayNS (L2Alg.cpp:293-347): NO_NOISE_SHAPING / MODERATE / NORMAL / PURIST, default "None"
+PU_DISP["L2:DisplayNS"] = v => ["None", "Moderate", "Normal", "Ultra"][Math.trunc(v)] ?? "None";
+
+// L3 Multi — Plugins/Misc/L3/Code/Plugin/L3Alg.cpp (map :1611-1619); enums L3Consts.h; every switch defaults to case 0
+PU_DISP["L3 Multi:DisplayQuantize"] = v => ["24 Bits", "22 Bits", "20 Bits", "18 Bits", "16 Bits"][Math.trunc(v)] ?? "24 Bits"; // :3697
+PU_DISP["L3 Multi:DisplayIDRType"] = v => ["None", "Type1", "Type2"][Math.trunc(v)] ?? "None"; // :3563
+PU_DISP["L3 Multi:DisplayNS"] = v => ["None", "Moderate", "Normal", "Ultra"][Math.trunc(v)] ?? "None"; // :3668
+PU_DISP["L3 Multi:DisplayBehaviour"] = v => ["ARC", "Aggressive", "Warm", "Scaled", "Manual"][Math.trunc(v)] ?? "ARC"; // :3635
+
+/* L3 Ultra display functions (Plugins/Misc/L3/Code/Plugin/L3Alg.cpp; enums L3Consts.h) */
+// DisplayProfile (:3587) by prf* enum order (L3Consts.h:61: Basic first), default "Extreme Analog"
+PU_DISP["L3 Ultra:DisplayProfile"] = v =>
+  ["Basic Profile", "Extreme Analog", "Semi Separated", "Wide Band ARC", "Wide Band Manual", "Cosy and Warm",
+   "Loud and Proud", "Lean and Mean", "Low Level Loudness"][Math.trunc(v)] ?? "Extreme Analog";
+// DisplayQuantize (L3Alg.cpp:3563-3697): QUANTIZE_24..16, default "24 Bits"
+PU_DISP["L3 Ultra:DisplayQuantize"] = v => ["24 Bits", "22 Bits", "20 Bits", "18 Bits", "16 Bits"][Math.trunc(v)] ?? "24 Bits";
+// DisplayIDRType (L3Alg.cpp:3563-3697): NO_DITHER / IDR1 / IDR2, default "None"
+PU_DISP["L3 Ultra:DisplayIDRType"] = v => ["None", "Type1", "Type2"][Math.trunc(v)] ?? "None";
+// DisplayNS (L3Alg.cpp:3563-3697): NO_NOISE_SHAPING / MODERATE / NORMAL / PURIST, default "None"
+PU_DISP["L3 Ultra:DisplayNS"] = v => ["None", "Moderate", "Normal", "Ultra"][Math.trunc(v)] ?? "None";
+
+// L3-LL Multi (R3PM/R3PS) — Plugins/Misc/L3_IIR/Code/Plugin/L3_IIRAlg.cpp; enums L3_IIRConsts.h:80/:179/:189/:198
+PU_DISP["L3-LL Multi:DisplayQuantize"] = v => ["24 Bits", "22 Bits", "20 Bits", "18 Bits", "16 Bits"][Math.trunc(v)] ?? "24 Bits"; // :4331
+PU_DISP["L3-LL Multi:DisplayIDRType"] = v => ["None", "Type1", "Type2"][Math.trunc(v)] ?? "None"; // :4197
+PU_DISP["L3-LL Multi:DisplayNS"] = v => ["None", "Moderate", "Normal", "Ultra"][Math.trunc(v)] ?? "None"; // :4302
+PU_DISP["L3-LL Multi:DisplayBehaviour"] = v => ["ARC", "Aggressive", "Warm", "Scaled", "Manual"][Math.trunc(v)] ?? "ARC"; // :4269
+
+// L3-LL Ultra (ccs R3G*) — Plugins/Misc/L3_IIR/Code/Plugin/L3_IIRAlg.cpp (map :1990); enums L3_IIRConsts.h:89 / :179 / :189 / :198
+// All switch on (int32)RealWorld; toggle scale RW = state index. Defaults fall to the first entry.
+PU_DISP["L3-LL Ultra:DisplayProfile"] = v => ["Basic Profile","Extreme Analog","Semi Separated","Wide Band ARC","Wide Band Manual",
+  "Cosy and Warm","Loud and Proud","Lean and Mean","Low Level Loudness"][Math.trunc(v)] ?? "Basic Profile"; // :4221
+PU_DISP["L3-LL Ultra:DisplayQuantize"] = v => ["24 Bits","22 Bits","20 Bits","18 Bits","16 Bits"][Math.trunc(v)] ?? "24 Bits"; // :4331
+PU_DISP["L3-LL Ultra:DisplayIDRType"] = v => ["None","Type1","Type2"][Math.trunc(v)] ?? "None"; // :4197
+PU_DISP["L3-LL Ultra:DisplayNS"] = v => ["None","Moderate","Normal","Ultra"][Math.trunc(v)] ?? "None"; // :4302
+
+// L4 Ultramaximizer — Plugins/Masters/L4/Code/Plugin/L4Alg.cpp (map :1987, plus m_LUFS.PrepareDisplayFunctionsMapSelf);
+// enums L4Alg.h:46 (QUANTIZE_24..16) / :56 (NO_NOISE_SHAPING..PURIST_NS) / :76 (NO_DITHER, IDR1, IDR2)
+PU_DISP["L4 Ultramaximizer:DisplayQuantize"] = v => ["24 Bits","22 Bits","20 Bits","18 Bits","16 Bits"][Math.trunc(v)] ?? "24 Bits"; // :597
+PU_DISP["L4 Ultramaximizer:DisplayIDRType"] = v => ["None","Type1","Type2"][Math.trunc(v)] ?? "None"; // :628
+PU_DISP["L4 Ultramaximizer:DisplayNS"] = v => ["None","Moderate","Normal","Ultra"][Math.trunc(v)] ?? "None"; // :651
+PU_DISP["L4 Ultramaximizer:DisplayFloat2x"] = v => "x" + (+v).toFixed(2); // :580
+// Common_Sources/Modules/LUFS/cLUFS.cpp:1439 (a meter: shows the stored value, no live loudness here)
+PU_DISP["L4 Ultramaximizer:DisplayExtendedDigit"] = v => (+v).toFixed(0);
+
+// LinEQ — Plugins/Masters/LinEQ/Code/Plugin/LinEQAlg.cpp (map :3343-3348); enums LinEQConsts.h; switches default to case 0
+// :174 kWindowHanningOdd, kWindowRect, kWindowBlackman, kWindowKaiser (Kaiser shown as "Normal" on purpose)
+PU_DISP["LinEQ:DisplayWindowType"] = v => ["Normal", "Accurate", "LowRipple", "Normal"][Math.trunc(v)] ?? "Normal";
+PU_DISP["LinEQ:DisplayDitherType"] = v => ["Off", "On"][Math.trunc(v)] ?? "Off"; // :202
+PU_DISP["LinEQ:DisplayFiltType"] = v => ["Bell", "Resonant Low-shelf", "V-Slope Low-shelf", "Resonant Hi-shelf", // :241
+  "V-Slope Hi-shelf", "Resonant Hi-pass", "V-Slope Hi-pass", "Resonant Low-pass", "V-Slope Low-pass"][Math.trunc(v)] ?? "Bell";
+PU_DISP["LinEQ:DisplayFiltTypeRFIR"] = v => ["Bell", "Low-shelf", "Hi-shelf", "Hi-pass", "Low-pass"][Math.trunc(v)] ?? "Bell"; // :319
+
+// LinMB — Plugins/Masters/LinMB/Code/Plugin/LinMBAlg.cpp (map :1335-1341)
+PU_DISP["LinMB:DisplayKnee"] = v => v == 0 ? "Soft" : v >= 0.75 ? "Hard" : (+v).toFixed(2); // :3005
+PU_DISP["LinMB:DisplayArc"] = v => Math.trunc(v) === 1 ? "Manual" : "ARC"; // :2985
+PU_DISP["LinMB:DisplayMode"] = v => Math.trunc(v) === 1 ? "Opto" : "Electro"; // :3045
+PU_DISP["LinMB:DisplayMaskerLevel"] = v => v <= -90 ? "Off" : (+v).toFixed(2); // :3017
+PU_DISP["LinMB:DisplayMakeupMode"] = v => Math.trunc(v) === 1 ? "Auto" : "Manual"; // :3027
+
+/* LoAir display functions (Plugins/Surround/LoAir/Code/Plugin/LoAirAlg.cpp) */
+// DisplayFilt (:245): Float0 + " Hz"
+PU_DISP["LoAir:DisplayFilt"] = v => (+v).toFixed(0) + " Hz";
+// DisplayGainOff (:235): <= LowestLevelDB (-60, LoAirConsts.h:7) -> "-INF", else Float1
+PU_DISP["LoAir:DisplayGainOff"] = v => v <= -60 ? "-INF" : (+v).toFixed(1);
+
+/* Lofi Space display functions (Plugins/Artist/Retro_Fi/Code/Plugin/Retro_FiAlg.cpp — Lofi Space = kSpring_Break_* 'LFS?' components) */
+// DisplayDelay (:2003): note-length enum (Retro_FiConsts.h:146: SIXTYFORTH_NOTE_T = 0 ... TWO_BARS); nothing otherwise
+PU_DISP["Lofi Space:DisplayDelay"] = v =>
+  ["1/64T", "1/64", "1/64D", "1/32T", "1/32", "1/32D", "1/16T", "1/16", "1/16D", "1/8T", "1/8", "1/8D",
+   "1/4T", "1/4", "1/4D", "1/2T", "1/2", "1/2D", "1B", "2B"][Math.trunc(v)] ?? "";
+// DisplayHpLp (:1970): Float0 + " Hz"
+PU_DISP["Lofi Space:DisplayHpLp"] = v => (+v).toFixed(0) + " Hz";
+// DisplayPrecent (:1954): Float1 + " %"
+PU_DISP["Lofi Space:DisplayPrecent"] = v => (+v).toFixed(1) + " %";
+// DisplayReverbLength (:2119): Float2 + " Sec"
+PU_DISP["Lofi Space:DisplayReverbLength"] = v => (+v).toFixed(2) + " Sec";
+
+// MannyM-Delay — Plugins/Artist/MannyM_Delay/Code/Plugin/MannyM_DelayAlg.cpp (base ArtistMannyCommonAlg adds only DisplayMeterSelector)
+PU_DISP["MannyM-Delay:DisplayDelay"] = v => ["1/64T", "1/64", "1/32T", "1/64D", "1/32", "1/16T", "1/32D", "1/16", "1/8T", "1/16D",
+  "1/8", "1/4T", "1/8D", "1/4", "1/2T", "1/4D", "1/2", "1/2D", "Whole"][Math.trunc(v)] ?? ""; // :743 (ordered by length)
+PU_DISP["MannyM-Delay:DisplaySize"] = v => Math.min(100, 1 + 99 * (v - 0.5) * 0.90909).toFixed(1); // :763
+PU_DISP["MannyM-Delay:DisplayRate"] = v => v > 10 ? (+v).toFixed(1) : v >= 0.01 ? (+v).toFixed(2) : (0).toFixed(2); // :774
+
+/* MannyM-EQ display functions (Plugins/Artist/MannyM_EQ/Code/Plugin/MannyM_EQAlg.cpp; tables MannyM_EQAlg.h:11-54) */
+// DisplayBandFreq1..4 (:506-528): aFreqBands[band][int(dRW)]
+PU_DISP["MannyM-EQ:DisplayBandFreq1"] = v => ["50", "110", "140", "220", "250"][Math.trunc(v)] ?? "";
+PU_DISP["MannyM-EQ:DisplayBandFreq2"] = v => ["250", "320", "400", "800", "1.5k"][Math.trunc(v)] ?? "";
+PU_DISP["MannyM-EQ:DisplayBandFreq3"] = v => ["800", "1.6k", "3.2k", "5k", "8k"][Math.trunc(v)] ?? "";
+PU_DISP["MannyM-EQ:DisplayBandFreq4"] = v => ["10k", "12.5k", "15k", "20k", "25k"][Math.trunc(v)] ?? "";
+// DisplayHighPass (:546): state 0 -> "Off", else Float0
+PU_DISP["MannyM-EQ:DisplayHighPass"] = (v, q) => Math.round(puState(q, v)) === 0 ? "Off" : (+v).toFixed(0);
+// DisplayLowPass (:558): state GRAN -> "Off", else dRW/1000 with 2 decimals + "k"
+PU_DISP["MannyM-EQ:DisplayLowPass"] = (v, q) => Math.round(puState(q, v)) === PU_GRAN ? "Off" : (v / 1000).toFixed(2) + "k";
+
+// MannyM-Reverb — Plugins/Artist/MannyM_RVerb/Code/Plugin/MannyM_RVerbAlg.cpp (map :229-233, set after ArtistMannyCommonAlg's)
+PU_DISP["MannyM-Reverb:DisplayWithPercent"] = v => (+v).toFixed(1) + "%"; // :233 DisplayWithUnits(DisplayFloat1, "%") (:206, no space)
+PU_DISP["MannyM-Reverb:DisplayWetDry"] = v => v >= 100 ? (+v).toFixed(0) : v >= 0.00001 ? (+v).toFixed(1) : "Off"; // :298
+PU_DISP["MannyM-Reverb:DisplayPhaserRate"] = v => v > 10 ? (+v).toFixed(1) : v >= 0.01 ? (+v).toFixed(2) : "0.00"; // :338
+
+// Maserati ACG — WCMaserati_ACG_ALG chains to WCStaticChainer_ALG::PrepareDisplayFunctionsMapSelf:
+// Plugins/Chainers/Static_Chainers_Common/Code/Plugin/WCStaticChainerAlg.cpp (map :2244). VU_DISPLAYED_20_DB = -20 (Waves-incs.h:58)
+PU_DISP["Maserati ACG:DisplayVuHold20"] = v => v > -20 ? (+v).toFixed(1) : "-Inf"; // :2342
+PU_DISP["Maserati ACG:DisplayMinMax"] = v => v == 100 ? "Max" : v == 0 ? "Min" : (+v).toFixed(1); // :2318
+
+// Maserati B72 — WCMaserati_B72_ALG adds DisplayFlavor/DisplayDirect; these come from WCStaticChainer_ALG (Plugins/Chainers/Static_Chainers_Common/Code/Plugin/WCStaticChainerAlg.cpp)
+PU_DISP["Maserati B72:DisplayVuHold20"] = v => v > -20 ? (+v).toFixed(1) : "-Inf"; // :2342 (VU_DISPLAYED_20_DB = -20)
+PU_DISP["Maserati B72:DisplayMinMax"] = v => v == 100 ? "Max" : v == 0 ? "Min" : (+v).toFixed(1); // :2318
+
+// Maserati DRM — WCMaserati_DRM_ALG chains to WCStaticChainer_ALG::PrepareDisplayFunctionsMapSelf:
+// Plugins/Chainers/Static_Chainers_Common/Code/Plugin/WCStaticChainerAlg.cpp (map :2244)
+PU_DISP["Maserati DRM:DisplayMinMax"] = v => v == 100 ? "Max" : v == 0 ? "Min" : (+v).toFixed(1); // :2318
+
+// Maserati GRP — Plugins/Artist/Maserati_GRP/Code/Plugin/Maserati_GRP_Alg.cpp:295: DisplayVuHold((50/12)*dRW) (VU_DISPLAYED_MIN_DB = -99.9)
+PU_DISP["Maserati GRP:DisplayInputOutputGain"] = v => { const g = (50.0 / 12.0) * v; return g > -99.9 ? g.toFixed(1) : "-Inf"; };
+
+// Maserati GTi — WCMaserati_GTi_ALG (map :651) chains to WCStaticChainer_ALG::PrepareDisplayFunctionsMapSelf:
+// Plugins/Chainers/Static_Chainers_Common/Code/Plugin/WCStaticChainerAlg.cpp (map :2244). VU_DISPLAYED_20_DB = -20 (Waves-incs.h:58)
+PU_DISP["Maserati GTi:DisplayVuHold20"] = v => v > -20 ? (+v).toFixed(1) : "-Inf"; // :2342
+PU_DISP["Maserati GTi:DisplayMinMax"] = v => v == 100 ? "Max" : v == 0 ? "Min" : (+v).toFixed(1); // :2318
+
+/* Maserati HMX display functions — static chainer base WCStaticChainer_ALG::PrepareDisplayFunctionsMapSelf
+   (Plugins/Chainers/Static_Chainers_Common/Code/Plugin/WCStaticChainerAlg.cpp:2241), via Plugins/Artist/Maserati_HMX/Code/Plugin/WCMaserati_HMX_ALG.cpp:380 */
+// DisplayVuHold20 (WCStaticChainerAlg.cpp:2342): > VU_DISPLAYED_20_DB (-20) -> Float1, else "-Inf"
+PU_DISP["Maserati HMX:DisplayVuHold20"] = v => v > -20 ? (+v).toFixed(1) : "-Inf";
+// DisplayMinMax (WCStaticChainerAlg.cpp:2318): 100 -> "Max", 0 -> "Min", else Float1
+PU_DISP["Maserati HMX:DisplayMinMax"] = v => v == 100 ? "Max" : v == 0 ? "Min" : (+v).toFixed(1);
+
+// Maserati VX1 — WCMaserati_VX1_ALG chains to WCStaticChainer_ALG::PrepareDisplayFunctionsMapSelf:
+// Plugins/Chainers/Static_Chainers_Common/Code/Plugin/WCStaticChainerAlg.cpp (map :2244). VU_DISPLAYED_20_DB = -20 (Waves-incs.h:58)
+PU_DISP["Maserati VX1:DisplayVuHold20"] = v => v > -20 ? (+v).toFixed(1) : "-Inf"; // :2342
+PU_DISP["Maserati VX1:DisplayMinMax"] = v => v == 100 ? "Max" : v == 0 ? "Min" : (+v).toFixed(1); // :2318
+
+// MaxxBass — Plugins/Gold/MaxxBass/Code/Plugin/MaxxBassAlg.cpp (RealWorld in dB via GainScale); NO_FLT/ORD_2/ORD_4 (MaxxBassConsts.h:87)
+PU_DISP["MaxxBass:DisplayGain"] = v => v > -144 ? (v > -100 ? (+v).toFixed(1) : (+v).toFixed(0)) : "-inf"; // :299
+PU_DISP["MaxxBass:DisplayHPFilter"] = v => ["6dB/Octave", "12dB/Octave", "24dB/Octave"][Math.trunc(v)] ?? ""; // :409 (nOUT_F/default -> empty)
+
+// MetaFlanger — Plugins/FX/MetaFlanger/Code/Plugin/MetaFlangerAlg.cpp
+PU_DISP["MetaFlanger:Display_0_to_100"] = v => (v * 100).toFixed(0); // :642
+PU_DISP["MetaFlanger:DisplayRate"] = v => v > 10 ? (+v).toFixed(1) : v >= 0.01 ? (+v).toFixed(2) : (0).toFixed(2); // :613
+PU_DISP["MetaFlanger:DisplayWaveType"] = v => v > 0 ? "Triangle" : "Sine"; // :649
+PU_DISP["MetaFlanger:DisplayFreq"] = v => (v >= 10 ? (+v).toFixed(0) : (+v).toFixed(1)) + "k"; // :628
+
+// MondoMod — Plugins/FX/MondoMod/Code/Plugin/MondoModAlg.cpp (map :76); waveform enum MondoModConsts.h:14
+PU_DISP["MondoMod:DisplayRate"] = v => v > 10 ? (+v).toFixed(1) : v >= 0.01 ? (+v).toFixed(2) : "0.00"; // :699
+PU_DISP["MondoMod:DisplayWaveType"] = v => ["Square","Saw I","Saw II","Triangle","Sine"][Math.trunc(v)] ?? ""; // :752
+PU_DISP["MondoMod:DisplayPhase"] = v => ["0","90","180","270"][Math.trunc(v)] ?? ""; // :726 (DisplayFloat0 of 0/90/180/270)
+PU_DISP["MondoMod:DisplayxFactor"] = v => "x" + (+v).toFixed(v == 100 ? 0 : v < 10 ? 2 : 1); // :713
+
+/* Morphoder display functions (Plugins/Transform/Morphoder/Code/Plugin/MorphoderAlg.cpp; enums MorphoderConsts.h) */
+// DisplayMixerGain (:3157): <= -60 -> "-Inf", else Float1
+PU_DISP["Morphoder:DisplayMixerGain"] = v => v <= -60 ? "-Inf" : (+v).toFixed(1);
+// DisplayModulatorRouter (:3072) / DisplayCarrierRouter (:3108): PopUpRout_* (MorphoderConsts.h:98), default Track
+PU_DISP["Morphoder:DisplayModulatorRouter"] = PU_DISP["Morphoder:DisplayCarrierRouter"] = v =>
+  ["Track", "Left", "Right", "Left+Right", "SideChain", "Internal"][Math.trunc(v)] ?? "Track";
+// DisplayHoldSmoothing (:3216): >= EXTRA_SMOOTH_VALUE (5005) -> INF_SYMBOL "Inf", else Float0
+PU_DISP["Morphoder:DisplayHoldSmoothing"] = v => v >= 5005 ? "Inf" : (+v).toFixed(0);
+// DisplaySynthName (:3229): sSynthNames[int(dRW)] (PrepareSynthNames :2333)
+PU_DISP["Morphoder:DisplaySynthName"] = v =>
+  ["Organic", "Robotic", "WarmPad", "Quazimod", "RedAlert", "SawSquare", "Thalamus", "Pegasus", "FlatTalk", "Electric"][Math.trunc(v)] ?? "";
+
+// MultiMod Rack — Plugins/Distortion/MultiModRack/Code/Plugin/MultiModRackAlgT.cpp:447 registers m_KBandMIDI's map
+// (cKeyboardAndMidi): Common_Sources/Modules/KeyboardAndMidi/cKeyboardAndMidiAlg.cpp:368/397, bodies in cKeyboardAndMidi.cpp
+// :1017 DisplayFloatAdaptive: integer -> DisplayFloat0, else DisplayFloat2
+PU_DISP["MultiMod Rack:DisplayFloatAdaptive"] = v => (+v).toFixed(v === Math.floor(v) ? 0 : 2);
+// :350 DisplayNoteLength = kNoteLengthDisplayValues[(int)RW] (cKeyboardAndMidi.cpp:14)
+const mmrNoteLen = ["1/64T","1/64","1/32T","1/64D","1/32","1/16T","1/32D","1/16","1/8T","1/16D","1/8","1/4T","1/8D","1/4","1/2T","1/4D","1/2","1/2D","1B","2B","4B","8B","16B","32B"];
+PU_DISP["MultiMod Rack:DisplayNoteLength"] = v => mmrNoteLen[Math.trunc(v)] ?? "";
+
+/* NLS display functions (Plugins/Hybrid/NLS/Code/Plugin/NLSAlg.cpp) */
+// DisplayGroupSelect (:230): > 0 -> Float0, else "None"
+PU_DISP["NLS:DisplayGroupSelect"] = v => v > 0 ? (+v).toFixed(0) : "None";
+// DisplayGroupColorType (:144): console type + 1 (kIndividual = -1, kSSL, kTG, kNeve; NLSConsts.h:75)
+PU_DISP["NLS:DisplayGroupColorType"] = v => ["Individual", "SPIKE", "MIKE", "NEVO"][Math.trunc(v)] ?? "";
+
+/* NX display functions (Plugins/Misc/Nx/Code/Plugin/NxAlg.cpp) */
+// DisplaySensor (:9367): the connected head-tracker's name (m_CurrentSensorDetails.m_szSensorName) —
+// runtime device state the page does not have, so it shows empty (no sensor connected)
+PU_DISP["NX:DisplaySensor"] = () => "";
+
+// Nx Germano Studios — Plugins/Nx/NxStudioBase/NxStudioBaseAlg.cpp (map :1076-1081)
+PU_DISP["Nx Germano Studios:DisplayLevel"] = v => (+v).toFixed(1) + " dB"; // :1688
+PU_DISP["Nx Germano Studios:DisplayAmbienceTrim"] = v => (+v).toFixed(0) + " %"; // :1697
+
+// Nx Ocean Way Nashville — base class Plugins/Nx/NxStudioBase/NxStudioBaseAlg.cpp
+PU_DISP["Nx Ocean Way Nashville:DisplayLevel"] = v => (+v).toFixed(1) + " dB"; // :1688
+PU_DISP["Nx Ocean Way Nashville:DisplayAmbienceTrim"] = v => (+v).toFixed(0) + " %"; // :1697
+
+/* OVox display functions — Plugins/Transform/OVox/Code/Plugin/OVoxAlgT.cpp:1606 registers the KeyboardAndMidi module
+   (Common_Sources/Modules/KeyboardAndMidi/cKeyboardAndMidi.cpp) first, then its own (OVoxAlg.cpp), which win */
+// DisplayMixerGain (OVoxAlg.cpp:2141): <= -60 -> "-Inf", else Float1
+PU_DISP["OVox:DisplayMixerGain"] = v => v <= -60 ? "-Inf" : (+v).toFixed(1);
+// DisplayModulatorRouter (OVoxAlg.cpp:2084): PopUpRout_Track / _SideChain (OVoxConsts.h:163), default Track
+PU_DISP["OVox:DisplayModulatorRouter"] = v => Math.trunc(v) === 1 ? "SideChain" : "Track";
+// DisplayCarrierRouter (OVoxAlg.cpp:2097): Track / SideChain / Internal, default Track
+PU_DISP["OVox:DisplayCarrierRouter"] = v => ["Track", "SideChain", "Internal"][Math.trunc(v)] ?? "Track";
+// DisplayVoiceMode (cKeyboardAndMidi.cpp:780): kMIDIMode / kVoiceMode / kMIDIVoiceAuto
+PU_DISP["OVox:DisplayVoiceMode"] = v => ["MIDI", "Voice", "Auto"][Math.trunc(v)] ?? "";
+// DisplayVoiceModeTolerance (:796): < 201 -> Float0, else "Off"
+PU_DISP["OVox:DisplayVoiceModeTolerance"] = v => v < 201 ? (+v).toFixed(0) : "Off";
+// DisplayNoteLength (:350): kNoteLengthDisplayValues[int(dRW)] (cKeyboardAndMidi.cpp:14)
+PU_DISP["OVox:DisplayNoteLength"] = v =>
+  ["1/64T", "1/64", "1/32T", "1/64D", "1/32", "1/16T", "1/32D", "1/16", "1/8T", "1/16D", "1/8", "1/4T", "1/8D", "1/4",
+   "1/2T", "1/4D", "1/2", "1/2D", "1B", "2B", "4B", "8B", "16B", "32B"][Math.trunc(v)] ?? "";
+// DisplayPortamento (:443): ePortamentoOff / Legato / Always
+PU_DISP["OVox:DisplayPortamento"] = v => ["Off", "Legato", "Always"][Math.trunc(v)] ?? "";
+// DisplayFloatAdaptive (:1017): whole -> Float0, else Float2
+PU_DISP["OVox:DisplayFloatAdaptive"] = v => (+v).toFixed(v == Math.floor(v) ? 0 : 2);
+// DisplaySync (:492): kPlayModeSync / Legato / Retrigger / Polyphonic / Free (KeyboardAndMidiConsts.h:25), default Legato
+PU_DISP["OVox:DisplaySync"] = v => ["Synced", "Legato", "ReTrigger", "Poly", "Free"][Math.trunc(v)] ?? "Legato";
+// DisplayArp (:724): 0 -> Off, 1..4 -> "N Oct"
+PU_DISP["OVox:DisplayArp"] = v => ["Off", "1 Oct", "2 Oct", "3 Oct", "4 Oct"][Math.trunc(v)] ?? "";
+// DisplayTranspose (:885): 0 = F#/Gb ... 6 = C ... 11 = F
+PU_DISP["OVox:DisplayTranspose"] = v =>
+  ["F#/Gb", "G", "G#/Ab", "A", "A#/Bb", "B", "C", "C#/Db", "D", "D#/Eb", "E", "F"][Math.trunc(v)] ?? "";
+// DisplayMIDINote (:274): note name + (octave - 2); "none" below 0
+PU_DISP["OVox:DisplayMIDINote"] = v => {
+  if (!(v >= 0)) return "none";
+  const n = Math.trunc(v);
+  return ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][n % 12] + (Math.trunc(n / 12) - 2);
+};
+// DisplayChordPresetName / DisplayScalePresetName (cChordsKeyboard_imp.h:2635 / :2643): the loaded chord / scale preset
+// name — runtime state from the plugin chunk that the page does not have, so it shows empty
+PU_DISP["OVox:DisplayChordPresetName"] = () => "";
+PU_DISP["OVox:DisplayScalePresetName"] = () => "";
+
+// PS22 — Plugins/Gold/PS22/Code/Plugin/PS22Alg.cpp (map :693)
+PU_DISP["PS22:DisplayLPW"] = v => "x " + (+v).toFixed(2); // :146
+PU_DISP["PS22:ClipDisplay"] = v => v >= 0.999999 ? " Clip" : "No Clip"; // :180 (a live clip indicator; shows the stored value)
+PU_DISP["PS22:DisplayVuMode"] = v => Math.trunc(v) === 1 ? " M       S" : " L        R"; // :156 (spacing verbatim)
+
+// PuigChild — Plugins/JJP/PuigChild/Code/Plugin/PuigChildAlg.cpp (map :63)
+PU_DISP["PuigChild:DisplayInput"] = v => (20 - v).toFixed(0); // :1141 DisplayFloat0(20 - RW)
+PU_DISP["PuigChild:DisplayTC"] = v => (v + 1).toFixed(0); // :1132 DisplayFloat0(RW + 1)
+
+// PuigTec — Plugins/JJP/PuigTec/Code/Plugin/PuigTecAlg.cpp; RealWorld indexes a fixed list (entry 0 = "n/a"), blank when out of range
+const puigTecDispList = a => v => a[Math.trunc(v)] ?? "";
+PU_DISP["PuigTec:DisplayHiFreq"] = puigTecDispList(["n/a", "3KHz", "4KHz", "5KHz", "8KHz", "10KHz", "12KHz", "16KHz"]); // :1542
+PU_DISP["PuigTec:DisplayAttenSel"] = puigTecDispList(["n/a", "5KHz", "10KHz", "20KHz"]); // :1614
+PU_DISP["PuigTec:DisplayLowFreq"] = puigTecDispList(["n/a", "20Hz", "30Hz", "60Hz", "100Hz"]); // :1524
+PU_DISP["PuigTec:DisplayLMFreq"] = puigTecDispList(["n/a", "200Hz", "300Hz", "500Hz", "700Hz", "1000Hz"]); // :1560
+PU_DISP["PuigTec:DisplayMidFreq"] = puigTecDispList(["n/a", "200Hz", "300Hz", "500Hz", "700Hz", "1KHz", "1.5KHz", "2KHz", "3KHz", "4KHz", "5KHz", "7KHz"]); // :1578
+PU_DISP["PuigTec:DisplayHMFreq"] = puigTecDispList(["n/a", "1.5KHz", "2KHz", "3KHz", "4KHz", "5KHz"]); // :1596
+
+// Q10 — Plugins/Gold/Q10/Code/Plugin/QnAlg.cpp (map :154); enum BELL,LP_SHELV,HP_SHELV,LP,HP,PQ_BELL (QnAlg.h:34)
+PU_DISP["Q10:DisplayFilterType"] = v => ["Bell","Low-Shelf","Hi-Shelf","Low-Pass","Hi-Pass","PQ-Bell"][Math.trunc(v)] ?? "Bell"; // :94
+
+// RBass — Plugins/Renaissance/RBass/Code/Plugin/RBassAlg.cpp (map :818); 0 = "In", 1 = "Out" (default -> "In")
+PU_DISP["RBass:DisplayOrigInOut"] = v => Math.trunc(v) === 1 ? "Out" : "In";
+
+// RChannel — Plugins/Renaissance/RChannel/Code/Plugin/RChannelAlg.cpp; enums RChannelConsts.h (ARC/MANUAL :107, BELL..CUT :165, scHPF.. :173, scINT.. :189)
+PU_DISP["RChannel:DisplayLowType"] = v => ["Bell", "Low-Shelf", "Low-RShelf", "Hi-Pass"][Math.trunc(v)] ?? "Bell"; // :319
+PU_DISP["RChannel:DisplayHighType"] = v => ["Bell", "Hi-Shelf", "Hi-RShelf", "Low-Pass"][Math.trunc(v)] ?? "Bell"; // :346
+PU_DISP["RChannel:DisplaySCHSrc"] = v => ["Int", "PreEQ", "Ext"][Math.trunc(v)] ?? "Int"; // :271
+PU_DISP["RChannel:DisplaySCHType"] = v => ["HPF", "BPF", "LPF", "BRF"][Math.trunc(v)] ?? "HPF"; // :292
+PU_DISP["RChannel:DisplayAttack"] = v => v < 10 ? (+v).toFixed(2) : v < 100 ? (+v).toFixed(1) : (+v).toFixed(0); // :417
+PU_DISP["RChannel:DisplayRCompRVox"] = v => v == 0 ? "RComp" : "RVox"; // :5111
+PU_DISP["RChannel:DisplayMode"] = v => Math.trunc(v) === 1 ? "Manual" : "Auto"; // :501
+PU_DISP["RChannel:DisplayExpGate"] = v => v == 0 ? "Exp" : "Gate"; // :5120
+PU_DISP["RChannel:DisplayGateThresh"] = (v, q) => puState(q, v) > 0 ? (+v).toFixed(1) : "-Inf"; // :261
+// :373 — centre state (GRAN>>1 = 500) shows ">0<", else an arrow towards the rotation side
+PU_DISP["RChannel:DisplayRotation"] = (v, q) => Math.abs(puState(q, v) - 500) < 1e-9 ? ">0<"
+  : v < 0 ? "< " + Math.abs(v).toFixed(1) + "  " : "  " + Math.abs(v).toFixed(1) + " >";
+// Common_Sources/Modules/FFTAnalyzerModule/CommonFFTAnalyzerT.cpp:3412 (registered via the FFT analyzer module)
+PU_DISP["RChannel:DisplayFreqAndNote"] = v => {
+  const dLog = Math.log2(v) - 4.03136, tbl = "C C#D D#E F F#G G#A A#B";
+  let oct = Math.floor(dLog), cents = Math.round(1200 * (dLog - oct)), note = "";
+  if (cents < 50) note = "C ";
+  else if (cents >= 1150) { note = "C "; cents -= 1200; oct++; }
+  else for (let j = 1, off = 50, x = 2; j <= 11; j++, off += 100, x += 2)
+    if (cents >= off && cents < off + 100) { note = tbl.substr(x, 2); cents -= j * 100; break; }
+  const centsStr = cents !== 0 ? " " + (cents > 0 ? "+" : "-") + Math.abs(cents) + " Cents" : "";
+  if (note[1] === " ") note = note[0];
+  return (+v).toFixed(0) + " Hz (" + note + oct + centsStr + ")";
+};
+
+// RComp — Plugins/Renaissance/RComp/Code/Plugin/RCompAlg.cpp (map :1694-1697)
+PU_DISP["RComp:DisplayAttack"] = v => v < 10 ? (+v).toFixed(2) : v < 100 ? (+v).toFixed(1) : (+v).toFixed(0); // also used by Release
+PU_DISP["RComp:DisplayWarmSmooth"] = v => Math.trunc(v) ? "Smooth" : "Warm";
+PU_DISP["RComp:DisplayParamMode"] = v => Math.trunc(v) ? "Manual" : "ARC";
+PU_DISP["RComp:DisplayElectroOpto"] = v => Math.trunc(v) ? "Opto" : "Electro";
+
+/* REDD17 display functions (Plugins/AbbeyRoad/REDD/Code/Plugin/REDDAlg.cpp; consts REDDConsts.h) */
+// DisplayAnalog (:2783): <= analog_off_level (-24) -> "Off", else Float1
+PU_DISP["REDD17:DisplayAnalog"] = v => v <= -24 ? "Off" : (+v).toFixed(1);
+// DisplayBassLift (:2736): BASS_LIFT_3_STATES_MINUS_10DB=0 / OFF / ON (REDDConsts.h:322), default "Lift"
+PU_DISP["REDD17:DisplayBassLift"] = v => ["Pad", "Off", "Lift"][Math.trunc(v)] ?? "Lift";
+
+// REDD37-51 — Plugins/AbbeyRoad/REDD37/Code/Plugin/REDD37Alg.cpp (map :1333-1345); REDD37Consts.h
+PU_DISP["REDD37-51:DisplayAnalog"] = v => v <= -24 ? "Off" : (+v).toFixed(1); // :1446 analog_off_level = -24
+// :1634 BASS_LIFT_3_STATES_ON = 0 ("Lift", also default), _OFF, _MINUS_10DB ("Pad")
+PU_DISP["REDD37-51:DisplayBassLift"] = v => ["Lift", "Off", "Pad"][Math.trunc(v)] ?? "Lift";
+
+/* REQ display functions (Plugins/Renaissance/REQ/Code/Plugin/REQAlg.cpp + the FFT analyzer module) */
+// DisplayLowType (:244): BELL/SHELV/CUT/RES_SHELV (REQConsts.h:67), default Bell
+PU_DISP["REQ:DisplayLowType"] = v => ["Bell", "Low-Shelf", "Hi-Pass", "Low-RShelv"][Math.trunc(v)] ?? "Bell";
+// DisplayHighType (:270), default Bell
+PU_DISP["REQ:DisplayHighType"] = v => ["Bell", "Hi-Shelf", "Low-Pass", "Hi-RShelv"][Math.trunc(v)] ?? "Bell";
+/* DisplayFreqAndNote: Common_Sources/Modules/FFTAnalyzerModule/CommonFFTAnalyzerT.cpp:3412 (registered via mFFTAnalyzerModule)
+   "<Hz> Hz (<note><oct>[ +/-N Cents])" — note from log2(f) - 4.03136, cents rounded, C wraps up at >= 1150 cents */
+PU_DISP["REQ:DisplayFreqAndNote"] = v => {
+  if (!(v > 0)) return (+v).toFixed(0) + " Hz";
+  const l = Math.log2(v) - 4.03136;
+  let oct = Math.floor(l), c = Math.round(1200 * (l - oct)), n = "C";
+  if (c >= 1150) { c -= 1200; oct++; }
+  else if (c >= 50) { const j = Math.floor((c + 50) / 100); n = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][j]; c -= j * 100; }
+  return (+v).toFixed(0) + " Hz (" + n + oct + (c ? " " + (c > 0 ? "+" : "-") + Math.abs(c) + " Cents" : "") + ")";
+};
+
+// RS56 — Plugins/AbbeyRoad/RS56/Code/Plugin/RS56Alg.cpp; enums RS56Consts.h:234-286
+PU_DISP["RS56:Display_Bass_Freq"] = v => ["32", "64", "128", "256"][Math.trunc(v)] ?? "32"; // :1146
+PU_DISP["RS56:Display_Treble_Freq"] = v => ["512", "1024", "2048", "4096"][Math.trunc(v)] ?? "512"; // :1177
+PU_DISP["RS56:Display_Top_Freq"] = v => ["5800", "8192", "11600", "16400"][Math.trunc(v)] ?? "5800"; // :1207
+PU_DISP["RS56:Display_Shape"] = v => ["Low End", "Blunt", "Med Blunt", "Med Sharp", "Sharp", "High End"][Math.trunc(v)] ?? "Low End"; // :1236
+// Plugins/AbbeyRoad/Common/REDD_Common.h:51 DisplayMonitor functor — reads PARAM_SPREAD (SPREAD_MS = 2, REDD_Common_Consts.h)
+PU_DISP["RS56:DisplayMonitor"] = v => {
+  const sp = puVal("PARAM_SPREAD");
+  if (sp === null) return "";
+  const ms = Math.trunc(sp) === 2;
+  return [ms ? "Mid" : "Left", "Mono", "Stereo", ms ? "Side" : "Right"][Math.trunc(v)] ?? (ms ? "Mid" : "Left");
+};
+
+// RVerb — Plugins/Renaissance/RVerb/Code/Plugin/RVerbAlg.cpp (map :4767-4787); RVerbConsts.h
+PU_DISP["RVerb:DisplayReverbTime"] = v => v < 10 ? (+v).toFixed(2) : (+v).toFixed(1); // :4854
+PU_DISP["RVerb:DisplayLevel"] = v => v <= -40 ? "Off" : (+v).toFixed(1) + " dB"; // :5217
+PU_DISP["RVerb:DisplaySize"] = v => Math.min(100, 1 + 99 * (v - 0.5) * 0.90909).toFixed(1); // :5148 size -> %
+PU_DISP["RVerb:DisplayDecorrelation"] = v => "Var: " + (+v).toFixed(0); // :5053
+// :4914 enum eHall_1, eHall_2, eRoom, eChamber, eChurch, ePlate_1, ePlate_2, eReverse, eGated, eNonLinear, eEchoVerb,
+// eResoVerb (RVerbConsts.h:150); default -> DisplayFloat0
+PU_DISP["RVerb:DisplayReverbType"] = v => ["Hall 1", "Hall 2", "Room", "Chamber", "Church", "Plate 1", "Plate 2", "Reverse",
+  "Gated", "Non-Linear", "EchoVerb", "ResoVerb"][Math.trunc(v)] ?? (+v).toFixed(0);
+PU_DISP["RVerb:DisplayHold"] = v => v == 3.5 ? "Linear" : (+v).toFixed(2); // :5205 INFINITE_HOLD_TIME = 3.5
+
+// RVox — Plugins/Renaissance/RVox/Code/Plugin/RVoxAlg.cpp
+PU_DISP["RVox:DisplayGate"] = v => v > -80 ? (+v).toFixed(1) : "-Inf"; // :105
+
+// Reel ADT — Plugins/AbbeyRoad/ReelADT/Code/Plugin/ReelADTAlg.cpp (no default case -> empty); eWaveForm in ReelADTConsts.h:214
+PU_DISP["Reel ADT:DisplayVariSpeedRateSync"] = v => ["1/4", "1/2", "Whole", "1.5", "2", "2.5", "3", "3.5", "4", "6", "8", "9", "12", "16"][Math.trunc(v)] ?? ""; // :1297
+PU_DISP["Reel ADT:DisplayWaveType"] = v => ["Sine Up", "Sine Down", "Triangle Up", "Triangle Down", "Random"][Math.trunc(v)] ?? ""; // :1368
+
+/* RenAxx display functions (Plugins/Renaissance/RenAx/Code/Plugin/RenAxAlg.cpp) */
+// DisplayAttack (:148): < 10 -> Float2, < 100 -> Float1, else Float0
+PU_DISP["RenAxx:DisplayAttack"] = v => (+v).toFixed(v < 10 ? 2 : v < 100 ? 1 : 0);
+
+/* Retro Fi display functions (Plugins/Artist/Retro_Fi/Code/Plugin/Retro_FiAlg.cpp) */
+// DisplayDelay (:2003): note-length enum (Retro_FiConsts.h:146: SIXTYFORTH_NOTE_T = 0 ... TWO_BARS); nothing otherwise
+PU_DISP["Retro Fi:DisplayDelay"] = v =>
+  ["1/64T", "1/64", "1/64D", "1/32T", "1/32", "1/32D", "1/16T", "1/16", "1/16D", "1/8T", "1/8", "1/8D",
+   "1/4T", "1/4", "1/4D", "1/2T", "1/2", "1/2D", "1B", "2B"][Math.trunc(v)] ?? "";
+// DisplayHpLp (:1970): Float0 + " Hz"
+PU_DISP["Retro Fi:DisplayHpLp"] = v => (+v).toFixed(0) + " Hz";
+// DisplayPrecent (:1954): Float1 + " %"
+PU_DISP["Retro Fi:DisplayPrecent"] = v => (+v).toFixed(1) + " %";
+// DisplayReverbLength (:2119): Float2 + " Sec"
+PU_DISP["Retro Fi:DisplayReverbLength"] = v => (+v).toFixed(2) + " Sec";
+
+// Rogue Dimensions (DMNM/DMNS) — Renaissance Reverb alg: Plugins/Renaissance/Reverb/Code/Plugin/ReverbAlg.cpp; INFINITE_HOLD_TIME = 3.5 (ReverbConsts.h:32)
+PU_DISP["Rogue Dimensions:DisplayMatrixType"] = v => Math.floor(v) == v
+  ? (["Identity", "Pairwise", "MaxMix", "Full Circle", "Half Circle", "NearMaxMix", "StereoMax"][Math.trunc(v)] ?? (+v).toFixed(2))
+  : v < 3.99 ? (+v).toFixed(2) : "Space"; // :7073
+PU_DISP["Rogue Dimensions:DisplayReverbTime"] = v => v < 10 ? (+v).toFixed(2) : (+v).toFixed(1); // :7049
+PU_DISP["Rogue Dimensions:DisplayWetDry"] = v => Math.trunc(v) === 100 ? (+v).toFixed(0) + " " : (+v).toFixed(1); // :7523
+PU_DISP["Rogue Dimensions:DisplayLevel"] = v => v <= -40 ? "Off" : (+v).toFixed(1) + " dB"; // :7428
+PU_DISP["Rogue Dimensions:DisplaySize"] = v => Math.min(100, 1 + 99 * (v - 0.5) * 0.90909).toFixed(1); // :7359
+PU_DISP["Rogue Dimensions:DisplayDecorrelation"] = v => "Var: " + (+v).toFixed(0); // :7264
+PU_DISP["Rogue Dimensions:DisplayMillisec"] = v => (+v).toFixed(1) + "ms"; // :7275
+PU_DISP["Rogue Dimensions:DisplayMillisecInt"] = v => (+v).toFixed(0) + "ms"; // :7286
+PU_DISP["Rogue Dimensions:DisplayZeroOff"] = v => Math.trunc(v) === -1 ? "Auto" : (+v).toFixed(0); // :7341
+PU_DISP["Rogue Dimensions:DisplayHold"] = v => v == 3.5 ? "Linear" : (+v).toFixed(2); // :7416
+PU_DISP["Rogue Dimensions:DisplayDynamicsType"] = v => ["gate", "comp"][Math.trunc(v)] ?? (+v).toFixed(0); // :7185
+PU_DISP["Rogue Dimensions:DisplayPlusMinus"] = v => (v >= 0 ? "+" : "") + (+v).toFixed(2); // :7370
+PU_DISP["Rogue Dimensions:DisplayReverbInOut"] = v => ["Out", "In"][Math.trunc(v)] ?? (+v).toFixed(2); // :7297
+PU_DISP["Rogue Dimensions:DisplayDelaySend"] = v => v > 0.01 ? (+v).toFixed(2) : "--"; // :7061
+
+// SSL E-Channel (SCHM/SCHS) — Plugins/SSL/SSLChannel/Code/Plugin/SSLChannelAlg.cpp
+PU_DISP["SSL E-Channel:DisplayRatio"] = (v, q) => puState(q, v) == 1000 ? "+Inf" : (+v).toFixed(1); // :2429
+PU_DISP["SSL E-Channel:DisplayHP"] = (v, q) => puState(q, v) > 0 ? String(Math.trunc(v)) : "Out"; // :2481 (int32_t cast)
+PU_DISP["SSL E-Channel:DisplayLP"] = (v, q) => puState(q, v) > 0 ? (+v).toFixed(1) : "Out"; // :2494 ("%1.1f")
+
+// SSL EV2 Channel — Plugins/SSL/SSL_EV2_Channel/Code/Plugin/SSL_EV2_ChannelAlg.cpp (map :701); both read ScaleState
+PU_DISP["SSL EV2 Channel:DisplayFilters"] = (v, q) => puState(q, v) >= 1 ? (+v).toFixed(1) : "Out"; // :899 (state 0 = filter out)
+PU_DISP["SSL EV2 Channel:DisplayRatio"] = (v, q) => Math.round(puState(q, v)) === 1000 ? "+Inf" : (+v).toFixed(1); // :887
+
+// SSL G-Channel — Plugins/SSL/SSLChannel/Code/Plugin/SSLChannelAlg.cpp (map :2324-2329); these read ScaleState (0..1000)
+PU_DISP["SSL G-Channel:DisplayRatio"] = (v, q) => Math.round(puState(q, v)) === 1000 ? "+Inf" : (+v).toFixed(1); // :2429
+PU_DISP["SSL G-Channel:DisplayHP"] = (v, q) => puState(q, v) > 0 ? String(Math.trunc(v)) : "Out"; // :2481 int32_t(RW)
+PU_DISP["SSL G-Channel:DisplayLP"] = (v, q) => puState(q, v) > 0 ? (+v).toFixed(1) : "Out"; // :2494 "%1.1f"
+
+// SSLComp (SLCM/SLCS) — Plugins/SSL/SSLComp/Code/Plugin/SSLCompAlg.cpp; dScHpfMinFreqHz = 20 (SSLCompConsts.h:11)
+PU_DISP["SSLComp:DisplayRatio"] = v => ([2, 4, 10][Math.trunc(v)] ?? +v).toFixed(0) + ":1"; // :1904
+PU_DISP["SSLComp:DisplayAttack"] = v => [".1ms", ".3ms", "1ms", "3ms", "10ms", "30ms"][Math.trunc(v)] ?? ".1ms"; // :1826
+PU_DISP["SSLComp:DisplayRelease"] = v => [".1s", ".3s", ".6s", "1.2s", "Auto"][Math.trunc(v)] ?? ".1s"; // :1855
+PU_DISP["SSLComp:DisplaySCFreq"] = v => v > 20 ? (+v).toFixed(0) : "Off"; // :1930
+
+// Saphira — Plugins/Artist/Saphira/Code/Plugin/SaphiraAlg.cpp (map :239); enums eTapeSpeed / eBandType at :18
+// (these override the page's generic DisplayLowType/DisplayHighType, which have different texts)
+PU_DISP["Saphira:DisplayHarmonicsVU"] = v => v > -80 ? (+v).toFixed(1) : "-Inf"; // :591, kVUHarmonicsMin_db = -80 (live meter; stored value)
+PU_DISP["Saphira:DisplayTapeSpeed"] = v => ["7.5","11.25","15","22.5","30"][Math.trunc(v)] ?? ""; // :484
+PU_DISP["Saphira:DisplayLowType"] = v => ["HP","Low-Shelf"][Math.trunc(v)] ?? ""; // :553
+PU_DISP["Saphira:DisplayHighType"] = v => ["LP","Hi-Shelf"][Math.trunc(v)] ?? ""; // :572
+
+// Scheps 73 — Plugins/AScheps/Scheps73/Code/Plugin/Scheps73Alg.cpp (map :1046-1057); enums Scheps73Consts.h:126-189;
+// every switch defaults to case 0
+PU_DISP["Scheps 73:Display_LF_Freq"] = v => ["35", "60", "110", "220"][Math.trunc(v)] ?? "35"; // :1888
+PU_DISP["Scheps 73:Display_MF_Freq"] = v => ["0.36", "0.7", "1.6", "3.2", "4.8", "7.2", "10"][Math.trunc(v)] ?? "0.36"; // :1913
+PU_DISP["Scheps 73:Display_HP_Freq"] = v => ["50", "80", "160", "300"][Math.trunc(v)] ?? "50"; // :1850
+PU_DISP["Scheps 73:Display_PreAmp"] = v => ["-20L", "-15L", "-10L", "-5L", "0L", "5L", "10L", "-20M", "-25M", "-30M", "-35M", // :1743
+  "-40M", "-45M", "-50M", "-55M", "-60M", "-65M", "-70M", "-75M", "-80M"][Math.trunc(v)] ?? "-20L";
+
+// Scheps Parallel Particles — Plugins/Artist/Scheps_Parallel_Particles/Code/Plugin/Scheps_Parallel_ParticlesAlg.cpp (map :214)
+PU_DISP["Scheps Parallel Particles:DisplaySubHz"] = v => (+v).toFixed(1) + " Hz"; // :220
+
+/* Silk Vocal display functions (Plugins/Restoration/Silk/Code/Plugin/SilkAlg.cpp; consts SilkConsts.h:1034-1037) */
+// DisplayGainOut (:7030): kdGainOutMindB (-48) -> "-Inf", else Float1 + "dB"
+PU_DISP["Silk Vocal:DisplayGainOut"] = v => v == -48 ? "-Inf" : (+v).toFixed(1) + "dB";
+// DisplayFloat1WithPrecent (:7242): Float1 + "%"
+PU_DISP["Silk Vocal:DisplayFloat1WithPrecent"] = v => (+v).toFixed(1) + "%";
+// DisplayHPOffHz (:6988): kdHPOffHz (16) -> "Off", else Float0 + "Hz"
+PU_DISP["Silk Vocal:DisplayHPOffHz"] = v => v == 16 ? "Off" : (+v).toFixed(0) + "Hz";
+// DisplayLPOffHz (:7003): kdLPOffHz (20000) -> "Off", else Float0 + "Hz"
+PU_DISP["Silk Vocal:DisplayLPOffHz"] = v => v == 20000 ? "Off" : (+v).toFixed(0) + "Hz";
+
+// Space Rider — Plugins/Misc/SpaceRider/Code/Plugin/SpaceRiderAlg.cpp (map :769); note-value enum SpaceRiderConsts.h:415
+// (SIXTYFORTH_NOTE_T = 0 .. TWO_BARS = 19); no default -> empty
+PU_DISP["Space Rider:DisplayDelay"] = v => ["1/64T", "1/64", "1/64D", "1/32T", "1/32", "1/32D", "1/16T", "1/16", "1/16D",
+  "1/8T", "1/8", "1/8D", "1/4T", "1/4", "1/4D", "1/2T", "1/2", "1/2D", "1B", "2B"][Math.trunc(v)] ?? "";
+
+// Sub Align — Plugins/Live/SubAlign/Code/Plugin/SubAlignAlg.cpp
+PU_DISP["Sub Align:DisplayGainMute"] = v => v <= -60 ? "-INF" : (+v).toFixed(1); // :2626
+
+/* Submarine display functions (Plugins/Transform/Submarine/Code/Plugin/SubmarineAlg.cpp) */
+// DisplaySubGain (:1663): RealWorld is dB (SubGainScale :1642); < -48 -> "-Inf", else Float1
+PU_DISP["Submarine:DisplaySubGain"] = v => v < -48 ? "-Inf" : (+v).toFixed(1);
+
+/* SuperTap display functions (Plugins/FX/SuperTap/Code/Plugin/SuperTapAlg.cpp; enums SuperTapConsts.h) */
+// DisplayHTz (:1384): Float2
+PU_DISP["SuperTap:DisplayHTz"] = v => (+v).toFixed(2);
+// DisplayDelay (cSuperTap_ALG::DisplayDelay :1336, a member): dRW is in bars. MS graph mode or Free grid -> milliseconds
+// at tempo/4; else grid steps (numGridsPerBar from PARAM_GRID, :1261) with "+" / "-" for off-grid fractions (float maths).
+// Tempo: PARAM_TEMPO when not synced (:338); host-synced -> the page has no host tempo, so 120 BPM.
+PU_DISP["SuperTap:DisplayDelay"] = v => {
+  const t = puVal("PARAM_SYNC_ON") > 0 ? 120 : (puVal("PARAM_TEMPO") || 120), grid = Math.trunc(puVal("PARAM_GRID") || 0);
+  if (Math.trunc(puVal("PARAM_GRAPH_MODE") || 0) === 1 || grid === 0) return (v * 60 * 1000 / (t * 0.25)).toFixed(0);
+  const r = Math.fround(Math.fround(v) * ([0, 4, 6, 8, 12, 16][grid] ?? 0)), f = Math.fround(r - Math.trunc(r));
+  return r.toFixed(0) + (f < 0.05 ? "" : f < 0.5 ? "+" : "-");
+};
+// DisplayFBFilterType (:1429), default Low-Pass
+PU_DISP["SuperTap:DisplayFBFilterType"] = v => ["Low-Pass", "Low-Shelf", "Low-Decay"][Math.trunc(v)] ?? "Low-Pass";
+// DisplaykHz (:1372): > 10 -> Float0, else Float1; + "k"
+PU_DISP["SuperTap:DisplaykHz"] = v => (+v).toFixed(v > 10 ? 0 : 1) + "k";
+// DisplayFeedBackMode (:1458)
+PU_DISP["SuperTap:DisplayFeedBackMode"] = v => v > 0 ? "Tap Feedback" : "Norm";
+// DisplayGrid (:1487): FREE..SIXTEENTHS (SuperTapConsts.h:23), default Free
+PU_DISP["SuperTap:DisplayGrid"] = v =>
+  ["Free", "Quarters", "Qrt.Triplets", "Eighths", "Eighth triplets", "Sixteenths"][Math.trunc(v)] ?? "Free";
+// DisplayGraphMode (:1448)
+PU_DISP["SuperTap:DisplayGraphMode"] = v => v > 0 ? "MS" : "BPM";
+// DisplayTapFilterType (:1401): BELL, BELL2, HP_SHELV, LP_SHELV, HP, LP (SuperTapConsts.h:224), default Bell1
+PU_DISP["SuperTap:DisplayTapFilterType"] = v =>
+  ["Bell1", "Bell2", "Hi-Shelf", "Low-Shelf", "Hi-Pass", "Low-Pass"][Math.trunc(v)] ?? "Bell1";
+
+// TG12345 — Plugins/AbbeyRoad/TG12345/Code/Plugin/TG12345Alg.cpp (map :1123/:1134); kNoiseLevelOff = 0 (TG12345Consts.h:221)
+PU_DISP["TG12345:DisplayNoiseOff"] = v => v == 0 ? "Off" : (+v).toFixed(1); // :1461
+PU_DISP["TG12345:DisplayRecovery"] = v => (v + 1).toFixed(0); // :1454 DisplayFloat0(RW + 1)
+PU_DISP["TG12345:DisplayDriveOff"] = v => v == 0 ? "Off" : (+v).toFixed(2); // :1471 (also compares against kNoiseLevelOff)
+
+// TRACT — Plugins/Live/TRACT/Code/Plugin/TRACTAlg.cpp (map :226-246); enums TRACTConsts.h, Smaart enums SmaartAPI.h
+// :327 eFTOP, eBELL, eSHELV, eTILT, eCUT, eALLPASS (default -> "Shelf")
+PU_DISP["TRACT:DisplayType"] = v => ["Flat-Top", "Bell", "Shelf", "Tilt", "Cut", "All-Pass"][Math.trunc(v)] ?? "Shelf";
+PU_DISP["TRACT:DisplaySlope"] = v => ["-6", "-12", "-18", "-24", "-48"][Math.trunc(v)] ?? "-6"; // :380 eSlope_6dB..48dB
+// DisplayViewName (:270) shows CSmaartManager::s_vViewNames[current view]; PARAM_SMAART_VIEWS drives SetView (:2625);
+// LAST_ITEM (6) and anything past the table give "" (CSmaartManager.h:195)
+PU_DISP["TRACT:DisplayViewName1"] = v => ["RTA Bars", "RTA Lines", "Spectrograph", "Magnitude", "Phase", "Mag-Phase"][Math.trunc(v)] ?? "";
+// :5495 sapiBandOctave = 1 .. sapiBand48th = 6; otherwise DisplayFloat0
+PU_DISP["TRACT:DisplayConnectionBanding"] = v => [, "Oct", "1/3", "1/6", "1/12", "1/24", "1/48"][Math.trunc(v)] ?? (+v).toFixed(0);
+// DisplayAveraging / DisplayMeasurementName (:250 / :262) read the live Smaart connection (average / measurement
+// names) — engine state the page lacks; with no connection the C++ also yields an empty string
+PU_DISP["TRACT:DisplayAveraging"] = () => "";
+PU_DISP["TRACT:DisplayMeasurementName1"] = () => "";
+PU_DISP["TRACT:DisplayCaptureProcessed"] = v => v == 0 ? "None" : (+v).toFixed(0); // :5618
+// :5539 eOneOctave..eFotryEighthOct; otherwise DisplayFloat0
+PU_DISP["TRACT:DisplayResolution"] = v => ["Oct", "1/3", "1/6", "1/12", "1/24", "1/48"][Math.trunc(v)] ?? (+v).toFixed(0);
+// :5578 switches on ScaleState: eOptimizeToFlat, +6LFBoost, +9LFBoost, XCurve; >= eOptimizeToLocal1 are user
+// reference-curve names (runtime data the page lacks -> empty)
+PU_DISP["TRACT:DisplayReferenceCurves"] = (v, q) => ["Flat", "+6LFBoost", "+9LFBoost", "X-Curve"][Math.trunc(puState(q, v))] ?? "";
+
+/* Torque display functions (Plugins/Transform/Torque/Code/Plugin/TorqueAlg.cpp; tables TorqueConsts.h:75-163, verbatim) */
+// DisplayNote (:1298): note of the nearest kFreqMusicalNote key (std::map upper_bound on int(dRW)); "*" when not exact
+PU_DISP["Torque:DisplayNote"] = v => {
+  const F = [98, 104, 110, 117, 123, 131, 139, 147, 156, 165, 175, 185, 196, 208, 220, 233, 247, 262, 277, 294, 311, 330,
+    349, 370, 392, 415, 440, 446, 494, 523, 554, 587, 622, 659, 698, 740, 784, 831, 880, 923, 988];
+  const N = ["G2", "G#2", "A2", "A#2", "B2", "C3", "C#3", "D3", "D#3", "E3", "F3", "F#3", "G3", "G#3", "A3", "A#3", "B3",
+    "C4", "C#4", "D4", "D#4", "E4", "F4", "F#4", "G4", "G#4", "A4", "A#4", "B4", "C5", "C#5", "D5", "D#5", "E5", "F5",
+    "F#5", "G5", "G#5", "A5", "A#5", "B5"];
+  const iv = Math.trunc(v);
+  let up = F.findIndex(f => f > iv); if (up < 0) up = F.length; // upper_bound
+  const lo = up === 0 ? 0 : up - 1;
+  if (v == F[lo]) return N[lo];
+  if (up === F.length) return N[lo] + "*";
+  if (up === 0) return N[0] + "*";
+  return (Math.abs(iv - F[lo]) <= Math.abs(iv - F[up]) ? N[lo] : N[up]) + "*";
+};
+// DisplayTune (:1251): "+" for positive, then Float0
+PU_DISP["Torque:DisplayTune"] = v => (v > 0 ? "+" : "") + (+v).toFixed(0);
+
+// TrueVerb — Plugins/Gold/TrueVerb/Code/Plugin/TrueVerbAlg.cpp
+PU_DISP["TrueVerb:DisplayTRatio"] = v => (+v).toFixed(2) + "x"; // :166
+PU_DISP["TrueVerb:DisplayREVar"] = v => "EVar: " + (+v).toFixed(0); // :176
+PU_DISP["TrueVerb:DisplayRevLength"] = v => "RVar: " + (+v).toFixed(0); // :187
+// :1311 — "-Inf" at state 0. PARAM_GAIN uses the plugin's InputScale (state 0 <-> -400 dB); the state is taken from
+// InverseInputScale (:1269: GRAN * dbToGain(RW/2)) so this does not depend on a PU_SCALES entry for InputScale.
+PU_DISP["TrueVerb:DisplayInput"] = v => Math.round(1000 * Math.pow(10, v / 40)) === 0 ? "-Inf" : (+v).toFixed(1);
+
+// VComp — Plugins/Vintage/VComp/Code/Plugin/VCompAlg.cpp (map :1360)
+// :1447 DisplayLimitLevel: index 0..16 -> "4.0".."12.0" in 0.5 steps; default -> "4.0"
+PU_DISP["VComp:DisplayLimitLevel"] = v => { const i = Math.trunc(v); return (i >= 0 && i <= 16 ? 4 + i / 2 : 4).toFixed(1); };
+
+/* Vitamin display functions (Plugins/Misc/Vitamin/Code/Plugin/VitaminAlg.cpp) */
+// DisplayGainOff (:2828): 0 -> "Off", else Float1
+PU_DISP["Vitamin:DisplayGainOff"] = v => v == 0 ? "Off" : (+v).toFixed(1);
+// DisplayDirectGainOff (:2840): kGainBandOffdB (-48, VitaminConsts.h:39) -> "Off", else Float1
+PU_DISP["Vitamin:DisplayDirectGainOff"] = v => v == -48 ? "Off" : (+v).toFixed(1);
+// DisplayFloat1_dB (:2820): Float1 + "dB"
+PU_DISP["Vitamin:DisplayFloat1_dB"] = v => (+v).toFixed(1) + "dB";
+
+// Vocal Bender — Plugins/Transform/VocalBender/Code/Plugin/VocalBenderAlgT.cpp:1684 (map), bodies in VocalBenderAlg.cpp;
+// DisplayFloatAdaptive / DisplayNoteLength come from m_KBandMIDI: Common_Sources/Modules/KeyboardAndMidi/cKeyboardAndMidi.cpp
+PU_DISP["Vocal Bender:DisplayFloatAdaptive"] = v => (+v).toFixed(v === Math.floor(v) ? 0 : 2); // cKeyboardAndMidi.cpp:1017
+const vbNoteLen = ["1/64T","1/64","1/32T","1/64D","1/32","1/16T","1/32D","1/16","1/8T","1/16D","1/8","1/4T","1/8D","1/4","1/2T","1/4D","1/2","1/2D","1B","2B","4B","8B","16B","32B"];
+PU_DISP["Vocal Bender:DisplayNoteLength"] = v => vbNoteLen[Math.trunc(v)] ?? ""; // cKeyboardAndMidi.cpp:350 / :14
+// VocalBenderAlg.cpp:1565 cVocalBender_ALG::DisplayCentsOrSemitones: PARAM_CENTS_OR_SEMITONES == 1 -> RW/100 " semitones"
+PU_DISP["Vocal Bender:DisplayCentsOrSemitones"] = v => puVal("PARAM_CENTS_OR_SEMITONES") == 1 ? (v / 100).toFixed(0) + " semitones" : (+v).toFixed(0) + " cents";
+// VocalBenderAlg.cpp:1784 DisplayFlatten: note name of MIDI (36 + RW) + octave (quot - 1); kdMinMidiForFlatten_midi = 36
+PU_DISP["Vocal Bender:DisplayFlatten"] = v => { const m = Math.trunc(36 + v);
+  return ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"][m % 12] + (Math.trunc(m / 12) - 1); };
+
+// Vocal Rider — Plugins/Misc/VocalRider/Code/Plugin/VocalRiderAlg.cpp (map :545)
+PU_DISP["Vocal Rider:DisplayPlaybackThresh"] = v => v > -12.1 ? (+v).toFixed(1) : "Off";
+
+// Voltage Amps Bass — Plugins/Guitar/Voltage_Amps_Bass/Code/Plugin/Voltage_Amps_BassAlg.cpp; kMinDITone = 0 (Voltage_Amps_BassConsts.h:9)
+PU_DISP["Voltage Amps Bass:DisplayDITone"] = v => v == 0 ? "Off" : (+v).toFixed(1); // :402
+
+/* Voltage Amps Guitar display functions (Plugins/Guitar/Voltage_Amps_Guitar/Code/Plugin/Voltage_Amps_GuitarAlg.cpp) */
+// DisplayThreshold (:642): kMinThreshold (-60, Voltage_Amps_GuitarConsts.h:16) -> "Off", else Float1 + " dB"
+PU_DISP["Voltage Amps Guitar:DisplayThreshold"] = v => v == -60 ? "Off" : (+v).toFixed(1) + " dB";
+
+// WLM Plus — Plugins/Post/WLM/Code/Plugin/WLMAlg.cpp (map :1671-1690); WLMConsts.h, cWeightingCurves.h
+// :3198 thresholds on RealWorld; RW 4 exactly -> "LUFS 9dB", above 4 -> empty
+PU_DISP["WLM Plus:DisplayMomentaryScale"] = v => v < 1 ? "LKFS" : v < 2 ? "LU 18dB" : v < 3 ? "LUFS 18dB" : v < 4 ? "LU 9dB" : v == 4 ? "LUFS 9dB" : "";
+PU_DISP["WLM Plus:DisplayHMS"] = v => { // :3171 seconds -> "%02d:%02d:%02d"
+  const t = Math.trunc(v), p = n => String(Math.trunc(n)).padStart(2, "0");
+  return p(Math.trunc(t / 3600)) + ":" + p(Math.trunc(t / 60) % 60) + ":" + p(t % 60);
+};
+// :3076 eWeightCurveNone, LeqK, LeqA, LeqB, LeqC; default (LeqM) -> "Leq (M)"
+PU_DISP["WLM Plus:DisplayWeightCurve"] = v => ["None", "ITU 1770 R2LB", "Leq (A)", "Leq (B)", "Leq (C)"][Math.trunc(v)] ?? "Leq (M)";
+PU_DISP["WLM Plus:DisplayShortMax"] = (v, q) => Math.round(puState(q, v)) === 1000 ? "Off" : (+v).toFixed(1); // :3111 State == GRAN
+PU_DISP["WLM Plus:DisplayShortMin"] = v => v == -90 ? "Off" : (+v).toFixed(1); // :3121 kShortMinOffVal
+PU_DISP["WLM Plus:DisplayTarget"] = v => v == -33 ? "Off" : (+v).toFixed(1); // :3151 kTargetOffVal
+PU_DISP["WLM Plus:DisplayShortMaxLEQM"] = v => v == 92 ? "Off" : (+v).toFixed(1); // :3131 kShortMaxLEQMOffVal
+PU_DISP["WLM Plus:DisplayShortMinLEQM"] = v => v == 42 ? "Off" : (+v).toFixed(1); // :3141 kShortMinLEQMOffVal
+PU_DISP["WLM Plus:DisplayTargetLeqm"] = v => v == 70 ? "Off" : (+v).toFixed(1); // :3161 kTargetLeqmOffVal
+// :2915 LeqM values (> 10) are floored at 0.1 before Float1
+PU_DISP["WLM Plus:DisplayFloat1LeqM"] = v => (v > 10 ? 0.1 * Math.floor(10 * v) : +v).toFixed(1);
+// :3023 eSTLength_400ms..2min; no match -> empty
+PU_DISP["WLM Plus:DisplaySTLength"] = v => ["400ms", "1s", "2s", "3s", "10s", "30s", "1min", "2min"][Math.trunc(v)] ?? "";
+PU_DISP["WLM Plus:DisplayChannelsStereo"] = v => ["Left", "Right", "Stereo"][Math.trunc(v)] ?? ""; // :2965
+
+/* WLM display functions (Plugins/Post/WLM/Code/Plugin/WLMAlg.cpp; consts WLMConsts.h:196-200, cWeightingCurves.h) */
+// DisplayMomentaryScale (:3198)
+PU_DISP["WLM:DisplayMomentaryScale"] = v =>
+  v < 1 ? "LKFS" : v < 2 ? "LU 18dB" : v < 3 ? "LUFS 18dB" : v < 4 ? "LU 9dB" : v == 4 ? "LUFS 9dB" : "";
+// DisplayHMS (:3171): seconds -> "%02d:%02d:%02d"
+PU_DISP["WLM:DisplayHMS"] = v => {
+  const t = Math.trunc(v), p = n => String(n).padStart(2, "0");
+  return p(Math.trunc(t / 3600)) + ":" + p(Math.trunc(t / 60) % 60) + ":" + p(t % 60);
+};
+// DisplayWeightCurve (:3076): eWeightCurveNone, LeqK, LeqA, LeqB, LeqC; default "Leq (M)"
+PU_DISP["WLM:DisplayWeightCurve"] = v => ["None", "ITU 1770 R2LB", "Leq (A)", "Leq (B)", "Leq (C)"][Math.trunc(v)] ?? "Leq (M)";
+// DisplayShortMax (:3111): state GRAN -> "Off", else Float1
+PU_DISP["WLM:DisplayShortMax"] = (v, q) => Math.round(puState(q, v)) === PU_GRAN ? "Off" : (+v).toFixed(1);
+// DisplayShortMin (:3121) -90 / DisplayTarget (:3151) -33 / DisplayShortMaxLEQM (:3131) 92 /
+// DisplayShortMinLEQM (:3141) 42 / DisplayTargetLeqm (:3161) 70 -> "Off", else Float1
+PU_DISP["WLM:DisplayShortMin"] = v => v == -90 ? "Off" : (+v).toFixed(1);
+PU_DISP["WLM:DisplayTarget"] = v => v == -33 ? "Off" : (+v).toFixed(1);
+PU_DISP["WLM:DisplayShortMaxLEQM"] = v => v == 92 ? "Off" : (+v).toFixed(1);
+PU_DISP["WLM:DisplayShortMinLEQM"] = v => v == 42 ? "Off" : (+v).toFixed(1);
+PU_DISP["WLM:DisplayTargetLeqm"] = v => v == 70 ? "Off" : (+v).toFixed(1);
+// DisplayFloat1LeqM (:2915): values > 10 (LeqM) are floored to 1 decimal first
+PU_DISP["WLM:DisplayFloat1LeqM"] = v => (v > 10 ? 0.1 * Math.floor(10 * v) : +v).toFixed(1);
+// DisplaySTLength (:3023): eSTLength_* (WLMConsts.h:100)
+PU_DISP["WLM:DisplaySTLength"] = v => ["400ms", "1s", "2s", "3s", "10s", "30s", "1min", "2min"][Math.trunc(v)] ?? "";
+// DisplayChannelsStereo (:2965): kChannelsSelectStereoL / R / LR (WLMConsts.h:93)
+PU_DISP["WLM:DisplayChannelsStereo"] = v => ["Left", "Right", "Stereo"][Math.trunc(v)] ?? "";
+
+// Waves Harmony — Plugins/Transform/Waves_Harmony/Code/Plugin/Waves_HarmonyAlgT.cpp:1265 (map). Order: DChainerALG, then
+// m_KBandMIDI (Common_Sources/Modules/KeyboardAndMidi/cKeyboardAndMidi.cpp), Psola voices, then the plugin's own
+// (Waves_HarmonyAlg.cpp), DbgTP (Common_Sources/Modules/DbgTPModule/DbgTPAlg.h), cChordsKeyboard names.
+const whNoteLen = ["1/64T","1/64","1/32T","1/64D","1/32","1/16T","1/32D","1/16","1/8T","1/16D","1/8","1/4T","1/8D","1/4","1/2T","1/4D","1/2","1/2D","1B","2B","4B","8B","16B","32B"]; // cKeyboardAndMidi.cpp:14
+const whNotes = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+// Waves_HarmonyAlg.cpp:1598 DisplayFlatten: MIDI (kMinMidiForFlatten_midi = 24 + (int)RW), octave = quot - 1
+const whFlatten = v => { const m = 24 + Math.trunc(v), r = ((m % 12) + 12) % 12; return whNotes[r] + (Math.floor(m / 12) - 1); };
+
+// --- cKeyboardAndMidi (KeyboardAndMidi module) ---
+PU_DISP["Waves Harmony:DisplayVoiceModeTolerance"] = v => v < 201 ? (+v).toFixed(0) : "Off"; // cKeyboardAndMidi.cpp:796
+PU_DISP["Waves Harmony:DisplayNoteLength"] = v => whNoteLen[Math.trunc(v)] ?? ""; // :350
+PU_DISP["Waves Harmony:DisplayFloatAdaptive"] = v => (+v).toFixed(v === Math.floor(v) ? 0 : 2); // :1017
+PU_DISP["Waves Harmony:DisplaySync"] = v => ["Synced","Legato","ReTrigger","Poly","Free"][Math.trunc(v)] ?? "Legato"; // :492 (kPlayMode*, default Legato)
+PU_DISP["Waves Harmony:DisplayTranspose"] = v => ["F#/Gb","G","G#/Ab","A","A#/Bb","B","C","C#/Db","D","D#/Eb","E","F"][Math.trunc(v)] ?? ""; // :885
+PU_DISP["Waves Harmony:DisplayMIDINote"] = v => v >= 0 ? whNotes[Math.trunc(v) % 12] + (Math.trunc(Math.trunc(v) / 12) - 2) : "none"; // :274 (octave = quot - 2)
+
+// --- plugin's own (Waves_HarmonyAlg.cpp) ---
+PU_DISP["Waves Harmony:DisplaySemitones"] = v => (v / 100).toFixed(0); // :1381 DisplayFloat0(RW / 100)
+PU_DISP["Waves Harmony:DisplayFloat0_Percent"] = v => (+v).toFixed(0) + "%"; // :1636
+PU_DISP["Waves Harmony:DisplayMixerGainWithDB"] = v => v <= -60 ? "-Inf" : (+v).toFixed(1) + " dB"; // :1507
+PU_DISP["Waves Harmony:DisplayFlatten"] = v => whFlatten(v);
+PU_DISP["Waves Harmony:DisplayNoteLengthWithOFF"] = (v, q) => puState(q, v) === 0 ? "OFF" : (whNoteLen[Math.trunc(v)] ?? ""); // :1654 (ScaleState == 0)
+PU_DISP["Waves Harmony:DisplayFloat0WithOFF"] = (v, q) => puState(q, v) === 0 ? "OFF" : (+v).toFixed(0); // :1644 (ScaleState == 0)
+PU_DISP["Waves Harmony:DisplaySnapshot"] = v => (v + 1).toFixed(0); // :1628 DisplayFloat0(RW + 1)
+// :1923 cHarmonizer_ALG::DisplaySemitonesOrFlatten(i) — ignores its own RW; reads voice i's params:
+// flatten off -> (pitch + fine)/100 semitones: 0 -> "U", >0 gets "+", Float0 if fine == 0 else Float2; flatten on -> note name.
+const whSemiOrFlat = i => () => {
+  if (Math.trunc(puVal("PARAM_VOICE_FLATTEN_ON_OFF_" + i) || 0) === 0) {
+    const fine = (puVal("PARAM_VOICE_FINE_PITCH_CENTS_" + i) || 0) / 100;
+    const st = (puVal("PARAM_VOICE_GLOBAL_PITCH_SHIFT_" + i) || 0) / 100 + fine;
+    if (st === 0) return "U";
+    return (st > 0 ? "+" : "") + st.toFixed(fine === 0 ? 0 : 2);
+  }
+  return whFlatten(puVal("PARAM_VOICE_FLATTEN_TARGET_MIDI_" + i) || 0);
+};
+for (let i = 0; i <= 8; i++) PU_DISP["Waves Harmony:DisplaySemitonesOrFlatten_" + i] = whSemiOrFlat(i);
+
+// --- cChordsKeyboard_imp.h:2635 / :2643: the currently loaded chord / scale preset NAME (host-side state the page
+// does not have) -> empty string.
+PU_DISP["Waves Harmony:DisplayChordPresetName"] = () => "";
+PU_DISP["Waves Harmony:DisplayScalePresetName"] = () => "";
+
+// --- DbgTPAlg.h:37 / :53 (debug test points). Release builds have no _ENABLE_TP -> plain DisplayFloat0.
+PU_DISP["Waves Harmony:DisplayDbgTP"] = v => (+v).toFixed(0);
+PU_DISP["Waves Harmony:DisplayHeadroom"] = v => v == 13.82 ? "PT" : v == 9.05 ? "Motu" : (+v).toFixed(2); // kdPT_DA_0dBFsToV / kdMotu0dBGainToVolts
+
+// X-Hum — Plugins/Restoration/XHum/Code/Plugin/XHumAlg.cpp (map :152-156); kNotch_* XHumConsts.h:66
+PU_DISP["X-Hum:DisplayLink"] = v => ["Unlinked", "Odd-Even", "Linked"][Math.trunc(v)] ?? (+v).toFixed(0); // :99 default -> Float0
+PU_DISP["X-Hum:DisplayHTz"] = v => (+v).toFixed(0) + " Hz"; // :69
+
+// dbx-160 — Plugins/DBX/dbx160/Code/Plugin/dbx160Alg.cpp; kNoiseLevelOff = 0 (dbx160Consts.h:308)
+PU_DISP["dbx-160:DisplayNoiseOff"] = v => v == 0 ? "Off" : (+v).toFixed(1); // :2112
+PU_DISP["dbx-160:DisplayCompression"] = v => v == 100 ? "inf" : (+v).toFixed(2); // :2459
+PU_DISP["dbx-160:DisplayFloat1_Percent"] = v => (+v).toFixed(1) + "%"; // :2023
+
+/* AR TG Meter Bridge: cAR_TG_Meter_Bridge_ALG::UpdateDisplaySelf (AbbeyRoad/AR_TG_Meter_Bridge/Code/Plugin/AR_TG_Meter_BridgeAlg.cpp)
+   - :288-303 PARAM_VU_SELECT == eMeterSelectGR(1) disables the VU / PPM / hold / digit params, any other value their GR
+     twins → HideWhenDisabled "VUmeter Left" vs "Gr VUmeter Left", "Out PPM [Hold] Left" vs "Out PPM [Hold] GR Left",
+     "Out PPM Left Digits" vs "Out GR PPM Left Digits" (+ Right).
+   - :306-310 PARAM_TRACK_NAME_DISPLAY == 0 (no TG selected; also without shared-memory support) disables PARAM_VU_SELECT →
+     the "VU Select" knob hides over the plain "VU Select Disabled" picture (never hidden).
+   "Track Name" / "Track Name Popup" (toggle picture + its DynamicPopup, same never-disabled param) stay overlaid.
+   Assumes the master instance (a non-master instance hides every control, :113-126). */
+PU_GRAPHS["AR TG Meter Bridge:groups"]=()=>{
+  const gr=Math.round(+puVal("PARAM_VU_SELECT")||0)===1,dis=new Set();
+  const vu=["PARAM_VUMETER_R","PARAM_VUMETER_L","PARAM_PPM_L","PARAM_PPM_R","PARAM_PPM_HOLD_L","PARAM_PPM_HOLD_R",
+    "PARAM_PPM_HOLD_MARKER_L","PARAM_PPM_HOLD_MARKER_R"];
+  const g=["PARAM_VUMETER_GR","PARAM_VUMETER_GR_R","PARAM_PPM_GR_L","PARAM_PPM_GR_R","PARAM_PPM_HOLD_GR_L","PARAM_PPM_HOLD_GR_R",
+    "PARAM_PPM_HOLD_MARKER_GR_L","PARAM_PPM_HOLD_MARKER_GR_R"];
+  (gr?vu:g).forEach(p=>dis.add(p));
+  if(Math.round(+puVal("PARAM_TRACK_NAME_DISPLAY")||0)===0)dis.add("PARAM_VU_SELECT");
+  return {hideCtrls:PU.ctrls.filter(c=>(c.fl||[]).includes("HideWhenDisabled")&&(c.p||[]).some(p=>dis.has(p.n))).map(c=>c.n)};
+};
+
+/* ARPlates: overlay only — nothing to hide. "Input Level Left" / "Input Level Right" and "Output Level Left" / "Output
+   Level Right" (PLTS / PLTX) are the paired L/R faders by design: CInputOutputRotationKnob (AbbeyRoad/ARPlates/Code/Plugin/
+   CInputOutputRotationKnob.h :5-9) — "the link area functionality is achieved through overlap between the controls alpha
+   images"; each has its own image set and value window. ARPlatesAlg.cpp has no control show / hide / disable code
+   (its Show / Hide calls are graph objects only). */
+
+/* Abbey Road Chambers: param disabled-modes on HideWhenDisabled controls (AbbeyRoad/ARChambers/Code/Plugin/ARChambersAlg.cpp).
+   - PARAM_LOAD_IR (UpdateDisplaySelf :1310-1335): every LoadIRdisabledParam (.h :331) disabled, then the loaded room's list
+     re-enabled (k_ChambersParams / k_MirrorParams / k_StoneParams, .h :350-383) → only that room's mic-position
+     popup / toggles / BG picture / sliders show (Chamber 2 also its Speaker / Mic selectors).
+   - UpdateMicTypeDisplay / UpdateSpeakerTypeDisplay (:3943-3970): KM53s / MKH2s BG and Altec / BW speaker by type.
+   - UpdateDisabledMicPositionWhileDragging (:1160): the *_POSITION_{TOP,MID,BOTTOM}_DISABLED params are disabled while
+     their value is 0 = kEnabledMicPositionParam (CQuantizedSliderST.h :8; 1 only while a mic slider is dragged) → at rest
+     the mic silhouettes / arrows are hidden; the drag sliders themselves stay (they also follow their position param).
+   - PARAM_SYNC_ONOFF (:1203): eMS_MODE(0) → Delay Division(s) disabled, else Delay Time(s).
+   The L / R input / output meter knobs share one rect on purpose (separate half images) — left alone. */
+PU_GRAPHS["Abbey Road Chambers:groups"]=()=>{
+  const v=n=>Math.round(+puVal(n)||0),dis=new Set();
+  const loadIR=["SPEAKER_TYPE","SPEAKER_POSITION","PILLARS_GAIN_DB","CENTER_GAIN_DB","MIC_TYPE","MIC_POSITION",
+    "MIC_POSITION_TOP_DISABLED","MIC_POSITION_MID_DISABLED","MIC_POSITION_BOTTOM_DISABLED","MIRROR_MIC_POSITION",
+    "MIRROR_MIC_POSITION_TOP_DISABLED","MIRROR_MIC_POSITION_MID_DISABLED","MIRROR_MIC_POSITION_BOTTOM_DISABLED",
+    "MIRROR_MIC_POSITION_DISABLED","STONE_MIC_POSITION","STONE_MIC_POSITION_DISABLED","STONE_MIC_POSITION_TOP_DISABLED",
+    "STONE_MIC_POSITION_MID_DISABLED","STONE_MIC_POSITION_BOTTOM_DISABLED"];
+  const room=[["SPEAKER_TYPE","SPEAKER_POSITION","PILLARS_GAIN_DB","CENTER_GAIN_DB","MIC_TYPE","MIC_POSITION",
+      "MIC_POSITION_BOTTOM_DISABLED","MIC_POSITION_MID_DISABLED","MIC_POSITION_TOP_DISABLED"],
+    ["MIRROR_MIC_POSITION","MIRROR_MIC_POSITION_MID_DISABLED","CENTER_GAIN_DB","MIRROR_MIC_POSITION_TOP_DISABLED",
+      "MIRROR_MIC_POSITION_BOTTOM_DISABLED","MIC_BOTTOM_SLIDER_MIRROR","MIRROR_MIC_POSITION_DISABLED"],
+    ["STONE_MIC_POSITION","STONE_MIC_POSITION_MID_DISABLED","CENTER_GAIN_DB","STONE_MIC_POSITION_TOP_DISABLED",
+      "STONE_MIC_POSITION_BOTTOM_DISABLED","MIC_BOTTOM_SLIDER_STONE","STONE_MIC_POSITION_DISABLED"]][v("PARAM_LOAD_IR")]||[];
+  loadIR.filter(p=>!room.includes(p)).forEach(p=>dis.add("PARAM_"+p));
+  dis.add(v("PARAM_MIC_TYPE")===1?"PARAM_MIC_TYPE_KM53s_DISABLED":"PARAM_MIC_TYPE_MKH2s_DISABLED");
+  dis.add(v("PARAM_SPEAKER_TYPE")===0?"PARAM_SPEAKER_TYPE_BW_DISABLED":"PARAM_SPEAKER_TYPE_ALTEC_DISABLED");
+  const ms=v("PARAM_SYNC_ONOFF")===0;
+  ["","_R"].forEach(s=>dis.add(ms?"PARAM_TAPE_DELAY_SYNC"+s:"PARAM_TAPE_DELAY_MSEC"+s));
+  const drag=new Set(["","MIRROR_","STONE_"].flatMap(r=>["TOP","MID","BOTTOM"].map(k=>"PARAM_"+r+"MIC_POSITION_"+k+"_DISABLED")));
+  const off=(c,p)=>dis.has(p.n)||(drag.has(p.n)&&v(p.n)===0&&c.cls!=="QuantizedSliderST");
+  return {hideCtrls:PU.ctrls.filter(c=>(c.fl||[]).includes("HideWhenDisabled")&&(c.p||[]).some(p=>off(c,p))).map(c=>c.n)};
+};
+
+/* Abbey Road RS124: param disabled-modes on HideWhenDisabled controls (AbbeyRoad/RS124/Code/Plugin/RS124Alg.cpp).
+   - UpdateDisableModeForVUMeter (:3394-3411): PARAM_METER_SELECTOR eVUMETER_INPUT(0) → PARAM_OUT_VU_L/R disabled, else
+     PARAM_IN_VU_L/R ("Clip Led Indicator In" vs "… Out"); eVUMETER_GAIN_CHANGE(1) → PARAM_VUMETER(_R) disabled, else
+     PARAM_VUMETER_GR_DISPLAY(_R) ("VU L" vs "VU GR L").
+   - UpdateDisableModeForRecoveryControl (:973-979): PARAM_SUPER_FUSE(_R) on disables PARAM_RECOVERY(_R) → "Recovery"
+     hidden, revealing the plain "Recovery Disabled" knob drawn under it on purpose (it is never hidden). */
+PU_GRAPHS["Abbey Road RS124:groups"]=()=>{
+  const v=n=>Math.round(+puVal(n)||0),sel=v("PARAM_METER_SELECTOR"),dis=new Set();
+  for(const s of ["L","R"])dis.add(sel===0?"PARAM_OUT_VU_"+s:"PARAM_IN_VU_"+s);
+  for(const s of ["","_R"]){
+    dis.add(sel===1?"PARAM_VUMETER"+s:"PARAM_VUMETER_GR_DISPLAY"+s);
+    if(v("PARAM_SUPER_FUSE"+s))dis.add("PARAM_RECOVERY"+s);
+  }
+  return {hideCtrls:PU.ctrls.filter(c=>(c.fl||[]).includes("HideWhenDisabled")&&(c.p||[]).some(p=>dis.has(p.n))).map(c=>c.n)};
+};
+
+/* Abbey Road Saturator: AbbeyRoadSaturatorAlg.cpp (Distortion/AbbeyRoadSaturator/Code/Plugin) :1966-2001 — PARAM_PRE_MS_IN_GAIN /
+   PARAM_POST_MS_OUT_GAIN are disabled in PARAM_ST_MODE eModeStereo(0) or with one output → the HideWhenDisabled
+   "Pre MS In Gain" knob hides and the plain "Pre MS In Gain Disabled" knob drawn under it shows (never hidden).
+   Overlays left alone: "Gain" (1-step mouse / value-window knob) over "Gain Knob" (151-step image, same param);
+   "VU Clip In L" / "VU Clip Out L" are identical (same PARAM_PEAK_CLIP and images; the In / Out disable at :1066 acts on
+   PARAM_IN/OUT_PEAK_METER_*, which no LV1 control uses). */
+PU_GRAPHS["Abbey Road Saturator:groups"]=()=>
+  ({hideCtrls:/S$/.test(PU.cc)&&Math.round(+puVal("PARAM_ST_MODE")||0)!==0?[]:["Pre MS In Gain"]});
+
+/* Abbey Road Studio 3: NxStudioBase::DisplayPersonalizationUnits (Nx/NxStudioBase/NxStudioBaseAlg.cpp :1146-1154) — PARAM_PERSONALIZATION_UNITS
+   eInchUnits(1) disables PARAM_HEAD_RADIUS / PARAM_EAR_AZIMUTH (cm), eCMUnits(0) their _INCH twins → HideWhenDisabled
+   "Radius Cm" / "Arc Cm" vs "Radius Inch" / "Arc Inch". The LV1 default leaves the param unset (*) → its init, cm. */
+PU_GRAPHS["Abbey Road Studio 3:groups"]=()=>
+  ({hideCtrls:Math.round(+puVal("PARAM_PERSONALIZATION_UNITS")||0)===1?["Radius Cm","Arc Cm"]:["Radius Inch","Arc Inch"]});
+
+/* Abbey Road TG Mastering Chain: overlay only — nothing to hide. TGTS / TGLS "Output Gain" / "Output Gain R"
+   (PARAM_OUTPUT / PARAM_OUTPUT_R) are the stereo L / R output faders sharing one rect by design (separate 75-step
+   image sequences 19100 / 15100 and separate value windows, like the TG12345 output pair); the chainer code
+   (AbbeyRoad/Abbey_Road_TG_Mastering_Chain/Code/Plugin) has no control show / hide / disable call for them. */
+
+/* Abbey Road Vinyl: cARVinyl_ALG::SetVUMeterSelect (AbbeyRoad/ARVinyl/Code/Plugin/ARVinylAlg.cpp :5106-5124) — PARAM_METER_SELECT
+   eMeterOutput(1) disables PARAM_PEAKMETER_IN_L/R, eMeterInput(0) PARAM_PEAKMETER_OUT_L/R → HideWhenDisabled
+   "VU Clip In[ 2| R]" vs "VU Clip Out[ 2| R]".
+   Overlays left alone: "Length Display" (CVinylDigitDisplay) / "Length" (a User1-only TextKnob on PARAM_LENGTH_IN_SAMPLES
+   with no image or value window — an invisible automation proxy, :988-1034); "Time Format" (toggle picture) /
+   "Time Format Popup" (its menu, same PARAM_VIEW_MODE). */
+PU_GRAPHS["Abbey Road Vinyl:groups"]=()=>{
+  const out=Math.round(+puVal("PARAM_METER_SELECT")||0)===1,dis=new Set(["L","R"].map(s=>(out?"PARAM_PEAKMETER_IN_":"PARAM_PEAKMETER_OUT_")+s));
+  return {hideCtrls:PU.ctrls.filter(c=>(c.fl||[]).includes("HideWhenDisabled")&&(c.p||[]).some(p=>dis.has(p.n))).map(c=>c.n)};
+};
+
+/* Atlas Reverb: cReverb_ALG::UpdateDampingEqControls (Renaissance/Reverb/Code/Plugin/ReverbAlg.cpp :4244-4291) — of the groups
+   "Damp-Hi", "Damp-Low", "EQ Wide-Hi", "EQ Wide-Low", "EQ Wide Hover" only those that exist are touched (GroupExists);
+   Atlas has just "EQ Wide Hover" (the EQ Low-F / Hi-F Freq / Gain value knobs that follow the EQ markers,
+   MarkerMovesDependents), shown only while PARAM_SCREEN_TAB == 3 (EQ tab; or the legacy skin — not used in LV1).
+   Caveat: their ControlRect is 0,0 (the plugin moves them onto the markers at run time); the page draws them there.
+   "Damp Tab" / "Space Tab" / "Ducker Tab" / "EQ Tab" are the GUIXML tab buttons over the screen area — left to the tabs. */
+PU_GRAPHS["Atlas Reverb:groups"]=()=>
+  Math.round(+puVal("PARAM_SCREEN_TAB")||0)===3?{show:["EQ Wide Hover"]}:{hide:["EQ Wide Hover"]};
+
+/* Berzerk Distortion: BerzerkDistortionAlg.cpp (Distortion/BerzerkDistortion/Code/Plugin) :390-403 — on the FDBK tab
+   PARAM_FDBK_FREQ_PITCH == kPitchMode(0) disables PARAM_FDBK_FREQ_LOW/HIGH, kFreqMode(1) the NOTE / OCT params →
+   HideWhenDisabled "FDBK Low|High Freq" vs "FDBK Low|High Note" (the whole "Fdbk" group is the tab's business).
+   Overlays left alone: "M/S Input Disabled" (3-step PARAM_ST_MODE picture drawn over the "M/S Input" knob, which is not
+   HideWhenDisabled — the plugin covers it on purpose); "Character" toggle picture + "Character Popup" (same param). */
+PU_GRAPHS["Berzerk Distortion:groups"]=()=>({hideCtrls:Math.round(+puVal("PARAM_FDBK_FREQ_PITCH")||0)===0
+  ?["FDBK Low Freq","FDBK High Freq"]:["FDBK Low Note","FDBK High Note"]});
+
+/* Brauer Motion: param disabled-modes on HideWhenDisabled controls, per panner (Brauer/BrauerMotion/Code/Plugin/BrauerMotionAlg.cpp;
+   enums BrauerMotionConsts.h: mode Sync 0 / Time 1 / Input 2 / Manual 3; trigger Off 0 / Simple 1 / 1Shot 2 / ReTrig 3 /
+   STrigReverse 4 / AtoB 5; path X-Lights 3; modulator Square 3; beats "none" 0).
+   - UpdateDisplayPannerModeSection (:5726-5762): Pulse Width (WIDTH_X_LIGHT) disabled unless X-Lights path and not Manual /
+     AtoB ("Offset" under it is not HideWhenDisabled); path (:5701-5708): X-Lights disables Motion Filter Gain Min.
+   - EnableModulatorAndTriggerSectionControllers (:5770-5811): Trigger Mode disabled in Input / Manual mode; Trigger Hold
+     unless AtoB (and not Input / Manual) — "Trigger HP" under it is not HideWhenDisabled.
+   - DisableBarsOrFreqAccordingToMode (:5950-5987): Bars / Beats (+ popups) only in Sync mode (not AtoB, not ReTrig+Square);
+     their "Disabled Plaster" only in Sync+ReTrig+Square; Speed only in Time mode (same trigger exceptions); Input
+     Sensitivity only in Input mode (not AtoB).
+   - DisableDottedAndTrippletAccordingToPannerModeAndBeatsValue (:5990-6027): Dotted / Triplet in Sync with beats != none,
+     their plasters in Sync with beats == none (same trigger exceptions).
+   Panner 1 / 2 stacks are split by the GUIXML tabs; path markers, toggle + popup pairs left alone. */
+PU_GRAPHS["Brauer Motion:groups"]=()=>{
+  const v=n=>Math.round(+puVal(n)||0),dis=new Set(),D=(p,b)=>{if(b)dis.add(p);};
+  for(const ch of [1,2]){
+    const R=ch===2?"_R":"",mode=v("PARAM_MODE_CH"+ch),trig=v("PARAM_TRIGGER_STATE_CH"+ch),xl=v("PARAM_PATH_STATE"+R)===3;
+    const ab=trig===5,rsq=trig===3&&v("PARAM_MODULATOR"+R)===3,sync=mode===0,above=mode>=2,none=+puVal("PARAM_BEATS_STATE_CH"+ch)===0;
+    D("PARAM_SPEC_PAN_GAIN_MIN_HIGH"+R,xl);
+    D("PARAM_WIDTH_X_LIGHT_"+ch,!xl||mode===3||ab);
+    D("PARAM_TRIGGER_STATE_CH"+ch,above);
+    D("PARAM_TRIGGER_HOLD_CH"+ch,!ab||above);
+    D("PARAM_BARS_STATE_CH"+ch,!sync||ab||rsq);D("PARAM_BEATS_STATE_CH"+ch,!sync||ab||rsq);
+    D(ch===1?"PARAM_BARS_BEATS_L_DISABLE":"PARAM_BARS_BEATS_R_DISABLE",!(sync&&rsq));
+    D("PARAM_SIG_FREQ_SEC"+R,mode!==1||ab||rsq);
+    D("PARAM_LFO_IN_TH"+R,mode!==2||ab);
+    const ch2=ch===1?"L":"R";
+    D("PARAM_TRIPLETS_"+ch2,!sync||none||ab||rsq);D("PARAM_DOTTED_"+ch2,!sync||none||ab||rsq);
+    D("PARAM_DOTTED_DISABLE"+R,!sync||!none||ab||rsq);D("PARAM_TRIPLET_DISABLE"+R,!sync||!none||ab||rsq);
+  }
+  return {hideCtrls:PU.ctrls.filter(c=>(c.fl||[]).includes("HideWhenDisabled")&&!/Marker/.test(c.cls||"")
+    &&(c.p||[]).some(p=>dis.has(p.n))).map(c=>c.n)};
+};
+
+/* C1: overlay only — nothing to hide. GATM / GATS "ExpSliderMaster" is a MultiThumbSlider with no image of its own whose
+   DependentsList holds "Exp Open Slider" (Gold/C1/Resources/C1GUI.xml :4054-4101): the master and its dependent thumb share
+   one rect by design. C1Alg.cpp has no control show / hide / disable code. */
+
+/* CLA Drums: WCCLA_Drums_ALG::UpdateDisplaySelf (Artist/CLA_Drums/Code/Plugin/WCCLA_Drums_ALG.cpp :926-939) — PARAM_PRESET_FLAVOR
+   eCowbell(5) disables PARAM_GATE / PARAM_GATE_COLOR, any other flavor PARAM_DELAY / PARAM_DELAY_COLOR → HideWhenDisabled
+   "Gate" / "Gate Color" / "Gate Color 1|2" vs "Delay" / "Delay Color" / "Delay Color 1|3" (WCCLA_Drums_ALG.h :53-60). */
+PU_GRAPHS["CLA Drums:groups"]=()=>{
+  const dis=Math.round(+puVal("PARAM_PRESET_FLAVOR")||0)===5?["PARAM_GATE","PARAM_GATE_COLOR"]:["PARAM_DELAY","PARAM_DELAY_COLOR"];
+  return {hideCtrls:PU.ctrls.filter(c=>(c.fl||[]).includes("HideWhenDisabled")&&(c.p||[]).some(p=>dis.includes(p.n))).map(c=>c.n)};
+};
+
+/* CLA Epic (Artist/CLA_Epic/Code/Plugin/CLA_EpicAlg.cpp):
+   - HandleRouteGroupsVisibility (:211-240): group "ROUTE" shown only while PARAM_ROUTE_SHOW == kRouteControlsShow(0);
+     "UNDER_ROUTE_DLYTAPE|DLYTHROW|DLYSLAP|DLYCROWD" (CLA_EpicConsts.h :117) — only the one of PARAM_DELAY_TAB, and none
+     while the routing screen shows → splits TapeTap1 / ThrowTap1, TapeFbk / ThrowFbk, offsets, offset locks, ….
+   - HandleSyncVisibilityEpic (:983-1011): each sync note toggle + its popup ("TapeTap1Syn" / "TapeTap1Syn Popup", Tap2,
+     Throw 1 / 2, "SlapSyn") is shown only when PARAM_DELAY_TAB is its delay and its *SYNC_ONOFF param == kSyncEnabled(1);
+     otherwise hidden, leaving the "… Syn Disabled" plate under it (never hidden by code).
+   Overlays left alone: "<Reverb>Mute_blink" (blink image over the mute button, PARAM_MUTE_*_BLINK) and the image-less
+   "TAPE / THROW / SLAP / CROWD" + "PLATE / ROOM / HALL / SPACE Header" click zones (CLA_EpicGUI.cpp :143-146). */
+PU_GRAPHS["CLA Epic:groups"]=()=>{
+  const v=n=>Math.round(+puVal(n)||0),tab=v("PARAM_DELAY_TAB"),route=v("PARAM_ROUTE_SHOW")===0;
+  const ur=["UNDER_ROUTE_DLYTAPE","UNDER_ROUTE_DLYTHROW","UNDER_ROUTE_DLYSLAP","UNDER_ROUTE_DLYCROWD"];
+  const show=[],hide=[],hideCtrls=[];
+  (route?show:hide).push("ROUTE");
+  ur.forEach((g,i)=>(i===tab&&!route?show:hide).push(g));
+  for(const [p,t,c] of [["PARAM_DLYSLAPTIMESYNC_ONOFF",2,"SlapSyn"],["PARAM_DLYTAPETIME1SYNC_ONOFF",0,"TapeTap1Syn"],
+    ["PARAM_DLYTAPETIME2SYNC_ONOFF",0,"TapeTap2Syn"],["PARAM_DLYTHROWTIME1SYNC_ONOFF",1,"ThrowTap1Syn"],
+    ["PARAM_DLYTHROWTIME2SYNC_ONOFF",1,"ThrowTap2Syn"]])
+    if(!(tab===t&&v(p)===1))hideCtrls.push(c,c+" Popup");
+  return {show,hide,hideCtrls};
+};
+
+/* CLA MixDown: CLA_MixDownAlg::UpdateMetersEnabledDisabled (Artist/CLA_MixDown/Code/Plugin/CLA_MixDownAlg.cpp :285-298) —
+   PARAM_METER_IO == eSelector_Gr(1) disables PARAM_DISPLAY_METER_INPUT_OUPUT_LEFT/RIGHT, In / Out disable
+   PARAM_DISPLAY_METER_GR_LEFT/RIGHT → HideWhenDisabled "Display Meter Input/Ouput Left|Right" vs "Display Meter Gr Left|Right".
+   CMBS "Output Clip Left" / "Output Clip Right" share one rect on purpose (separate L / R clip-LED images 2010-2013). */
+PU_GRAPHS["CLA MixDown:groups"]=()=>{
+  const gr=Math.round(+puVal("PARAM_METER_IO")||0)===1;
+  return {hideCtrls:["Left","Right"].map(s=>gr?"Display Meter Input/Ouput "+s:"Display Meter Gr "+s)};
+};
+
+/* CLA Nx: NxStudioBase::DisplayPersonalizationUnits (Nx/NxStudioBase/NxStudioBaseAlg.cpp :1146-1154) — PARAM_PERSONALIZATION_UNITS
+   eInchUnits(1) disables PARAM_HEAD_RADIUS / PARAM_EAR_AZIMUTH (cm), eCMUnits(0) their _INCH twins → HideWhenDisabled
+   "Radius Cm" / "Arc Cm" vs "Radius Inch" / "Arc Inch". The LV1 default leaves the param unset (*) → its init, cm.
+   "Monitor" (PARAM_FLAVOR radio) / "Boombox Center" (PARAM_BOOMBOX_CENTER toggle, own on/off images) share one rect on
+   purpose — the toggle is an overlay button on the monitor strip (UpdateBoomboxCenterMode :1609); left alone. */
+PU_GRAPHS["CLA Nx:groups"]=()=>
+  ({hideCtrls:Math.round(+puVal("PARAM_PERSONALIZATION_UNITS")||0)===1?["Radius Cm","Arc Cm"]:["Radius Inch","Arc Inch"]});
+
+/* CLA-2A: cCLA_2AALG::DisableEnableMeterControls (CLA/CLA_2A/Code/Plugin/CLA_2AAlg.cpp :2139-2150) — PARAM_METER == VU_Comp(1)
+   disables PARAM_DISPLAY_VU_L, any other value PARAM_DISPLAY_VU_GR (CLA_2AConsts.h :41-47) → HideWhenDisabled
+   "Meter" vs "GR-Meter". */
+PU_GRAPHS["CLA-2A:groups"]=()=>({hideCtrls:[Math.round(+puVal("PARAM_METER")||0)===1?"Meter":"GR-Meter"]});
+
+/* CLA-3A: cCLA_3AALG::DisableEnableMeterControls (CLA/CLA_3A/Code/Plugin/CLA_3AAlg.cpp :1929-1940) — PARAM_METER == VU_Comp(1)
+   disables PARAM_DISPLAY_VU_L, any other value PARAM_DISPLAY_VU_GR (CLA_3AConsts.h :39-44) → HideWhenDisabled
+   "VU L" vs "VU GR". */
+PU_GRAPHS["CLA-3A:groups"]=()=>({hideCtrls:[Math.round(+puVal("PARAM_METER")||0)===1?"VU L":"VU GR"]});
+
+/* CLA-76: cCLA_76_ALG::DisableEnableMeterControls (CLA/CLA_76/Code/Plugin/CLA_76Alg.cpp :1429-1440) — PARAM_METER_SELECT ==
+   METER_MODE_GR(0) disables PARAM_VUMETER, Input / Output disable PARAM_VUMETER_GR (CLA_76Consts.h :475-479) →
+   HideWhenDisabled "VU" vs "Reduction Meter". */
+PU_GRAPHS["CLA-76:groups"]=()=>({hideCtrls:[Math.round(+puVal("PARAM_METER_SELECT")||0)===0?"VU":"Reduction Meter"]});
+
+/* Curves AQ (Restoration/Curves/Code/Plugin; static view: no marker selected, no learn running, no analysed input):
+   - Node popups: CCurvesMarkers_X hides its dependents ("Node N Frequency / Gain / Q / Curve Type / Solo / On/Off / Delete",
+     all at a 0,0 ControlRect the marker moves at run time) unless the node is selected (Controls/CCurvesMarkers.cpp :123-129).
+   - Band N Boost / Cut / Solo (crossover dependents): PARAM_HOVERED_XOVER_NUMBER enables only the hovered band's
+     (CurvesAlg.cpp :5945-5963; 1-based, 0 = none — also forced to 0 when the crossovers are hidden, :6131-6134).
+   - Anchors: PARAM_HIDE_SHOW_ANCHORS_CONTROLS (:5577-5588) disables PARAM_ANCHOR_FREQ/GAIN_1..4 without analysed input
+     → "Anchor N" joysticks and their ": X Gain / Frq" knobs hide.
+   - AI window: not learning → PARAM_LEARN_2 ("Learn Cancel") and the readiness meters (PARAM_ENABLE_GENRE/INST_METER)
+     disabled (:5781-5786); PARAM_SINGLE_INSTRUMENT (:5595-5603) disables PARAM_GENRE_MENU when 1, else
+     PARAM_INSTRUMENT_MENU → "Mix Menu[ Popup]" vs "Instrument Menu[ Popup]".
+   Overlays left alone: "Cut Global Mix Images" under "Main Knob"; "Hide/Show Grid" / "BYPASS" over the graph;
+   "HP Slope" / "LP Slope" (HPF / LPF marker dependents; their ControlRect is relative — the page draws both there). */
+PU_GRAPHS["Curves AQ:groups"]=()=>{
+  const v=n=>Math.round(+puVal(n)||0),hov=v("PARAM_HOVERED_XOVER_NUMBER"),xo=v("PARAM_HIDE_SHOW_XOVERS")===1,dis=new Set();
+  for(let i=1;i<=4;i++){
+    if(!xo||i!==hov)["PARAM_CUT_BAND_","PARAM_BOOST_BAND_","PARAM_XOVER_SOLO_"].forEach(p=>dis.add(p+i));
+    dis.add("PARAM_ANCHOR_FREQ_"+i);dis.add("PARAM_ANCHOR_GAIN_"+i);
+  }
+  ["PARAM_LEARN_2","PARAM_ENABLE_GENRE_METER","PARAM_ENABLE_INST_METER",
+    v("PARAM_SINGLE_INSTRUMENT")>0?"PARAM_GENRE_MENU":"PARAM_INSTRUMENT_MENU"].forEach(p=>dis.add(p));
+  const node=/^Node \d+ (Frequency|Gain|Q|Curve Type|Solo|On\/Off|Delete)$/;
+  return {hideCtrls:PU.ctrls.filter(c=>node.test(c.n)||((c.fl||[]).includes("HideWhenDisabled")&&!/Marker/.test(c.cls||"")
+    &&(c.p||[]).some(p=>dis.has(p.n)))).map(c=>c.n)};
+};
+
+/* Curves Equator (Restoration/Curves/Code/Plugin; static view: no marker selected):
+   - Node popups: CCurvesMarkers_X hides its dependents ("Node N Frequency / Gain / Q / Curve Type / Solo / On/Off / Delete"
+     and their " SC" twins, 0,0 ControlRects the marker moves at run time) unless the node is selected
+     (Controls/CCurvesMarkers.cpp :123-129).
+   - Threshold: CurvesAlg.cpp :9779-9790 — PARAM_SIDECHAIN_EN off disables PARAM_BIN_CLIPPER_THRESHOLD_SC /
+     PARAM_READINESS_METER_SC, on disables PARAM_BIN_CLIPPER_THRESHOLD / PARAM_READINESS_METER → "Main Knob" vs
+     "Main Knob Sidechain".
+   - Band N Cut / Solo are crossover dependents: CNRGraphXover hides them at creation (Controls/CNRGraphXover.cpp :79-88)
+     and shows them only beside active, shown crossovers → hidden while PARAM_HIDE_SHOW_XOVERS != 1 (:6103);
+     with crossovers shown they stay (positions are run-time; caveat: drawn at their XML rect). */
+PU_GRAPHS["Curves Equator:groups"]=()=>{
+  const v=n=>Math.round(+puVal(n)||0),sc=v("PARAM_SIDECHAIN_EN")===1,xo=v("PARAM_HIDE_SHOW_XOVERS")===1;
+  const dis=new Set(sc?["PARAM_BIN_CLIPPER_THRESHOLD","PARAM_READINESS_METER"]:["PARAM_BIN_CLIPPER_THRESHOLD_SC","PARAM_READINESS_METER_SC"]);
+  const node=/^Node \d+ (Frequency|Gain|Q|Curve Type|Solo|On\/Off|Delete)( SC)?$/,band=/^Band \d+ (Cut|Solo|Boost)$/;
+  return {hideCtrls:PU.ctrls.filter(c=>node.test(c.n)||(!xo&&band.test(c.n))||((c.fl||[]).includes("HideWhenDisabled")
+    &&!/Marker/.test(c.cls||"")&&(c.p||[]).some(p=>dis.has(p.n)))).map(c=>c.n)};
+};
+
+/* Curves Resolve (Restoration/Curves/Code/Plugin): "Band N Process" / "Band N Solo" are crossover dependents —
+   CNRGraphXover hides them at creation (Controls/CNRGraphXover.cpp :79-88) and shows them only beside active, shown
+   crossovers → hidden while PARAM_HIDE_SHOW_XOVERS != 1 (CurvesAlg.cpp :6103); with crossovers shown they stay
+   (run-time positions; caveat: drawn at their XML rect; the hover rule :5945 skips the Live variants).
+   Overlay left alone: "SC is Menu" (toggle picture) / "SC is Menu Popup" (its menu; HideWhenDisabled on
+   PARAM_DISABLE_UNTIL_SIDECHAIN, which follows whether the host sends a side-chain, :5735 — not a parameter rule). */
+PU_GRAPHS["Curves Resolve:groups"]=()=>Math.round(+puVal("PARAM_HIDE_SHOW_XOVERS")||0)===1?{}
+  :{hideCtrls:PU.ctrls.filter(c=>/^Band \d+ (Process|Solo)$/.test(c.n)).map(c=>c.n)};
+
+/* DPR-402 (Harman/dpr402/Code/Plugin/dpr402Alg.cpp):
+   - :2411-2423 PARAM_SHOW_JUMPER_INFO(_R) off disables PARAM_JUMPER_INFO(_R) → the HideWhenDisabled "Jumper Info[ L/M| R/S]"
+     panel (BDRS: both on one rect) shows only while its info button is on (LV1 default: unset → off).
+   - ActionOnParamsByName (:4966-5030; kLeft/RightChannelParams dpr402Alg.h :301-317, enums dpr402Consts.h): per channel,
+     side-chain on (PARAM_USER_ENABLE_SIDECHAIN_L/_R) disables the whole list (jumper mode, peak-limiter level / attack,
+     de-ess, de-ess freq, mode selector); otherwise jumper eJumperMode07(6) disables peak-limiter level / attack + de-ess,
+     08(7) de-ess freq + de-ess, 09(8) de-ess, 10(9) mode selector, 11(10) de-ess + mode selector; mode selector eDeEssWide(1)
+     disables de-ess, eDeEssHF(2) de-ess + peak-limiter level / attack → "Peak Lim Attack[ L/M| R/S]" hides over its
+     plain "… dis" picture (never hidden); "Jumper[ …]" / "Jumper … Popup" hide with a side-chain (else stay overlaid —
+     toggle picture + its menu). Expanded GUI assumed (the collapsed skin skips this, :2400-2405). */
+PU_GRAPHS["DPR-402:groups"]=()=>{
+  const v=n=>Math.round(+puVal(n)||0),dis=new Set();
+  if(!v("PARAM_SHOW_JUMPER_INFO"))dis.add("PARAM_JUMPER_INFO");
+  if(!v("PARAM_SHOW_JUMPER_INFO_R"))dis.add("PARAM_JUMPER_INFO_R");
+  for(const [R,A,S] of [["","L","L"],["_R","R","R"]]){
+    const P={lvl:"PARAM_USER_PEAK_LIM_LEVEL"+R,de:"PARAM_USER_DE_ESS"+R,mode:"PARAM_USER_MODE_SELECTOR"+R,
+      jmp:"PARAM_USER_JUMPER_MODE"+R,freq:"PARAM_USER_DE_ESS_FREQ"+R,att:"PARAM_USER_PEAK_LIM_ATTACK_"+A};
+    if(v("PARAM_USER_ENABLE_SIDECHAIN_"+S))Object.values(P).forEach(p=>dis.add(p));
+    else{const j=v(P.jmp);
+      const d=j===6?["lvl","att","de"]:j===7?["freq","de"]:j===8?["de"]:j===9?["mode"]:j===10?["de","mode"]:[];
+      d.forEach(k=>dis.add(P[k]));}
+    const m=v(P.mode);
+    if(m===1)dis.add(P.de);else if(m===2)[P.de,P.lvl,P.att].forEach(p=>dis.add(p));
+  }
+  return {hideCtrls:PU.ctrls.filter(c=>(c.fl||[]).includes("HideWhenDisabled")&&(c.p||[]).some(p=>dis.has(p.n))).map(c=>c.n)};
+};
+
+/* EMO-D5: overlay only — nothing to hide. "Comp Rel" (EMO_D5TextKnob panel, PARAM_COMP_MAX_REL) and "Comp Auto Manual"
+   (RadioButton, PARAM_COMP_REL_MODE) share the panel rect on purpose: the radio's two divisions sit inside the panel
+   (div rects 15,42 / 15,68). EMO_D5Alg.cpp only disables the ducker-delay / units params (SetUnits :534-575), which have no
+   controls in this GUI; EMO_D5GUI.cpp has no Show/Hide calls. Markers + Graph on one rect are the graph overlay. */
+
+/* EMO-IEM (ML4S = the Nx engine, Misc/Nx): cNxALG::DisplayPersonalizationUnits (Misc/Nx/Code/Plugin/NxAlg.cpp :3774-3797) —
+   PARAM_PERSONALIZATION_UNITS (eCMUnits 0, eInchUnits 1): cm → Head Radius / Ear Azimuth, inch → Head Radius Inch /
+   Ear Azimuth Inch (HideWhenDisabled TextKnobs, pairwise same rect). */
+PU_GRAPHS["EMO-IEM:groups"]=()=>({hideCtrls:Math.round(puVal("PARAM_PERSONALIZATION_UNITS")??0)===1?["Head Radius","Ear Azimuth"]:["Head Radius Inch","Ear Azimuth Inch"]});
+
+/* H-Comp: cHComp_ALG::DisableEnableControls / DisableEnableMeterControls (Hybrid/HComp/Code/Plugin/HCompAlg.cpp ~965-992)
+   — UpdateDisabledMode on HideWhenDisabled controls. PARAM_SYNC_ON == kSyncOff(2): Release (ms) shown, ReleaseBPM + BPM
+   hidden; User/Host sync: the reverse. PARAM_METER_TYPE == kVUAtten(1): Attenuation VU shown, IO VU hidden; In/Out: reverse.
+   (HCompConsts.h: kSyncUser 0, kSyncHost 1, kSyncOff 2; kVUIn 0, kVUAtten 1, kVUOut 2.) */
+PU_GRAPHS["H-Comp:groups"]=()=>{
+  const syncOff=Math.round(puVal("PARAM_SYNC_ON")??2)===2,vuAtt=Math.round(puVal("PARAM_METER_TYPE")??1)===1;
+  return {hideCtrls:[...(syncOff?["ReleaseBPM","BPM"]:["Release"]),vuAtt?"IO VU":"Attenuation VU"]};
+};
+
+/* H-Delay: cHBDelay_ALG::UpdateDisplaySelf case PARAM_SYNC_ON / PARAM_DUAL / PARAM_PING_PONG (Hybrid/HBDelay/Code/Plugin/
+   HBDelayAlg.cpp ~2370-2445) — UpdateDisabledMode on HideWhenDisabled controls.
+   syncOff = PARAM_SYNC_ON == kSyncOff(2) (HBDelayConsts.h); dual = PARAM_DUAL == 0 (inverted), forced on by Ping-Pong on a
+   non-mono variant; rightSel = *_MAIN_RIGHT_DISPLAY == 1 (big knob edits R in dual, not ping-pong).
+   Big knob (one rect): Delay Sec (ms, not R-selected) / Delay Sec R / Delay BPM / Delay BPM R.
+   Big readouts: Delay Sec Display (ms, single), Delay BPM Display + BPM (sync, single: PARAM_*_MAIN_DISPLAY / PARAM_BPM_DUAL).
+   Dual readouts: "* L Dual Display" (PARAM_*_LEFT: mode && dual), "* R Display" (PARAM_*_RIGHT: mode && dual && !pingpong),
+   BPM DUAL (PARAM_BPM: sync && dual); LabelL_R (PARAM_DUAL_LABEL: dual && !pingpong); Ping Pong Start Direction (pingpong). */
+PU_GRAPHS["H-Delay:groups"]=()=>{
+  const iv=(n,d)=>Math.round(puVal(n)??d);
+  const syncOff=iv("PARAM_SYNC_ON",1)===2,pp=iv("PARAM_PING_PONG",0)===1,mono=PU.cc==="HBDM";
+  const dual=iv("PARAM_DUAL",1)===0||(pp&&!mono);
+  const msR=!pp&&dual&&iv("PARAM_DELAY_TIME_MS_MAIN_RIGHT_DISPLAY",0)===1,bpmR=!pp&&dual&&iv("PARAM_DELAY_TIME_BPM_MAIN_RIGHT_DISPLAY",0)===1;
+  const show={
+    "Delay Sec":syncOff&&!msR,"Delay Sec R":syncOff&&msR,"Delay BPM":!syncOff&&!bpmR,"Delay BPM R":!syncOff&&bpmR,
+    "Delay Sec Display":syncOff&&!dual,"Delay BPM Display":!syncOff&&!dual,"BPM":!syncOff&&!dual,
+    "Delay Sec L Dual Display":syncOff&&dual,"Delay Sec R Display":syncOff&&dual&&!pp,
+    "Delay BPM L Dual Display":!syncOff&&dual,"Delay BPM R Display":!syncOff&&dual&&!pp,"BPM DUAL":!syncOff&&dual,
+    "LabelL_R":dual&&!pp,"Ping Pong Start Direction":pp};
+  return {hideCtrls:Object.keys(show).filter(k=>!show[k]&&(mono?!/ R$|Dual|R Display|LabelL_R|Ping Pong/i.test(k):true))};
+};
+
+/* H-Reverb: UpdateDisabledMode rules of cHRev_ALG (Hybrid/HRev/Code/Plugin/HRevAlg.cpp):
+   - PARAM_SYNC_PREDELAY (:1215-1221): 1 → Predelay Sync knob/marker/scale clicks, else Predelay Free ones.
+   - UpdateInDeEsserMode (:1247): PARAM_ROUTING_COMP == kComMode_DeEss(2) → Dynamics Range (+ -24/0 clicks), else Dynamics
+     Recovery (+ 30/3000 clicks).
+   - EnableSelectedFilterType (:1460-1540) by PARAM_FILTER_TYPE (HRevConsts.h: Damping 0, ADSR 1, LFO 2): Damping → Damping
+     LF CutOff / LF Ratio / HF Ratio / HF CutOff + Reverb Damping graph & Damping Low/Hi markers; ADSR → Filter Type / Q /
+     Mix / Flip / F1 / F2 + Envelope graph & Attack/Decay markers; LFO → Filter Type / Q / Mix / Flip / F1 / F2 + LFO graph +
+     LFO Rate Mode, and EnableSyncLFO (:1405): PARAM_SYNC_LFO 1 → LFO Sync Rate, else LFO Free Rate.
+   (The Free/Sync Min/Mid/Max and Recovery/Range end-value click zones carry no HideWhenDisabled — they stay disabled and
+   image-less in the plugin; they are hidden here with their knob so only the live set reacts.) */
+PU_GRAPHS["H-Reverb:groups"]=()=>{
+  const iv=(n,d)=>Math.round(puVal(n)??d),hide=[];
+  const pdSync=iv("PARAM_SYNC_PREDELAY",0)===1,deEss=iv("PARAM_ROUTING_COMP",0)===2,ft=iv("PARAM_FILTER_TYPE",0),lfoSync=iv("PARAM_SYNC_LFO",1)===1;
+  const pd=s=>["Predelay "+s,"Predelay "+s+" Min","Predelay "+s+" Mid","Predelay "+s+" Max","PreDelay "+s+" Marker"];
+  hide.push(...pd(pdSync?"Free":"Sync"));
+  hide.push(...(deEss?["Dynamics Recovery","Dynamics Recovery 30","Dynamics Recovery 3000"]:["Dynamics Range","Dynamics Range -24","Dynamics Range 0"]));
+  const damp=["Damping LF CutOff","Damping LF Ratio","Damping HF Ratio","Damping HF CutOff","Reverb Damping","Damping Low","Damping Hi"];
+  const reso=["Filter Type","Filter Q","Filter Mix","Filter Flip","F1","F2"];
+  const env=["Envelope","Envelope Attack Time","Envelope Decay Time"],lfo=["LFO","LFO Rate Mode","LFO Free Rate","LFO Sync Rate"];
+  if(ft!==0)hide.push(...damp);
+  if(ft===0)hide.push(...reso);
+  if(ft!==1)hide.push(...env);
+  if(ft!==2)hide.push(...lfo);else hide.push(lfoSync?"LFO Free Rate":"LFO Sync Rate");
+  return {hideCtrls:hide};
+};
+
+/* IR-1: cIR1_ALG::UpdateDisplaySelf case PARAM_WET_DRY_TOGGLE (Misc/IR1/Code/Plugin/IR1Alg.cpp ~1506-1517) —
+   0 → Wet-Dry slider enabled, Dry Gain disabled; 1 → the reverse (both HideWhenDisabled, same rect).
+   Not ported (IR-data driven, not parameter driven): the Direct section disable when the loaded IR has no direct, and the
+   Time disable for very short IRs (IR1Alg_Preset.cpp ~1250-1280). */
+PU_GRAPHS["IR-1:groups"]=()=>({hideCtrls:[Math.round(puVal("PARAM_WET_DRY_TOGGLE")??0)===0?"Dry Gain":"Wet-Dry"]});
+
+/* IRLive: overlay only — nothing to hide. Each knob is a pair on one rect: "<Name>" (cimg 600, a 1-step blank strip; carries
+   the value text, cursor and text entry) drawn over "<Name> Images" (the real 120-step film strip) — both bound to the same
+   param (Predelay, Time, Wet-Dry, Gain, Dmp Low/Hi-F Ratio and Freq). IR1Alg.cpp never toggles one against the other; the
+   IRLive build (m_bIsLive) even skips the "no direct" disable (IR1Alg_Preset.cpp ~1250). */
+
+/* J37: param disabled-modes on HideWhenDisabled controls (AbbeyRoad/TJ37/Code/Plugin).
+   - TJ37Alg.cpp :714-728 PARAM_FEEDBACK_MIX: DELAY_SLAP(0) disables PARAM_DelayLevel(_R) (Feedback %), Feedback /
+     X-Feedback disable PARAM_DelayLevel(_R)_dB (Slap dB) → "Delay Slap Level" vs "Delay Feedback Level".
+   - TJ37Alg.cpp :731-744 PARAM_SYNC_ONOFF: eMS_MODE(0) disables PARAM_DelayTime_sync(_R), else PARAM_DelayTime(_R)
+     → "Delay Time" vs "Delay Time Sync".
+   - TJ37AlgT.cpp :1556-1566 SetVUMeterSelect: bIn = (bool)PARAM_METER; PEAKMETER_IN_L/R disabled when !bIn,
+     PEAKMETER_OUT_L/R when bIn → "VU Clip In" vs "VU Clip Out". */
+PU_GRAPHS["J37:groups"]=()=>{
+  const v=n=>Math.round(+puVal(n)||0),slap=v("PARAM_FEEDBACK_MIX")===0,ms=v("PARAM_SYNC_ONOFF")===0,inn=!!v("PARAM_METER");
+  const dis=new Set();
+  for(const s of ["","_R"]){
+    dis.add(slap?"PARAM_DelayLevel"+s:"PARAM_DelayLevel"+s+"_dB");
+    dis.add(ms?"PARAM_DelayTime_sync"+s:"PARAM_DelayTime"+s);
+  }
+  for(const s of ["L","R"])dis.add(inn?"PARAM_PEAKMETER_OUT_"+s:"PARAM_PEAKMETER_IN_"+s);
+  return {hideCtrls:PU.ctrls.filter(c=>(c.fl||[]).includes("HideWhenDisabled")&&(c.p||[]).some(p=>dis.has(p.n))).map(c=>c.n)};
+};
+
+/* JJP-Drums: WCJJP_Drums_ALG::UpdateDisplaySelf (Artist/JJP_Drums/Code/Plugin/WCJJP_Drums_ALG.cpp :302-455) — per-flavor
+   UpdateDisabledMode on HideWhenDisabled controls. PARAM_PRESET_FLAVOR (ePresets, .h :47): 0 Kick In, 1 Kick Out,
+   2 Snare Top, 3 Snare Bottom, 4 Toms. Enabled sets: Lows 1 ≠3 / Lows 2 =3; Highs 1 ∈{0,3} / Highs 2 otherwise;
+   Sustain, Punch ∈{0,1,4}; Sub ∈{0,1}; Length, Wood, Presence ∈{2,3}; Tone =4; Attitude ≤3; Verb ≥2. Each "<X> Mute"
+   follows its slider (only the HideWhenDisabled ones hide — the Attitude and Verb sliders themselves stay drawn). */
+PU_GRAPHS["JJP-Drums:groups"]=()=>{
+  const f=Math.round(puVal("PARAM_PRESET_FLAVOR")??0),hide=[];
+  const on={"Lows 1":f!==3,"Lows 2":f===3,"Highs 1":f===0||f===3,"Highs 2":f!==0&&f!==3,
+    Sustain:f<2||f===4,Punch:f<2||f===4,Sub:f<2,Length:f===2||f===3,Wood:f===2||f===3,Presence:f===2||f===3,Tone:f===4};
+  for(const k in on)if(!on[k]){hide.push(k);if(!/ [12]$/.test(k))hide.push(k+" Mute");}
+  if(f>3)hide.push("Attitude Mute");
+  if(f<2)hide.push("Verb Mute");
+  return {hideCtrls:hide};
+};
+
+/* Kaleidoscopes (FX/Kaleidoscopes/Code/Plugin/KaleidoscopesAlg.cpp) — the GUI code never calls Show/Hide; every swap is
+   UpdateDisabledMode on HideWhenDisabled controls (UpdateParamDisableAndDisplay :4762). Per effect e (1|2):
+   - Trigger state S (eTriggerStates, Consts :450: 0 Off, 1 Simple, 2 ReTrig, 3 1-Shot). S==Simple disables PARAM_TRIGGER_MODE
+     (SetTriggerFilters :4934-4949, mode forced Energy) and the user Attack (DisableEnableTriggerAttackControls :7533).
+   - TriggerDisableModeDisplay :4784: mode Rhythm(0) → Sensitivity shown, Threshold hidden; Energy(1) → reverse.
+   - LFO type (Consts :193): Sin/Tri/AbsSin cyclic → Sync enabled + Speed (free) or Speed Synced (synced), Sensitivity hidden;
+     Random/In/InSC → Sync, Speed and Speed Synced hidden, Sensitivity shown (DisableEnableSyncControl :4428 → DisableSyncControl :7462).
+   - Trigger length (DisableEnableTriggerSustainControls :7500): ReTrig only — synced (and sync enabled) → Length Synced (+ value),
+     else Length (ms); other states → both hidden.
+   - Effect type T (Consts :232: 0 Phaser, 1 Flanger, 2 Chorus, 3 Vibrato), DisableEnableControlsPerUserEffectType :4648:
+     Resonance/Q/Freq Min/Max + Phaser LFO graphs ← Phaser; Feedback/Manual/Max Delay ← Flanger|Chorus; Flanger|Chorus|Tremolo
+     graphs ← own type; Width hidden for Vibrato or Through; Mix hidden for Vibrato, Through or Parallel. (Bell Freq Min/Max are
+     also gated by SetModulator :3652, but EffectTypeLinkLaw :4306 sets the Bell modulator exactly for Phaser — same result.)
+   - Serial/Parallel (HandleParallelSerialModeDisplay :2911): Parallel → Level, Parallel Dry Gain, Rotate shown, Through hidden;
+     Serial → reverse.
+   - Crossouts: "Speed None" (UpdateSyncedSpeedDisplay :2996) when synced and tempo/(240·wholeNotes) > 20 Hz; "Trigger Sustain
+     None" (UpdateTriggerSustainBarsDisplay :3027) when synced ReTrig and 240000·wholeNotes/tempo > 2000 ms (index 0 = "Off" → hidden).
+     Tables kBarsBeatsRealWorldValue / kSustainBarsRealWorldValue (Consts :52/:60), 4/4 assumed, plugin's own PARAM_TEMPO.
+   Left alone (intentional overlays): Kaleidoscope + Mask (DisplayOnly animation + 11-step mask), "* Disabled" knobs (DisplayOnly
+   disabled-look underlays, image 14400 etc., never hidden by code), "* Patch" / "* BG" state images, Toggle+Popup pairs. */
+PU_GRAPHS["Kaleidoscopes:groups"]=()=>{
+  const v=(n,d)=>{const x=puVal(n);return x==null?d:Math.round(x);};
+  const BARS=[16,15,14,13,12,9,8,7,6,5,4,3,2,1,.75,.5,.375,1/3,.25,.1875,1/6,.125,.09375,1/12,.0625,.046875,1/24,.03125,.0234375,1/48,.015625,1/96];
+  const SUS=[0,1/96,.015625,1/48,.0234375,.03125,1/24,.046875,.0625,1/12,.09375,.125,1/6,.1875,.25,1/3,.375,.5,.75,1,2];
+  const tempo=puVal("PARAM_TEMPO")??120,par=v("PARAM_EFFECT_PARALLEL_EN",0)===1,hide=[];
+  const H=(on,...names)=>{if(!on)hide.push(...names);};
+  for(const e of [1,2]){
+    const S=v("PARAM_TRIGGER_STATE_"+e,0),mode=S===1?1:v("PARAM_TRIGGER_MODE_"+e,1),T=v("PARAM_USER_EFFECT_TYPE_"+e,0);
+    const cyc=v("PARAM_USER_LFO_TYPE_"+e,4)<=2,sync=cyc&&v("PARAM_SYNC_EN_"+e,0)===1,thru=!par&&v("PARAM_THROUGH_"+e,0)===1;
+    const tp=`Trigger ${e} `,ep=`Effect ${e} `;
+    H(S!==1,tp+"Energy/Rhythm",tp+"Energy/Rhythm Rhythm",tp+"Energy/Rhythm Energy");
+    H(mode===1,tp+"Threshold");H(mode===0,tp+"Sensitivity");
+    H(S!==1,tp+"Attack");
+    H(S===2&&!sync,tp+"Length");H(S===2&&sync,tp+"Length Synced",tp+"Length Synced Value");
+    const si=v("PARAM_TRIGGER_SUSTAIN_BARS_"+e,0),sw=SUS[si]??0;
+    H(S===2&&sync&&sw>0&&240000*sw/tempo>2000,"Trigger Sustain None "+e);
+    H(cyc,ep+"Sync",ep+"Sync on");
+    H(cyc&&!sync,ep+"Speed",ep+"Speed Value");H(sync,ep+"Speed Synced",ep+"Speed Synced Value");H(!cyc,ep+"Sensitivity");
+    const bw=BARS[v("PARAM_SPEED_BARS_"+e,13)]??1;
+    H(sync&&tempo/(240*bw)>20,"Speed None "+e);
+    H(T===0,ep+"Resonance",ep+"Q",ep+"Freq Min",ep+"Freq Max");
+    H(T===1||T===2,ep+"Feedback",ep+"Manual","Max Delay "+e);
+    H(T!==3&&!thru,ep+"Width");H(T!==3&&!thru&&!par,ep+"Mix");
+    H(par,ep+"Level",ep+"Rotate");H(!par,ep+"Through",ep+"Through on");
+    const gr=(t,mk)=>["A","B","C"].flatMap(x=>[`${t} Graph_${x} ${e}`,...mk(x)]);
+    H(T===0,...gr("Phaser",x=>[`PhaserMarker_${x} f ${e}`,`PhaserMarker_${x} n ${e}`]));
+    H(T===1,...gr("Flanger",x=>[`FlangerMarker_${x} ${e}`]));
+    H(T===2,...gr("Chorus",x=>[`ChorusMarker_${x} ${e}`]));
+    H(T===3,...gr("Tremolo",x=>[`TremoloMarker_${x} ${e}`]));
+  }
+  H(par,"Parallel Dry Gain");
+  // Width / Rotate / Through exist only in the stereo variants (GUIXML SubComp="BMDS,BMDX").
+  return {hideCtrls:/M$/.test(PU.cc||"")?hide.filter(n=>!/ (Width|Rotate|Through|Through on)$/.test(n)):hide};
+};
+
+/* L4 Ultramaximizer: overlay only — nothing to hide. The "stacks" are 1×1 px text-only VU controls (blank image 100) whose
+   value text sits elsewhere: Short/Long Term Meter (group "LONGTERM Up") vs Short/Long Term Meter B ("LONGTERM Down") are
+   swapped by the GUIXML Tab group ShowMETER (Show Short / Show Long tabs, PARAM_HIDE_SHOW_METER_3 — L4GUI.xml :1962-2000),
+   which the page already applies; LRA GUI is a separate always-on readout at its own text rect. L4Alg.cpp only disables
+   PARAM_PDR_REL (:1934, :2989) and PARAM_OUTPUT on No-Makeup (:2460), neither HideWhenDisabled in this GUI. */
+
+/* Lofi Space (Retro_Fi engine): Retro_FiAlg::UpdateDisableModeAccordingToBMPMode (Artist/Retro_Fi/Code/Plugin/Retro_FiAlg.cpp
+   :917-927) — PARAM_BPMHOSTMS == kTime (2; Retro_FiConsts.h kBPM 0, kHost 1, kTime 2): Echo Time MS shown, Echo Time BPM and
+   the BPM display hidden; BPM / Host: the reverse (all HideWhenDisabled). No Tone control in this GUI (the PARAM_DEVICE rule
+   of Retro Fi has nothing to act on here). */
+PU_GRAPHS["Lofi Space:groups"]=()=>({hideCtrls:Math.round(puVal("PARAM_BPMHOSTMS")??0)===2?["Echo Time BPM","BPM"]:["Echo Time MS"]});
+
+/* MDMX Distortion (Berzerk Distortion engine; DX2 Fuzz, DX3 OverDrive, DX4 Screamer):
+   - M/S gain (BerzerkDistortionAlg.cpp :2401-2417): PARAM_PRE_MS_IN_GAIN is disabled unless PARAM_ST_MODE != eModeStereo(0)
+     on a stereo-out variant → HideWhenDisabled "M/S Input" hides and the display-only "M/S Input Disabled" knob (greyed strip,
+     no HideWhenDisabled, same rect) shows; when enabled "M/S Input Disabled" is hidden here so one knob draws.
+     DX3S has no "Disabled" twin and its "M/S Input" is not HideWhenDisabled → left drawn.
+   - HandleBeatLeadMode (:4706-4719, not the Creative/Lab types): PARAM_BEAT_LEAD_MODE == eDynVCAModeLead(1) disables
+     PARAM_PUNCH_MODE ("Punch Mode" + its "Punch Mode bg" picture, both HideWhenDisabled), Beat(0) disables PARAM_SUSTAIN
+     ("Threshold"). "Punch Mode bg" + "Punch Mode" on one rect is the intended picture-under-toggle overlay. */
+PU_GRAPHS["MDMX Distortion:groups"]=()=>{
+  const cc=PU.cc||"",st=/S$/.test(cc),lead=Math.round(puVal("PARAM_BEAT_LEAD_MODE")??0)===1,hide=[];
+  if(st&&cc!=="DX3S"&&cc!=="DX3M")hide.push(Math.round(puVal("PARAM_ST_MODE")??0)!==0?"M/S Input Disabled":"M/S Input");
+  if(/^DX4/.test(cc));/* DX4 has neither Punch Mode nor Threshold */else if(lead){hide.push("Punch Mode");if(/^DX2/.test(cc))hide.push("Punch Mode bg");}
+  else hide.push("Threshold");
+  return {hideCtrls:hide};
+};
+
+/* MannyM-Delay: MannyM_DelayAlg::UpdateDisplaySelf case PARAM_MODE (Artist/MannyM_Delay/Code/Plugin, ~:434-449) —
+   PARAM_MODE 0 (ms) enables PARAM_DELAY_LEFT/RIGHT_MS ("Delay Left/Right ms"), otherwise PARAM_DELAY_*_NOTE_DURATION
+   ("Delay Left/Right Tempo" knobs + "Delay Left/Right Tempo Toggle" readouts, all HideWhenDisabled). The "Tempo Popup" hit
+   areas are not HideWhenDisabled and stay as the plugin leaves them. Overlay left alone: Input/Output VU Left + Right on one
+   rect (shared background, separate L/R foreground bars of one stereo meter). */
+PU_GRAPHS["MannyM-Delay:groups"]=()=>({hideCtrls:Math.round(puVal("PARAM_MODE")??0)===0
+  ?["Delay Left Tempo","Delay Right Tempo","Delay Left Tempo Toggle","Delay Right Tempo Toggle"]
+  :["Delay Left ms","Delay Right ms"]});
+
+/* MannyM-Distortion: overlay only — nothing to hide. On the stereo variant "Input/Output VU Left" and "... VU Right" share one rect and one
+   BackGround image but have their own ForeGround strips (the two bars of one stereo meter, e.g. 3021/3031, 3041/3051), so
+   both are meant to draw. Artist/MannyM_Distortion/Code/Plugin has no UpdateDisabledMode / Show / Hide calls (the VU params only reset
+   clip/peak there). */
+
+/* MannyM-EQ: overlay only — nothing to hide. On the stereo variant "Input/Output VU Left" and "... VU Right" share one rect and one
+   BackGround image but have their own ForeGround strips (the two bars of one stereo meter, e.g. 3021/3031, 3041/3051), so
+   both are meant to draw. Artist/MannyM_EQ/Code/Plugin has no UpdateDisabledMode / Show / Hide calls (the VU params only reset
+   clip/peak there). */
+
+/* MannyM-Reverb: overlay only — nothing to hide. On the stereo variant "Input/Output VU Left" and "... VU Right" share one rect and one
+   BackGround image but have their own ForeGround strips (the two bars of one stereo meter, e.g. 3021/3031, 3041/3051), so
+   both are meant to draw. Artist/MannyM_RVerb/Code/Plugin has no UpdateDisabledMode / Show / Hide calls (the VU params only reset
+   clip/peak there). */
+
+/* MannyM-ToneShaper: overlay only — nothing to hide. On the stereo variant "Input/Output VU Left" and "... VU Right" share one rect and one
+   BackGround image but have their own ForeGround strips (the two bars of one stereo meter, e.g. 3021/3031, 3041/3051), so
+   both are meant to draw. Artist/MannyM_ToneShaper/Code/Plugin has no UpdateDisabledMode / Show / Hide calls (the VU params only reset
+   clip/peak there). */
+
+/* MannyM-TripleD: overlay only — nothing to hide. On the stereo variant "Input/Output VU Left" and "... VU Right" share one rect and one
+   BackGround image but have their own ForeGround strips (the two bars of one stereo meter, e.g. 3021/3031, 3041/3051), so
+   both are meant to draw. Artist/MannyM_DeDeDe/Code/Plugin has no UpdateDisabledMode / Show / Hide calls (the VU params only reset
+   clip/peak there). */
+
+/* Maserati B72: WCMaserati_B72_ALG::UpdateDisplaySelf (Artist/Maserati_B72/Code/Plugin/WCMaserati_B72_ALG.cpp :333-401) —
+   PARAM_PRESET_FLAVOR (.h: 0 PRESET_BASS_DI, 1 PRESET_BASS_SYNTH). DI enables PARAM_OUTPUT_DI ("Output DI") and disables
+   PARAM_OUTPUT_GAIN (bound to the "Output Synth" knob); Synth the reverse. PARAM_DRY_OUTPUT_GAIN_DIRECT_IN_OUT ("Insert/Send")
+   is disabled unless Synth. All three HideWhenDisabled. */
+PU_GRAPHS["Maserati B72:groups"]=()=>(Math.round(puVal("PARAM_PRESET_FLAVOR")??0)===0
+  ?{hideCtrls:["Output Synth","Insert/Send"]}:{hideCtrls:["Output DI"]});
+
+/* Maserati GTi: WCMaserati_GTi_ALG::UpdateDisplaySelf (Artist/Maserati_GTi/Code/Plugin/WCMaserati_GTi_ALG.cpp :452-592) —
+   UpdateDisabledMode on HideWhenDisabled knobs by PARAM_PRESET_FLAVOR (.h :58: 0 Clean, 1 Clean Chorus, 2 Heavy,
+   3 Thick Rhythm, 4 Elec Soft Flange) and the direct switch (PARAM_DRY_OUTPUT_GAIN_DIRECT_IN_OUT == 1, itself enabled only
+   for flavors 3/4 — "Insert/Send"):
+   Presence 1 f≤2 && !direct, Presence 2 f≥3 && !direct; Output 1 f≤2, Output 2 f≥3; Mix & Depth f=1; Delay, Vibro, Chorus f=3;
+   Press, Range, Rate f=4; Width f≥3; FX (PARAM_WET_INPUT_GAIN) f≥3 && !direct; Insert/Send f≥3. */
+PU_GRAPHS["Maserati GTi:groups"]=()=>{
+  const f=Math.round(puVal("PARAM_PRESET_FLAVOR")??0),direct=f>=3&&Math.round(puVal("PARAM_DRY_OUTPUT_GAIN_DIRECT_IN_OUT")??0)===1;
+  const on={"Presence 1":f<=2&&!direct,"Presence 2":f>=3&&!direct,"Output 1":f<=2,"Output 2":f>=3,Mix:f===1,Depth:f===1,
+    Delay:f===3,Vibro:f===3,Chorus:f===3,Press:f===4,Range:f===4,Rate:f===4,Width:f>=3,FX:f>=3&&!direct,"Insert/Send":f>=3};
+  return {hideCtrls:Object.keys(on).filter(k=>!on[k])};
+};
+
+/* Maserati HMX: WCMaserati_HMX_ALG::UpdateDisplaySelf (Artist/Maserati_HMX/Code/Plugin/WCMaserati_HMX_ALG.cpp :229-327) —
+   PARAM_PRESET_FLAVOR (.h :45: 0 Modal, 1 PingPong). Modal enables Sensitivity, Spread, Output 1 (PARAM_OUTPUT_EQ), Size Modal
+   (PARAM_SIZE_T), Amount; PingPong enables Presence, Tempo Sync, Output 2 (PARAM_OUTPUT_GAIN), Size Bounce (PARAM_SIZE_R),
+   Dly Mix, and Tempo unless PARAM_TEMPO_SYNC == 1. All HideWhenDisabled. */
+PU_GRAPHS["Maserati HMX:groups"]=()=>{
+  const pp=Math.round(puVal("PARAM_PRESET_FLAVOR")??0)===1,sync=Math.round(puVal("PARAM_TEMPO_SYNC")??0)===1;
+  const modal=["Sensitivity","Spread","Output 1","Size Modal","Amount"],ping=["Presence","Tempo Sync","Output 2","Size Bounce","Dly Mix","Tempo"];
+  return {hideCtrls:pp?[...modal,...(sync?["Tempo"]:[])]:ping};
+};
+
+/* Maserati VX1: WCMaserati_VX1_ALG::UpdateDisplaySelf (Artist/Maserati_VX1/Code/Plugin/WCMaserati_VX1_ALG.cpp :390-404) —
+   PARAM_PRESET_FLAVOR (.h :44: 0 Male, 1 Female 1, 2 Female 2): "Compress" disabled for Female 2, "Air" for the others; both
+   also disabled while PARAM_DRY_OUTPUT_GAIN_DIRECT_IN_OUT == 1 (HideWhenDisabled, same rect). */
+PU_GRAPHS["Maserati VX1:groups"]=()=>{
+  const f2=Math.round(puVal("PARAM_PRESET_FLAVOR")??0)===2,direct=Math.round(puVal("PARAM_DRY_OUTPUT_GAIN_DIRECT_IN_OUT")??0)===1;
+  return {hideCtrls:direct?["Compress","Air"]:[f2?"Compress":"Air"]};
+};
+
+/* NX: cNxALG::DisplayPersonalizationUnits (Misc/Nx/Code/Plugin/NxAlg.cpp :3774-3797, called from UpdateDisplaySelf :2736-2753)
+   — PARAM_PERSONALIZATION_UNITS (NxConsts.h ePersonalizationUnits: eCMUnits 0, eInchUnits 1): cm → Head Radius / Ear Azimuth,
+   inch → Head Radius Inch / Ear Azimuth Inch (all HideWhenDisabled, pairwise same rect).
+   Left alone (intentional overlays): Select Sensor / Select Sensor Popup, Headphone Model / Headphone Model Popup,
+   Personalization Text / Personalisation Preset (text + popup-arrow layers; PARAM_PERSONALIZATION is never disabled), the
+   Calibrate and Head Modeling Help blinker layers (event/sensor driven, value 0 at init), Speaker Left / Speaker Right
+   (two handles on one NxRotationKnob canvas). */
+PU_GRAPHS["NX:groups"]=()=>({hideCtrls:Math.round(puVal("PARAM_PERSONALIZATION_UNITS")??0)===1?["Head Radius","Ear Azimuth"]:["Head Radius Inch","Ear Azimuth Inch"]});
+
+/* Nx Germano Studios: NxStudioBaseAlg::DisplayPersonalizationUnits (Nx/NxStudioBase/NxStudioBaseAlg.cpp :1146-1154) —
+   PARAM_PERSONALIZATION_UNITS (NxStudioBaseConsts.h: eCMUnits 0, eInchUnits 1): cm → Radius Cm / Arc Cm, inch → Radius Inch /
+   Arc Inch (HideWhenDisabled DigitDisplays, pairwise same rect). HideShow5_1Delays (:376) only affects 5.1 delay params with
+   no controls in this GUI. Head Model / Device Menu / Headphone Model popup + text pairs are intentional overlays. */
+PU_GRAPHS["Nx Germano Studios:groups"]=()=>({hideCtrls:Math.round(puVal("PARAM_PERSONALIZATION_UNITS")??0)===1?["Radius Cm","Arc Cm"]:["Radius Inch","Arc Inch"]});
+
+/* Nx Ocean Way Nashville: NxStudioBaseAlg::DisplayPersonalizationUnits (Nx/NxStudioBase/NxStudioBaseAlg.cpp :1146-1154) —
+   PARAM_PERSONALIZATION_UNITS (NxStudioBaseConsts.h: eCMUnits 0, eInchUnits 1): cm → Radius Cm / Arc Cm, inch → Radius Inch /
+   Arc Inch (HideWhenDisabled DigitDisplays, pairwise same rect). HideShow5_1Delays (:376) only affects 5.1 delay params with
+   no controls in this GUI. Head Model / Device Menu / Headphone Model popup + text pairs are intentional overlays. */
+PU_GRAPHS["Nx Ocean Way Nashville:groups"]=()=>({hideCtrls:Math.round(puVal("PARAM_PERSONALIZATION_UNITS")??0)===1?["Radius Cm","Arc Cm"]:["Radius Inch","Arc Inch"]});
+
+/* OVox (ORVS / ORVX): plugin-coded visibility (Plugins/Transform/OVox/Code/Plugin).
+   1. Modulator tabs: the "Modulators" TabGroup tabs carry a bare <FixedState/> ("State is set at runtime",
+      OVoxGUI.xml:1454); cOVox_ALG::InitDefaultGUISelf -> SetTabHandleFixedState (OVoxAlg.cpp:1250-1260) gives them
+      the kModSrc_* values (OVoxConsts.h:110-133): ADSR0 0, ADSR1 1, LFO0..3 8..11, FORMANT 12, AMP (Env) 13,
+      PITCH 14, Eq 15, Fx 16. The page's generic tab code needs FixedState=N, so the selected PARAM_MODULATORS_TAB
+      page is ported here: every other tab's groups (and the Fx tab's "Slots Container") are hidden.
+   2. Tiles menu (LFO tabs only, group TilesMenu): SetTilesMenuDisplay / GetDisableForTiles (OVoxAlgT.cpp:4500,
+      OVoxAlg.cpp:2380) disable PARAM_TILES_MENU / _SAVE / _DELETE (HideWhenDisabled: Shapes Menu, TilesScrollBar,
+      Save Shape, Delete Shape) unless PARAM_TILES_MENU_OPEN != 0 on an LFO tab.
+   3. LFO Steps: PARAM_SAMPLER_STEPS_k disabled while PARAM_SAMPLER_TYPE_k == 0 (LFO) (OVoxAlgT.cpp:4649) -> "ModN Steps" hidden.
+   4. LFO rate: ShowHideSignatureMS (OVoxAlgT.cpp:4489) — PARAM_SAMPLER_DISPLAY_k == 0 (Note) disables PARAM_SAMPLER_HZ_k
+      ("ModN Rate" hidden, "ModN Rate Synced" shown), else disables NOTE_LENGTH_k. "ModN Rate Dummy" (1-step mod-ring
+      layer, re-registered to the active rate param by ChangeDummyModRateParam, OVoxAlg.cpp:1214) stays: intentional overlay.
+   5. Note Gen time: PARAM_VOICE_MODE_QUANTIZE_ONOFF (OVoxAlgT.cpp:4740) — 1 disables VOICE_MODE_HOLD ("Note Gen Time"),
+      0 disables VOICE_MODE_QUANTIZE_SIGNATURE ("Note Gen Time Synced" + its Popup, an intentional toggle+popup overlay).
+   6. Synth Edit vs Keyboard tabs: "Keyboard Off Tab" (PARAM_KEYBOARD_TAB 0) lists both Synth Edit tab buttons and
+      ORSFilterGraph as its content, which the generic union re-shows over the SynthEdit TabGroup; in the plugin the
+      SynthEdit tab still picks its own button: PARAM_SYNTH_EDIT_TAB 0 shows "Synth Edit Tab" + ORSFilterGraph,
+      1 shows "Synth Edit Off Tab" (+ group Global). With the keyboard open (1) all three are hidden.
+   Left alone (intentional overlays / nothing disables them): Toggle+Popup pairs (Arp Mode/Rate, Global Portamento,
+   Global Follow Pitch, OVoxN Character, Note Mapper Root), Keyboard Bg under the Keyboard tabs. */
+PU_GRAPHS["OVox:groups"]=()=>{
+  const rint=n=>{const v=puVal(n);return v===null?null:Math.round(v);};
+  const tab=rint("PARAM_MODULATORS_TAB");
+  const pages=[[0,["ADSR0"]],[1,["ADSR1"]],[8,["SAMPLER0","TilesMenu"]],[9,["SAMPLER1","TilesMenu"]],
+    [10,["SAMPLER2","TilesMenu"]],[11,["SAMPLER3","TilesMenu"]],[12,["FORMANT_MODULATOR"]],[13,["AMP"]],
+    [14,["PITCH_MODULATOR"]],[15,["EQ"]],[16,[]]];
+  const on=new Set((pages.find(([s])=>s===tab)||[0,[]])[1]);
+  const hide=[...new Set(pages.flatMap(([,g])=>g))].filter(g=>!on.has(g));
+  const hideCtrls=[];
+  if(tab!==16)hideCtrls.push("Slots Container");
+  const lfo=tab!==null&&tab>=8&&tab<=11;
+  if(!lfo||rint("PARAM_TILES_MENU_OPEN")===0)hideCtrls.push("Shapes Menu","TilesScrollBar","Save Shape","Delete Shape");
+  for(let k=0;k<4;k++){
+    if(rint("PARAM_SAMPLER_TYPE_"+k)===0)hideCtrls.push(`Mod${k+1} Steps`);
+    hideCtrls.push(rint("PARAM_SAMPLER_DISPLAY_"+k)===0?`Mod${k+1} Rate`:`Mod${k+1} Rate Synced`);
+  }
+  if(rint("PARAM_VOICE_MODE_QUANTIZE_ONOFF")===1)hideCtrls.push("Note Gen Time");
+  else hideCtrls.push("Note Gen Time Synced","Note Gen Time Synced Popup");
+  if(rint("PARAM_KEYBOARD_TAB")===1)hideCtrls.push("Synth Edit Tab","Synth Edit Off Tab","ORSFilterGraph");
+  else if(rint("PARAM_SYNTH_EDIT_TAB")===1)hideCtrls.push("Synth Edit Tab","ORSFilterGraph");
+  else hideCtrls.push("Synth Edit Off Tab");
+  return {hide,hideCtrls};
+};
+
+/* PRS Supermodels: PRSSupermodelsAlg.cpp (all stacked controls are HideWhenDisabled).
+   - UpdateDisabledModeInLeadClean (:1222): Archon (PSAM/PSAX, m_bIsArchon :61/:70) disables the clean knobs when
+     PARAM_LEAD_CLEAN is on and the *_LEAD knobs when it is off; every other model swaps only Boost / Boost Lead.
+   - UpdateDisabledModeForIRBrowser (:1295-1315): PARAM_DISABLE_TIMER_OFF(2) disabled while PARAM_START_STOP(2) runs,
+     PARAM_DISABLE_TIMER_ON(2) disabled while it doesn't → "Load Direction Idle n" vs "Load Direction On n"
+     (the collapsed skin forces both timers on — the page draws the expanded GUI). */
+PU_GRAPHS["PRS Supermodels:groups"]=()=>{
+  const lead=!!puVal("PARAM_LEAD_CLEAN"),archon=/^PSA/.test(PU.cc),hide=[];
+  const knobs=archon?["Volume","Treble","Middle","Bass","Bright","Boost"]:["Boost"];
+  for(const k of knobs)hide.push(lead?k:k+" Lead");
+  for(const [n,p] of [[1,"PARAM_START_STOP"],[2,"PARAM_START_STOP2"]])
+    hide.push(puVal(p)?"Load Direction Idle "+n:"Load Direction On "+n);
+  return {hideCtrls:hide};
+};
+
+/* Primary Source Expander (shares XPLATFORM EMO/EMO_D5 cEMO_D5Alg; VXPM/VXPS/VGGM/VGGS at EMO_D5Alg.cpp:23-27).
+   - cEMO_D5Alg::SetUnits (EMO_D5Alg.cpp:534-575): PARAM_GATE_SC_EXT == 0 (internal SC) disables all three ducker-delay
+     params; external → only the PARAM_UNITS_SELECT one stays enabled (0 ms, 1 feet, 2 meters). The text knobs
+     (DuckerDelay / Meters / Feet) are HideWhenDisabled → hidden. Their +/- IncDec keys are not HideWhenDisabled and draw
+     identical images on the same spots, so only the selected unit's pair is kept (same look, one hit target).
+   - Threshold / Threshold Num and Range / Range Num are an intentional overlay (18100 / 18200 = the knob's pointer,
+     18300 / 18400 = the value digits of the same param) — left alone. */
+PU_GRAPHS["Primary Source Expander:groups"]=()=>{
+  const ext=!!puVal("PARAM_GATE_SC_EXT"),u=puVal("PARAM_UNITS_SELECT")||0;
+  const units=[["DuckerDelay","DuckerDelay"],["DuckerDelay Feet","DuckerDelay feet"],["DuckerDelay Meters","DuckerDelay meter"]];
+  const hide=[];
+  units.forEach(([knob,keys],i)=>{
+    if(!ext||i!==u)hide.push(knob);
+    if(i!==u)hide.push(keys+" Plus",keys+" Minus");
+  });
+  return {hideCtrls:hide};
+};
+
+/* RChannel: RChannelAlg.cpp
+   - UpdateParamControl PARAM_COMP_SC_SHOW / PARAM_GATE_SC_SHOW (:4229-4242): outside the Legacy skin the "Comp SC" /
+     "Gate SC" side-chain panels are GroupShow'n only while their show param is 1 (UpdateParamSelf :3889 keeps at most
+     one of them on); the Legacy skin (PARAM_SKIN_TYPE 2) shows both (UpdateBandDisplay :3662).
+   - UpdateBandDisplay (:3636-3657): group "Band<n>" is shown only in the single-band view (PARAM_ALL_BAND_TAB 0) for
+     the selected band (PARAM_BAND_SELECTED 0-3), every Band group in the All-Bands view; Legacy skin shows all.
+   Left alone (intentional overlays): "Comp SC Show/Hide" / "Gate SC Show/Hide" (both drawn by the plugin; 842 is an
+   empty image), the All Bands On/Off tab pair (same image in either state), the popup hit areas over their type text. */
+PU_GRAPHS["RChannel:groups"]=()=>{
+  if(puVal("PARAM_SKIN_TYPE")===2)return {show:["Comp SC","Gate SC","Band1","Band2","Band3","Band4"]};
+  const show=[],hide=[],single=!puVal("PARAM_ALL_BAND_TAB"),sel=puVal("PARAM_BAND_SELECTED")||0;
+  for(const [g,p] of [["Comp SC","PARAM_COMP_SC_SHOW"],["Gate SC","PARAM_GATE_SC_SHOW"]])(puVal(p)?show:hide).push(g);
+  for(let i=0;i<4;i++)(single&&sel===i?show:hide).push("Band"+(i+1));
+  return {show,hide};
+};
+
+/* REDD17: overlay only — nothing to hide (AbbeyRoad/REDD/Code/Plugin has no control show / hide / disable code).
+   - "Output" / "Output M Internal" (REDS: "Output Left|Right" / "Output L|R Internal"): one fader by design — the
+     RotationKnob "… Internal" (71-step image sequence, REDDGUI.xml :5480) draws the fader, the custom
+     REDD_CommonOutputFader on the same rect and param (1-step image, AbbeyRoad/Common/CREDD_CommonOutputFader.cpp)
+     handles the mouse with its KnobCenterPointsForMouseUp snapping and owns the value window.
+   - "Peak VU" / "Peak VU Mask": the peak slider and its mask image over the same rect (same PARAM_PEAK_METER). */
+
+/* REDD37-51: overlay only — nothing to hide (AbbeyRoad/REDD37/Code/Plugin has no control show / hide / disable code).
+   - "Output" / "Output M Internal" (R37S: "Output Left|Right" / "Output L|R Internal"): one fader by design — the
+     RotationKnob "… Internal" image sequence draws the fader, the custom REDD_CommonOutputFader on the same rect and
+     param (AbbeyRoad/Common/CREDD_CommonOutputFader.cpp) handles the mouse (center-point snapping) and the value window.
+   - "Peak VU" / "Peak VU Mask": the peak slider and its mask image (same PARAM_PEAK_METER).
+   - "Link" / "Link Selection" (R37S): the PARAM_LINK toggle and its selection-image toggle (same param). */
+
+/* REQ: REQAlg.cpp band display (:1860-1888) — group "Band<n>" (n = 1..6, only those that exist in the variant) is
+   GroupShow'n only in the single-band view (PARAM_ALL_BAND_TAB 0) for the selected band (PARAM_BAND_SELECTED 0-5);
+   the All-Bands view hides every Band group (the "All Band" tab group takes over); the Legacy skin
+   (PARAM_SKIN_TYPE 2, RenaissanceSkins::eSkinLegacy) shows them all.
+   The "All Bands Tab" / "All Bands Off Tab" pair is left alone: both tabs draw the same image (3050 / 3051 swapped)
+   in either state. */
+PU_GRAPHS["REQ:groups"]=()=>{
+  const bands=[1,2,3,4,5,6].map(n=>"Band"+n);
+  if(puVal("PARAM_SKIN_TYPE")===2)return {show:bands};
+  const single=!puVal("PARAM_ALL_BAND_TAB"),sel=puVal("PARAM_BAND_SELECTED")||0;
+  return {show:single?[bands[sel]]:[],hide:bands.filter((g,i)=>!(single&&i===sel))};
+};
+
+/* Retro Fi: Retro_FiAlg.cpp (stacked knobs are HideWhenDisabled)
+   - UpdateDisableModeAccordingToBMPMode (:917-927): PARAM_ECHOTIME ("Echo Time MS") is enabled only when
+     PARAM_BPMHOSTMS == kTime (2, Retro_FiConsts.h:124-129); otherwise PARAM_ECHO_DELAY_BPM ("Echo Time BPM").
+   - UpdateDisplaySelf PARAM_DEVICE (:491-496): PARAM_TONE is disabled when the device is eIRBypass (3) → "Tone" hides
+     and the display-only "Tone Disabled" knob (no HideWhenDisabled, drawn underneath) shows through. Otherwise "Tone"
+     covers it; "Tone Disabled" is hidden here so only one knob draws.
+   "Noise Type Popup" over "Noise Type" is the popup's hit area over its own text — left alone. */
+PU_GRAPHS["Retro Fi:groups"]=()=>({hideCtrls:[
+  puVal("PARAM_BPMHOSTMS")===2?"Echo Time BPM":"Echo Time MS",
+  puVal("PARAM_DEVICE")===3?"Tone":"Tone Disabled"]});
+
+/* Rogue Brutewall: RogueBrutewallAlg.cpp
+   - "Bell Freq" / "Bell Gain" share one rect on purpose — a dual-concentric knob (11200 = the outer frequency ring
+     with a hole, 11400 = the inner gain cap; separate value texts). PARAM_EQ_TONE_FREQ_0 / _GAIN_DB_0 are never
+     disabled — left alone.
+   - :898-916 hides group "LabControls" (Wet Mix, FF_* calibration, NNDelay*) unless the developer feature flag
+     ColorBoxesNAMAdvancedControls is set in FeatureFlags.yaml — never on a normal install, so always hidden here. */
+PU_GRAPHS["Rogue Brutewall:groups"]=()=>({hide:["LabControls"]});
+
+/* Rogue Dimensions (Renaissance/Reverb cReverb_ALG): UpdateDampingEqControls (ReverbAlg.cpp:4244-4290), the same rule
+   as RVerb.vis.js — only the selected marker's knob group of the displayed tab is shown: PARAM_SCREEN_TAB 1 (Damping)
+   → "Damp-Hi" when PARAM_DISPLAY_DUMPING_HF == 0 else "Damp-Low"; 3 (EQ) → "EQ Wide-Hi" / "EQ Wide-Low" by
+   PARAM_DISPLAY_EQ_HF (+ "EQ Wide Hover" on tab 3, where it exists); every other tab hides them all; the Legacy skin
+   (PARAM_SKIN_TYPE 2) shows all. "Decorrelation Popup" over "Decorrelation" is the popup's hit area — left alone. */
+PU_GRAPHS["Rogue Dimensions:groups"]=()=>{
+  const all=["Damp-Hi","Damp-Low","EQ Wide-Hi","EQ Wide-Low","EQ Wide Hover"];
+  if(puVal("PARAM_SKIN_TYPE")===2)return {show:all};
+  const tab=puVal("PARAM_SCREEN_TAB");
+  const show=tab===1?[puVal("PARAM_DISPLAY_DUMPING_HF")===0?"Damp-Hi":"Damp-Low"]
+    :tab===3?[puVal("PARAM_DISPLAY_EQ_HF")===0?"EQ Wide-Hi":"EQ Wide-Low","EQ Wide Hover"]:[];
+  return {show,hide:all.filter(g=>!show.includes(g))};
+};
+
+/* Rogue Overdrive: same ColorBoxes developer-only group as Rogue SampTone (feature flag off on normal installs) — always hidden. */
+PU_GRAPHS["Rogue Overdrive:groups"]=()=>({hide:["LabControls"]});
+
+/* Rogue Pre Focus: same ColorBoxes developer-only group as Rogue SampTone (feature flag off on normal installs) — always hidden. */
+PU_GRAPHS["Rogue Pre Focus:groups"]=()=>({hide:["LabControls"]});
+
+/* Rogue SampTone (ColorBoxes/SampCraft): SampCraftAlg.cpp:825-836 hides group "LabControls" (GainCalib, D_Factor,
+   NN Delay *, Work Point, FF_* …) unless the developer feature flag ColorBoxesNAMAdvancedControls is set in
+   FeatureFlags.yaml — never on a normal install, so always hidden here.
+   "In VU L" / "Inp VU R" (SCNS) share one rect on purpose: two LED-row meters (11100 / 11120) drawn at different rows of
+   the same strip — left alone. */
+PU_GRAPHS["Rogue SampTone:groups"]=()=>({hide:["LabControls"]});
+
+/* SSL E-Channel: nothing to hide. "CompAttn" / "ExpAttn" share one rect on purpose — two transparent LED-column meters
+   (11410 = compressor GR, 11310 = expander/gate GR) of the same GR strip. Neither is ever disabled or hidden by
+   SSLChannel/Code/Plugin/SSLChannelAlg.cpp (ReadMeterSelf :1998-2010 only zeroes their readings on bypass). */
+
+/* SSL EV2 Channel: SSL_EV2_ChannelAlg.cpp UpdateVUMeterDisplay (:679-693) — PARAM_VU_TYPE 0 (output) disables
+   PARAM_IN_VU_L/R, 1 (input) disables PARAM_OUT_VU_L/R; the VU bars and their peak LEDs are HideWhenDisabled, so only
+   the selected source's "… VU Left/Right" + peak LEDs draw.
+   "GR Gate Exp Meter" / "GR Comp Gain Meter" share a rect on purpose: two transparent LED columns (3200 / 3240) of
+   the same GR strip, never disabled — left alone. */
+PU_GRAPHS["SSL EV2 Channel:groups"]=()=>{
+  const out=!puVal("PARAM_VU_TYPE");
+  const inp=["Input VU Left","Input VU Right","Input Peak Left","Input Peak Right"],
+        outp=["Output VU Left","Output VU Right","Peak Left","Peak Right"];
+  return {hideCtrls:out?inp:outp};
+};
+
+/* SSL G-Channel: nothing to hide. "CompAttn" / "ExpAttn" share one rect on purpose — two transparent LED-column meters
+   (11410 = compressor GR, 11310 = expander/gate GR) of the same GR strip. Neither is ever disabled or hidden by
+   SSLChannel/Code/Plugin/SSLChannelAlg.cpp (ReadMeterSelf :1998-2010 only zeroes their readings on bypass). */
+
+/* Saphira: SaphiraAlg.cpp UpdateDisplaySelf PARAM_EQ_DISPLAY (:328-350) + UpdateHarmonicsSection (:384-460) — only the
+   selected section of the lower panel stays enabled (PARAM_EQ_DISPLAY: 0 eHarmonics, 1 eEqEdge, 2 eEqWarmth,
+   SaphiraAlg.h:22-27); the other sections' params are disabled and every stacked control is HideWhenDisabled:
+   - "Warmth Band…" controls only in section 2, "Edge Band…" only in section 1;
+   - "Harmonic Odd Display" / "Harmonic Even Display" only in section 0 and while PARAM_ODD_ON_OFF / PARAM_EVEN_ON_OFF
+     is on (:441-447) — with both on they overlay on purpose (odd + even harmonic bars in one graph).
+   Left alone: "Tape Speed Popup" over "Tape Speed" (popup hit area), "Input VU Left/Right" (PRSS: the two meter
+   strips of one meter image, never disabled). */
+PU_GRAPHS["Saphira:groups"]=()=>{
+  const sec=puVal("PARAM_EQ_DISPLAY"),hide=[];
+  for(const c of PU.ctrls){
+    if((/^Warmth Band/.test(c.n)&&sec!==2)||(/^Edge Band/.test(c.n)&&sec!==1))hide.push(c.n);
+  }
+  if(sec!==0||!puVal("PARAM_ODD_ON_OFF"))hide.push("Harmonic Odd Display");
+  if(sec!==0||!puVal("PARAM_EVEN_ON_OFF"))hide.push("Harmonic Even Display");
+  return {hideCtrls:hide};
+};
+
+/* Scheps 73: nothing to hide. "Mid Frequency" / "Mid Gain" and "Low Frequency" / "Low Gain" (and their L/M, R/S twins
+   in N73S) are 1073-style dual-concentric knobs: the stepped frequency ring (22700 / 23100, 7 / 4 steps) under the
+   gain cap (22800 / 23000, 71 steps) on one rect. Scheps73Alg.cpp has no Show/Hide/disable code for them. */
+
+/* Scheps Omni Channel: Scheps_Omni_ChannelAlg.cpp (+ Chainers_common SuiteChainerBaseAlg / DChainerAlg); all stacked
+   controls are HideWhenDisabled.
+   - UpdateVUMeterDispaly (:669-687): PARM_VU_SELECT == eVU_Select_Gr (1, StompChainerBaseConsts.h:186-193) disables the
+     in/out VU params → "Gr VUmeter Left/Right"; any other selection disables the GR ones → "VUmeter Left/Right"
+     (the insert-plugin-open case is not drawn here).
+   - UpdateDisabledOutputSlidersWhenInsertPluginShow (SuiteChainerBaseAlg.cpp:456-494): "Output Gain" (+ R) is disabled
+     and "Monitor Gain" (+ R) enabled only while a module is soloed (m_monSlotID, read from the child plugins'
+     solo controls, Scheps_Omni_ChannelAlg.cpp:1660-1700) — runtime child state, so the default: no solo → Output Gain.
+   - "SR First Run" (VST3 scan message over the whole window) — the primary GUI calls DisableVST3ScanMessage(true)
+     on open (Scheps_Omni_ChannelGUI.cpp:36 → DChainerAlg.cpp:5365), so it is hidden. */
+PU_GRAPHS["Scheps Omni Channel:groups"]=()=>{
+  const gr=puVal("PARM_VU_SELECT")===1;
+  return {hideCtrls:["Monitor Gain","Monitor Gain R","SR First Run",
+    ...(gr?["VUmeter Left","VUmeter Right"]:["Gr VUmeter Left","Gr VUmeter Right"])]};
+};
+
+/* Scheps Parallel Particles: Scheps_Parallel_ParticlesAlg.cpp
+   - The stacks "<X> Leds" / "<X> Leds Dimmed" / "<X>" (Thick, Sub, Bite, Air) are intentional layers of one knob: the LED
+     ring (2020x / 20400, follows PARAM_<X>), the dim mask toggle (PARAM_<X>_OFF, 5111/5101…) and the knob cap — the
+     plugin never hides any of them. Left alone.
+   - SetDisabledDueToOnOffThickSubBiteAirParams (:182-205): PARAM_<X>_METER is disabled while the module's on/off
+     (PARAM_<X>_OFF, 1 = on) is 0 → its HideWhenDisabled "<X> Ladder Dull" waterfall meter is hidden. */
+PU_GRAPHS["Scheps Parallel Particles:groups"]=()=>({hideCtrls:
+  [["Thick","PARAM_THICK_OFF"],["Sub","PARAM_SUB_OFF"],["Bite","PARAM_BITE_OFF"],["Air","PARAM_AIR_OFF"]]
+    .filter(([,p])=>puVal(p)===0).map(([n])=>n+" Ladder Dull")});
+
+/* SignalGenerator: overlay only — nothing to hide. "Gain Shortcuts" (PARAM_GAIN_DISCRETE, 4-step strip 600, reg None) is the
+   lit-shortcut layer drawn over the "Gain" knob (the -6/-12/-20 dB click zones set it); same for Frequency / Frequency
+   Shortcuts. SignalGenAlg.cpp :477-478 disables PARAM_SIN_FREQ(_DISCRETE) for white/pink noise, but those controls are not
+   HideWhenDisabled — the plugin keeps them drawn (disabled look). */
+
+/* Silk Vocal (Restoration/Silk, KPMM/KPMS at SilkAlg.cpp:33-34): nothing to hide — every stack is an intentional overlay.
+   - "Mid Process High Limit Line" / "Mid Process Low Limit Line": two display-only CSilkSlider_X cursors (LPF / HPF
+     limit) sharing one track rect, each drawn at its own value.
+   - "Voice Type Popup" over "Voice Type": the popup's hit area over its toggle image.
+   - "High Process - DeEsser/Shelf" + "… Hover A" / "… Hover b": the radio plus two hover-highlight toggles with the same
+     Idle image (219); PARAM_DEES_AUTOGAIN_TH_ONLY is never disabled (the only Silk disable code for hover windows,
+     :2260-2266 / :2271-2281, is commented out). */
+
+/* Space Rider: SpaceRiderAlg.cpp UpdateDisplaySelf PARAM_SYNC_ON (:432-440) — sync on disables PARAM_DELAY_TIME_MS,
+   off disables PARAM_DELAY_TIME_BPM (UpdateParamDisableMode :1011). Every control registered to the disabled param is
+   HideWhenDisabled: the knob, its Arc, its A / B range markers and its value display ("Delay Time Sync…" /
+   "Delay Time Bpm Display" vs "Delay Time ms…" / "Delay Time MS Display").
+   All other stacks (knob + "<X> Arc" ring + "<X> A" / "<X> B" ArcMarkers) are intentional overlays — the A/B set range
+   markers drawn around their knob; the code never disables the *_A / *_B params (:345-358 commented out). */
+PU_GRAPHS["Space Rider:groups"]=()=>{
+  const off=puVal("PARAM_SYNC_ON")?/^PARAM_DELAY_TIME_MS/:/^PARAM_DELAY_TIME_BPM/;
+  return {hideCtrls:PU.ctrls.filter(c=>(c.p||[]).some(p=>off.test(p.n))).map(c=>c.n)};
+};
+
+/* StudioVerse Audio Effects (Chainers/StudioRack StudioRackALG; WRHM/WRHS/WRHX at StudioRackAlg.cpp:48-50). The
+   stacked controls are HideWhenDisabled:
+   - RefreshAllMacrosDisplay (:5720-5729): PARAM_MACRO_TAB_DISPLAY_<i> is enabled only for i == PARAM_MACRO_TABS →
+     page 0 shows "Macro1".."Macro8" (PARAM_MACRO_n), page k (1-12) shows "Macro k_1".."Macro k_8"; the other 12 sets hide.
+   - UpdateParamControl PARAM_LEVEL_LOCK (:1910-1913): PARAM_LEVEL_LOCK_OUTPUT_DISPLAY is disabled while Level Lock is
+     off → "Level Lock Input Display" / "Level Lock Output Display" hide; with the lock on they overlay Input / Output
+     Gain on purpose (the locked look).
+   - UpdateDisabledModeForOP (:3558-3566): logged out → PARAM_USER_MENU disabled ("Login popup" hides), logged in →
+     PARAM_DISPLAY_LOGIN disabled ("Login" hides). The page has no Waves account session → logged out.
+   Left alone: "Macro Tab Selector" / "Macro Tab Name" / "… Inc" / "… Dec" (popup hit area + name text + arrow images
+   of one tab-name widget). */
+PU_GRAPHS["StudioVerse Audio Effects:groups"]=()=>{
+  const tab=puVal("PARAM_MACRO_TABS");
+  if(tab===null)return {}; // SRMS / STMM / STMS: no macro rack
+  const hide=["Login popup"];
+  for(let t=0;t<=12;t++)if(t!==tab)for(let n=1;n<=8;n++)hide.push(t?`Macro ${t}_${n}`:"Macro"+n);
+  if(!puVal("PARAM_LEVEL_LOCK"))hide.push("Level Lock Input Display","Level Lock Output Display");
+  return {hideCtrls:hide};
+};
+
+/* Sub Align: SubAlignAlg.cpp cSubAlign_AlgT::SetUnits (:740-777) — PARAM_UNITS_SELECT (0 eMilliSeconds, 1 eFeet,
+   2 eMeters, SubAlignConsts.h:259-261) leaves only that unit's PARAM_SUB_DELAY_LEFT/RIGHT[_FEET|_METERS] enabled; the
+   value text knobs ("Sub Delay[ Left|Right]", "… Meters", "… Feet") are HideWhenDisabled → only the selected one draws.
+   The speaker graphics and +/- keys of the three units are not HideWhenDisabled (the plugin draws all three, each
+   following the same delay converted to its unit) — only the selected unit's set is kept here: same look, one hit target. */
+PU_GRAPHS["Sub Align:groups"]=()=>{
+  const u=puVal("PARAM_UNITS_SELECT")||0,keep=[/^PARAM_SUB_DELAY_(LEFT|RIGHT)$/,/_FEET$/,/_METERS$/][u];
+  return {hideCtrls:PU.ctrls.filter(c=>(c.p||[]).some(p=>/^PARAM_SUB_DELAY_(LEFT|RIGHT)/.test(p.n)&&!keep.test(p.n))).map(c=>c.n)};
+};
+
+/* Sync Vx: the shipping GUI is an HTML view (TA-View/time-alignment.html). SyncVxGUI.cpp FinishCreate (:22-42): unless
+   the developer feature flag EnableSyncVxLabGui is set, it loads the HTML page and Hide()s every GUIXML control
+   except "Cover Image" (kCoverImageControlName, SyncVxConsts.h:254), whose PARAM_COVER_IMAGE_DISPLAY is enabled
+   when not in the lab GUI (SyncVxAlg.cpp:1119-1120). The page cannot run the HTML view, so it shows what the plugin
+   shows under it: the cover image only — this also removes the stacked "Denoise 2..15", "MarkersDisplay" /
+   "BlinkMakeRef" and "AutoAlign" / "PlayheadMode" bridge controls (HTMLControl flag: data links to the HTML view). */
+PU_GRAPHS["Sync Vx:groups"]=()=>({hideCtrls:PU.ctrls.filter(c=>c.n!=="Cover Image").map(c=>c.n),showCtrls:["Cover Image"]});
+
+/* TG12345: param disabled-modes on HideWhenDisabled controls (AbbeyRoad/TG12345/Code/Plugin/TG12345Alg.cpp).
+   - UpdateMeterModeDisplay (:906-927): PARAM_METER_SELECT == METER_SELECT_GR(0) disables the VU / VCA peak-meter display
+     params, else their _GR twins → "VU" vs "VU GR", "VCA Peak Meter" vs "VCA Peak Meter GR" (+ R / L variants).
+   - SetVUMeterSelect (:3430-3445): METER_SELECT_OUT(2) disables PARAM_PEAKMETER_IN_L/R, else PEAKMETER_OUT_L/R
+     → "Clip Led Indicator" vs "VU Clip Out".
+   TG5S "Output Level L" / "Output Level R" (PARAM_FADER / _R) share one rect on purpose (dual fader, separate images
+   and value windows) — left alone. */
+PU_GRAPHS["TG12345:groups"]=()=>{
+  const sel=Math.round(+puVal("PARAM_METER_SELECT")||0),gr=sel===0,out=sel===2,dis=new Set();
+  for(const s of ["","_R"])for(const b of ["PARAM_VUMETER_DISPLAY","PARAM_COMP_VCA_GAIN_METER_DISPLAY"])
+    dis.add(gr?b+s:b+"_GR"+s);
+  for(const s of ["L","R"])dis.add(out?"PARAM_PEAKMETER_IN_"+s:"PARAM_PEAKMETER_OUT_"+s);
+  return {hideCtrls:PU.ctrls.filter(c=>(c.fl||[]).includes("HideWhenDisabled")&&(c.p||[]).some(p=>dis.has(p.n))).map(c=>c.n)};
+};
+
+/* TRACT: TRACTAlg.cpp
+   - UpdateSelectedBandDisplay (:3914-3990): only the selected band (PARAM_SELECTED_BAND 0-7) keeps its params enabled,
+     and within it only the ones its type uses (PARAM_BAND_<n>_TYPE: 0 eFTOP, 1 eBELL, 2 eSHELV, 3 eTILT, 4 eCUT,
+     5 eALLPASS, TRACTConsts.h:91-99): Gain off for CUT / ALLPASS; Q for BELL; Q Shelf for SHELV / TILT; Q AP for
+     ALLPASS; Q Low, Width, Q High for FTOP; Slope (SHAPE) and dB/Oct (SLOPE) for CUT; Hi/Low for CUT / SHELV. The
+     value controls are HideWhenDisabled → hidden when disabled.
+   - The "<n> … Dec/Inc" IncDec keys are not HideWhenDisabled: the plugin draws all 8 bands' (and all Q variants') keys on
+     the same spots, with identical images — only the selected band's set is kept (the Q spot's keys of the variant the
+     type uses, plain "Q" otherwise): same look, one hit target.
+   - PARAM_DELAY_UNITS (:2980-2992, :4197-4208; 0 ms, 1 ft, 2 m): only that unit's PARAM_OUT_DELAY_* is enabled →
+     "Delay (ms)" / "Delay Out feet" / "Delay Out m" (HideWhenDisabled); their Dec/Inc keys deduped the same way.
+   Left alone: "Capture" / "Receive" (UpdateCaptureButton :6616-6631 — without a Smaart connection Capture is disabled
+   but still drawn and Receive draws over it, as in the plugin) and "Banding Popup" / "Spectrograph Banding Popup" (two
+   popups on one param pair, same image). */
+PU_GRAPHS["TRACT:groups"]=()=>{
+  const cur=(puVal("PARAM_SELECTED_BAND")||0)+1,t=puVal(`PARAM_BAND_${cur}_TYPE`)||0,hide=[];
+  const on={"Gain":t!==4&&t!==5,"Frq":true,"On/Off":true,"Q":t===1,"Q Shelf":t===2||t===3,"Q AP":t===5,
+    "Q Low":t===0,"Width":t===0,"Q High":t===0,"Slope":t===4,"dB/Oct":t===4,"Hi/Low":t===4||t===2};
+  const qKeys=t===2||t===3?"Q Shelf":t===5?"Q AP":t===0?"Q Low":"Q";
+  for(const c of PU.ctrls){
+    const m=/^([1-8]) (.+?)( Dec| Inc)?$/.exec(c.n);if(!m||!(m[2] in on))continue;
+    const b=+m[1],what=m[2],key=!!m[3];
+    if(b!==cur)hide.push(c.n);
+    else if(key?(/^Q( Shelf| AP| Low)?$/.test(what)&&what!==qKeys):!on[what])hide.push(c.n);
+  }
+  const u=puVal("PARAM_DELAY_UNITS")||0;
+  [["Delay (ms)","Delay Out ms"],["Delay Out feet","Delay Out ft"],["Delay Out m","Delay Out m"]].forEach(([v,k],i)=>{
+    if(i!==u)hide.push(v,k+" Dec",k+" Inc");});
+  return {hideCtrls:hide};
+};
+
+/* Voltage Amps Bass: nothing to hide. "Drive popup" over "Drive" is the popup's hit area (Idle 653) over the drive-type
+   text toggle on the same param (PARAM_DRIVE) — an intentional overlay. Voltage_Amps_Bass/Code/Plugin has no
+   Show/Hide/disable code. */
+
+/* Voltage Amps Guitar: nothing to hide. "Lead Tab" / "Drive Tab" / "Clean Tab" are GUIXML Tab controls with an empty
+   ControlRect (0,0,0,0): they only switch the channel groups by their FixedState (handled by the page's generic tab
+   code) and draw nothing. Voltage_Amps_Guitar/Code/Plugin has no Show/Hide/disable code. */
+
+/* WLM Plus (Post/WLM WLMAlg.cpp; WLMM/WLMS and WWLM/WWLS at :15-16 / :32-33): UpdateDisplaySelf (:1211-1230) — with the
+   weighting PARAM_WEIGHT_CURVE == eWeightCurveLeqM (5, cWeightingCurves.h:9-17) PARAM_SHORT_MIN / _MAX, PARAM_TARGET and
+   PARAM_MOMENTARY_SCALE_SWITCH are disabled and the *_LEQM twins enabled; any other weighting the reverse. The text knobs
+   ("Short Max" / "Short Max Leq(m)", "Short Min" / "… Leq(m)", "Target" / "Target Leq(m)") and the "Momentary Scale"
+   toggle are HideWhenDisabled. Left alone: the "<X> Popup" hit areas over their own toggles (Weighting, Channels,
+   Short Time, Momentary Scale). */
+PU_GRAPHS["WLM Plus:groups"]=()=>{
+  const leqm=puVal("PARAM_WEIGHT_CURVE")===5,b=["Short Max","Short Min","Target"];
+  return {hideCtrls:leqm?[...b,"Momentary Scale"]:b.map(n=>n+" Leq(m)")};
+};
+
+/* WLM (Post/WLM WLMAlg.cpp; WLMM/WLMS and WWLM/WWLS at :15-16 / :32-33): UpdateDisplaySelf (:1211-1230) — with the
+   weighting PARAM_WEIGHT_CURVE == eWeightCurveLeqM (5, cWeightingCurves.h:9-17) PARAM_SHORT_MIN / _MAX, PARAM_TARGET and
+   PARAM_MOMENTARY_SCALE_SWITCH are disabled and the *_LEQM twins enabled; any other weighting the reverse. The text knobs
+   ("Short Max" / "Short Max Leq(m)", "Short Min" / "… Leq(m)", "Target" / "Target Leq(m)") and the "Momentary Scale"
+   toggle are HideWhenDisabled. Left alone: the "<X> Popup" hit areas over their own toggles (Weighting, Channels,
+   Short Time, Momentary Scale). */
+PU_GRAPHS["WLM:groups"]=()=>{
+  const leqm=puVal("PARAM_WEIGHT_CURVE")===5,b=["Short Max","Short Min","Target"];
+  return {hideCtrls:leqm?[...b,"Momentary Scale"]:b.map(n=>n+" Leq(m)")};
+};
+
+/* Waves Harmony: Waves_HarmonyAlgT.cpp
+   - UpdateDisplaySelf PARAM_VOICE_MODE (:3941-3949): group "VOICE_MODE" is GroupHide'n when the voice mode is 0
+     (RealWorld 0 / 2, toggleRanges), shown otherwise.
+   - PARAM_VOICE_MODE_QUANTIZE_ONOFF (:3897-3899): quantize on disables PARAM_VOICE_MODE_HOLD ("Tolerance Time"), off
+     disables PARAM_VOICE_MODE_QUANTIZE_SIGNATURE ("Tolerance Bar" + "Tolerance Time Synced Popup"); all HideWhenDisabled.
+   - "Voice Tab Dispaly 1..8" (PARAM_NOTE_VOICE_TAB_DISPLAY_*) are disabled on every refresh (:1775) and re-enabled only
+     for voices that currently receive a generated note (:1809) — live audio/MIDI state → hidden here, so the voice tab
+     "Control VoiceSelect n" underneath shows.
+   Left alone: "Key Popup" over "Key" (popup hit area); "Global Edit" / "Global Edit Off" (GUIXML tabs, same image in
+   either state); "Advanced control modified" / "… off" (indicator pair on PARAM_ADVANCED_CONTROLS_MODIFIED_DISPLAY,
+   :4029-4040 — depends on keyboard-open state, not modelled); "Mark 2 Control n" markers (shown per live marker). */
+PU_GRAPHS["Waves Harmony:groups"]=()=>{
+  const r={show:[],hide:[],hideCtrls:[1,2,3,4,5,6,7,8].map(n=>"Voice Tab Dispaly "+n)};
+  if(!puVal("PARAM_VOICE_MODE"))r.hide.push("VOICE_MODE");else r.show.push("VOICE_MODE");
+  if(puVal("PARAM_VOICE_MODE_QUANTIZE_ONOFF")===1)r.hideCtrls.push("Tolerance Time");
+  else r.hideCtrls.push("Tolerance Bar","Tolerance Time Synced Popup");
+  return r;
 };
 /* ==== end of plugin graph modules ==== */
 function renderMaster(){
