@@ -1907,7 +1907,7 @@ function puState(q,v){ // RealWorld -> state (0..1000; discrete: 0..N-1)
     if(v<lo||v>hi)return (R[0]<R[R.length-1])===(v<lo)?0:PU_GRAN;
     let i=0;if(R[0]<R[R.length-1])while(i<R.length&&v>R[i])i++;else while(i<R.length&&v<R[i])i++;
     const t=R[i]===v?S[i]:S[i-1]+(v-R[i-1])*(S[i]-S[i-1])/(R[i]-R[i-1]);return st.endsWith("withrounding")?Math.floor(0.5+t):t;}
-  if(st==="logarithmic"||(/freq/i.test(st)&&q.min>0))return v>0&&q.min>0?Math.log(v/q.min)/Math.log(q.max/q.min)*PU_GRAN:0;
+  if((st==="logarithmic"||/freq/i.test(st))&&q.min>0)return v>0?Math.log(v/q.min)/Math.log(q.max/q.min)*PU_GRAN:0; // log with min ≤ 0: linear, as build_plugui
   return q.max===q.min||typeof q.max!=="number"?0:(v-q.min)/(q.max-q.min)*PU_GRAN;
 }
 function puRW(q,s){ // state -> RealWorld (quantized)
@@ -1921,7 +1921,7 @@ function puRW(q,s){ // state -> RealWorld (quantized)
     return puRound(q,S[i]===s?R[i]:R[i-1]+(s-S[i-1])*(R[i]-R[i-1])/(S[i]-S[i-1]));}
   if(typeof q.min!=="number"||typeof q.max!=="number")return s;
   s=Math.min(PU_GRAN,Math.max(0,s));
-  return puRound(q,st==="logarithmic"||(/freq/i.test(st)&&q.min>0)?q.min*Math.pow(q.max/q.min,s/PU_GRAN):q.min+s*(q.max-q.min)/PU_GRAN);
+  return puRound(q,(st==="logarithmic"||/freq/i.test(st))&&q.min>0?q.min*Math.pow(q.max/q.min,s/PU_GRAN):q.min+s*(q.max-q.min)/PU_GRAN);
 }
 const puNorm=(q,v)=>puIsTog(q)?puState(q,v)/Math.max(1,puStates(q)-1):puState(q,v)/PU_GRAN;
 const puIdx=(q,v)=>Math.round(puState(q,v)); // a discrete param's state (image / division / menu index)
@@ -1981,7 +1981,7 @@ async function openPlugUi(k,i,x){
       return iv[0]==="state"?puRW(q,iv[1]):iv[0]==="double"?puRW(q,iv[1]*PU_GRAN):iv[1];};
   const defs=noedit?P.map(q=>{const iv=q.init;if(!iv||iv[1]===null||typeof iv[1]!=="number")return null;
       return iv[0]==="state"?puRW(q,iv[1]):iv[0]==="double"?puRW(q,iv[1]*PU_GRAN):iv[1];})
-    :ix.defaults[cc].map((t,j)=>t==="*"?null:t==="R"?(P[j]?iniv(P[j]):null):+t);
+    :ix.defaults[cc].map((t,j)=>t==="*"?null:t==="R"?(P[j]?iniv(P[j]):null):puTok(t));
   const p=(r.params||[])[x]||{};
   closePlugUi();
   PU={k,i,x,name,cc,pack,P,noedit,pIdx:Object.fromEntries(P.map((q,j)=>[q.n,j])),defs,
@@ -2541,11 +2541,12 @@ async function puPopClick(e){
   const it=e.target.closest(".puit");
   if(it){puLoadPreset(it.dataset.src,+it.dataset.i);puPopToggle(false);}
 }
+const puTok=t=>+String(t).replace(",",".").replace(/\*$/,""); // a value token; a trailing "*" (e.g. "50*") marks the value, not part of it
 function puApplyTokens(tokens){
   if(puViewOnly())return;
   tokens.forEach((t,j)=>{
     const q=PU.P[j];if(!q||q.ro||t==="*")return;
-    const v=t==="R"?PU.defs[j]:+String(t).replace(",",".");
+    const v=t==="R"?PU.defs[j]:puTok(t);
     if(v!==null&&isFinite(v))PU.vals[j]=v; // as stored (the engine does not re-quantize preset values)
   });
   puCommit();
@@ -8611,7 +8612,8 @@ PU_GRAPHS["Abbey Road Vinyl:groups"]=()=>{
    Caveat: their ControlRect is 0,0 (the plugin moves them onto the markers at run time); the page draws them there.
    "Damp Tab" / "Space Tab" / "Ducker Tab" / "EQ Tab" are the GUIXML tab buttons over the screen area — left to the tabs. */
 PU_GRAPHS["Atlas Reverb:groups"]=()=>
-  Math.round(+puVal("PARAM_SCREEN_TAB")||0)===3?{show:["EQ Wide Hover"]}:{hide:["EQ Wide Hover"]};
+  ({hide:["EQ Wide Hover"]}); // the plugin shows them on tab 3 but moves them onto the EQ markers at run time (rects are
+  // 0,0 in GUIXML) -- without that layout they would sit in the window corner, so they stay hidden (values show on hover in the plugin)
 
 /* Berzerk Distortion: BerzerkDistortionAlg.cpp (Distortion/BerzerkDistortion/Code/Plugin) :390-403 — on the FDBK tab
    PARAM_FDBK_FREQ_PITCH == kPitchMode(0) disables PARAM_FDBK_FREQ_LOW/HIGH, kFreqMode(1) the NOTE / OCT params →
@@ -9359,11 +9361,11 @@ PU_GRAPHS["Space Rider:groups"]=()=>{
    of one tab-name widget). */
 PU_GRAPHS["StudioVerse Audio Effects:groups"]=()=>{
   const tab=puVal("PARAM_MACRO_TABS");
-  if(tab===null)return {}; // SRMS / STMM / STMS: no macro rack
+  if(tab===null)return {hideCtrls:["SR First Run"]}; // SRMS / STMM / STMS: no macro rack
   const hide=["Login popup"];
   for(let t=0;t<=12;t++)if(t!==tab)for(let n=1;n<=8;n++)hide.push(t?`Macro ${t}_${n}`:"Macro"+n);
   if(!puVal("PARAM_LEVEL_LOCK"))hide.push("Level Lock Input Display","Level Lock Output Display");
-  return {hideCtrls:hide};
+  return {hideCtrls:hide.concat("SR First Run")}; // the full-window first-run overlay (as in Scheps Omni Channel)
 };
 
 /* Sub Align: SubAlignAlg.cpp cSubAlign_AlgT::SetUnits (:740-777) — PARAM_UNITS_SELECT (0 eMilliSeconds, 1 eFeet,
@@ -9478,6 +9480,289 @@ PU_GRAPHS["Waves Harmony:groups"]=()=>{
   else r.hideCtrls.push("Tolerance Bar","Tolerance Time Synced Popup");
   return r;
 };
+
+/* Plugin-coded scales, batch 2 (ScaleTypes a plugin registers in PrepareScaleFunctionsMapSelf).
+   fwd(state 0..1000, q) -> RealWorld exactly as the C++ ScaleFunc computes it (incl. its own quantization; a
+   custom scale is NOT quantized by the engine afterwards — WCParam_Base.h:218 StateToRealWorld calls it raw);
+   inv(RealWorld, q) -> state exactly as the InverseScaleFunc (no extra rounding). For a custom ScaleType the
+   engine sets ScaleInfo a = <Minimum>, b = <Maximum>, c = <Var>, Quantize = <Resolution>,
+   OverQuantize = 1/<Resolution> (WCParam_Base.cpp:570 SetScale -> SetScaleGeneric :402).
+   q.var is not in the pack digests yet: the few scales that use <Var> fall back to the ParamXML value here.
+   GRAN = 1000, OVER_GRAN = 0.001 (kept apart: s*0.001 and s/1000 can differ by one ulp).
+   XPLATFORM paths below are relative to C:\Users\vgsou\Desktop\XPLATFORM\Plugins unless they start with WavesLib/Common_Sources.
+   Mirrored in build_plugui.CUSTOM_SCALES (see _scales_py.txt) — keep in sync. */
+const SCL_GRAN = 1000, SCL_OG = 0.001;
+// C (int32_t)x on x86/x64 (cvttsd2si): truncation; NaN / out of range -> INT_MIN (e.g. 40*log10(0) at state 0)
+const sclI32 = x => (x >= -2147483648 && x < 2147483648) ? Math.trunc(x) : -2147483648;
+const sclRes = (q, d) => (q && q.res > 0 ? q.res : d);
+const sclQF = (t, Q) => { const f = Math.floor(t); return f + Math.floor((t - f) * (1 / Q) + 0.5) * Q; }; // LinearScale-style
+const sclQE = (t, Q) => Math.floor(t * (1 / Q) + 0.5) * Q;                                                // ExtendedRes-style
+const sclMM = (lo, hi, v) => (v < lo ? lo : (hi < v ? hi : v));                                         // WUMinMax
+const sclMin = (a, b) => (a < b ? a : b), sclMax = (a, b) => (a < b ? b : a);                          // WUMin / WUMax (MinMaxUtilities.h:18)
+const sclDb = g => (g < 6.31e-8 ? -144.0 : 20.0 * Math.log10(g));                                       // WavesLib Filters.cpp:310 GainTodb
+const sclG = db => Math.pow(10.0, db * 0.05);                                                           // Filters.cpp:321 dbToGain
+const sclCC = () => (typeof PU !== "undefined" && PU && PU.cc) || "";
+
+/* VUmeterScale — Common_Sources/VUmeter/VUmeterScale.h:18 / :31 (same maths in the dbx160 / dpr402 local copies).
+   Generic: every plugin registers this one function (e.g. VUmeterPluginAlg.cpp:501, AphexAlg.cpp:2907, RS124Alg.cpp:1847). */
+PU_SCALES["*:VUmeterScale"] = {
+  fwd(s) { return sclDb(Math.pow(s / SCL_GRAN, 1.0 / 1.2)) + 3.0; },
+  inv(v) { return SCL_GRAN * Math.pow(sclG(v - 3.0), 1.2); }};
+
+/* FrqScale — the plugins' local copies of WavesLib FrqScale (sSCALE_INFO.cpp:467): forward identical
+   (20/200/1k/5k/20k Hz at 0/250/500/750/1000, fraction quantized to Resolution); the inverses differ only in clamping:
+   none — AScheps/SOC_Comp/Code/Plugin/SOC_CompAlg.cpp:4649, SOC_DeEsserAlg.cpp:1433, SOC_EQAlg.cpp:3227, SOC_GateAlg.cpp:1557;
+   >=0  — SOC_PreAlg.cpp:1048; 0..GRAN — Sibilance uses WavesLib InverseFrqScale (sSCALE_INFO.cpp:446). */
+function sclFrqFwd(s, q) {
+  const r1 = -0.715338279036696, r2 = 1.430676558073393, m = (s * SCL_OG - 0.25) * 2.0;
+  const ex = sclMin(0.0, m) * r1 * (-2.0) + sclMM(0.0, 1.0, m) + (sclMax(1.0, m) - 1.0) * (r2 - 1.0) * 2.0;
+  return sclQF(200.0 * Math.pow(25.0, ex), sclRes(q, 1));
+}
+function sclFrqInvRaw(v) {
+  if (v <= 0.0) return 0.0;
+  const r1 = -0.5 / (-0.715338279036696), r2 = 0.5 / (1.430676558073393 - 1.0), ex = Math.log(v * 0.005) / Math.log(25.0);
+  return SCL_GRAN * ((sclMin(0.0, ex) * r1 + sclMM(0.0, 1.0, ex) + (sclMax(1.0, ex) - 1.0) * r2) * 0.5 + 0.25);
+}
+for (const p of ["Comp", "DS2", "EQ", "Gate"])
+  PU_SCALES["Scheps Omni Channel~Scheps " + p + ":FrqScale"] = {fwd: sclFrqFwd, inv: sclFrqInvRaw};
+PU_SCALES["Scheps Omni Channel~Scheps Pre:FrqScale"] = {fwd: sclFrqFwd, inv: v => sclMax(0.0, sclFrqInvRaw(v))};
+PU_SCALES["Sibilance:FrqScale"] = {fwd: sclFrqFwd, inv: v => sclMM(0.0, SCL_GRAN, sclFrqInvRaw(v))};
+
+/* DelayScale (H-Delay family) — Hybrid/HBDelay/Code/Plugin/HBDelayAlg.cpp:418 / :440 (= Artist/Retro_Fi/Code/Plugin/
+   Retro_FiAlg.cpp:2128 / :2149, which also builds Lofi Space). 1 ms steps up to state 509, then a + (b-a)*x^Var.
+   Var = 2.854677541709963 in every ParamXML using it. */
+const sclHdlyVar = q => (q && q.var != null ? q.var : 2.854677541709963);
+const SCL_HDLY_DELAY = {
+  fwd(s, q) { const a = q.min, b = q.max, Q = sclRes(q, 1);
+    if (s <= 510.0 - a) return Math.floor(a + s + 0.5);
+    return sclI32((a + (b - a) * Math.pow(s * SCL_OG, sclHdlyVar(q))) * (1 / Q) + 0.5) * Q; },
+  inv(v, q) { const a = q.min, b = q.max;
+    return v <= 510.0 ? v - a : SCL_GRAN * Math.pow((v - a) / (b - a), 1.0 / sclHdlyVar(q)); }};
+for (const p of ["H-Delay", "Lofi Space", "Retro Fi"]) PU_SCALES[p + ":DelayScale"] = SCL_HDLY_DELAY;
+
+/* DelayScale (Enigma) — FX/Enigma/Code/Plugin/EnigmaAlg.cpp:74 / :84: (a + s*(b-a)/GRAN)^2 (0.0001..200 ms). */
+PU_SCALES["Enigma:DelayScale"] = {
+  fwd(s, q) { const Q = sclRes(q, 0.01); let t = q.min + s * (q.max - q.min) * SCL_OG; t *= t;
+    return sclI32(t * (1 / Q) + 0.5) * Q; },
+  inv(v, q) { return sclI32(0.5 + (Math.sqrt(v) - q.min) / ((q.max - q.min) * SCL_OG)); }};
+
+/* RateScale (H-Delay) — HBDelayAlg.cpp:350 / :369: log a..b, quantized to 3 significant digits (Quantize scaled x10
+   per decade above 10). */
+/* FreqScale (H-Delay, not in the batch list but same pack; the page's /freq/ fallback misses the quantization) —
+   HBDelayAlg.cpp:384 / :403: same, Quantize scaled x10 per decade from 1000 Hz up. */
+function sclHdlyLogQ(lim, def) {
+  return {
+    fwd(s, q) { const a = q.min, b = q.max, t = a * Math.pow(b / a, s * SCL_OG);
+      let oq = 1 / sclRes(q, def), Q = sclRes(q, def);
+      for (let qq = t; qq >= lim; qq *= 0.1, Q *= 10.0, oq *= 0.1);
+      return Math.floor(t * oq + 0.5) * Q; },
+    inv(v, q) { return v <= 0.0 ? 0.0 : SCL_GRAN * (Math.log(v / q.min) / Math.log(q.max / q.min)); }};
+}
+PU_SCALES["H-Delay:RateScale"] = sclHdlyLogQ(10.0, 0.01);
+PU_SCALES["H-Delay:FreqScale"] = sclHdlyLogQ(1000.0, 1);
+
+/* MeterScale — H-Delay: HBDelayAlg.cpp:458 / :475 (40*log10, "sqrt" meter); H-Comp: Hybrid/HComp/Code/Plugin/
+   HCompAlg.cpp:98 / :112 (20*log10). State 0 -> log10(0) = -inf -> (int32_t) = INT_MIN (x86) -> -214748364.8. */
+const sclMeterFwd = k => (s, q) => { const Q = sclRes(q, 0.1); return sclI32(k * Math.log10(s * SCL_OG) * (1 / Q) + 0.5) * Q; };
+PU_SCALES["H-Delay:MeterScale"] = {fwd: sclMeterFwd(40.0), inv: v => SCL_GRAN * Math.pow(10.0, 0.025 * v)};
+PU_SCALES["H-Comp:MeterScale"] = {fwd: sclMeterFwd(20.0), inv: v => SCL_GRAN * Math.pow(10.0, 0.05 * v)};
+
+/* RatioScale — each plugin its own:
+   H-Comp: HCompAlg.cpp:67 / :85 (50^(d*(1+k*(1-d))), k = kRatioScaleConstant HCompConsts.h:59 -> 8:1 at mid);
+   Magma StressBox: Magma/MagmaStressBox/Code/Plugin/MagmaStressBoxAlg.cpp:65 / :84 (consts :60-62);
+   RComp: Renaissance/RComp/Code/Plugin/RCompAlg.cpp:67 / :87; RenAxx: Renaissance/RenAx/Code/Plugin/RenAxAlg.cpp:77 / :97;
+   GTRAmp: Guitar/GuitarAmp/Code/Plugin/GuitarAmpAlg.cpp:851 / :868 (inverse keeps a +0.5 bias, no rounding);
+   RChannel: Renaissance/RChannel/Code/Plugin/RChannelAlg.cpp:520 / :539 (RComp mirrored: 0.5:1 at state 0, 50:1 at 1000). */
+const SCL_HCK = 0.126205841626695;
+PU_SCALES["H-Comp:RatioScale"] = {
+  fwd(s, q) { const Q = sclRes(q, 0.01); let d = s * SCL_OG; d = d * (1.0 + SCL_HCK * (1.0 - d));
+    return sclI32(Math.pow(50.0, d) * (1 / Q) + 0.5) * Q; },
+  inv(v) { const d = Math.log10(v) / Math.log10(50.0), bb = 1.0 + SCL_HCK;
+    return SCL_GRAN * ((bb - Math.sqrt(bb * bb - 4.0 * SCL_HCK * d)) / (2.0 * SCL_HCK)); }};
+const SCL_MSB_P3 = 1.963763809169817, SCL_MSB_P1 = 0.957567965286800, SCL_MSB_P2 = 1.1;
+PU_SCALES["Magma StressBox:RatioScale"] = {
+  fwd(s, q) { const Q = sclRes(q, 0.01), d = s * SCL_OG * 2.0 - 1.0;
+    const t = d < 0.0 ? Math.pow(5.0, -Math.pow(-d, SCL_MSB_P2)) : (d > 0.6 ? Math.pow(20.0, Math.pow(d, SCL_MSB_P3)) : Math.pow(6.0, Math.pow(d, SCL_MSB_P1)));
+    return sclI32(t * (1 / Q) + (t < 0.0 ? -0.5 : 0.5)) * Q; },
+  inv(v) { const d = v > 1.0 ? (v > 3.0 ? Math.pow(Math.log(v) / Math.log(20.0), 1.0 / SCL_MSB_P3) : Math.pow(Math.log(v) / Math.log(6.0), 1.0 / SCL_MSB_P1))
+      : -Math.pow(-Math.log(v) / Math.log(5), 1.0 / SCL_MSB_P2);
+    return (d + 1.0) * 0.5 * SCL_GRAN; }};
+function sclRenRatioFwd(d, q) { // d = state*OVER_GRAN - 0.625 (RComp / RenAxx / GTRAmp) or mirrored (RChannel)
+  const Q = sclRes(q, 0.01), t = d > 0.0 ? Math.pow(0.5, d * 2.666666666667) : Math.pow(0.02, d * 1.6);
+  return sclI32(t * (1 / Q) + (t < 0.0 ? -0.5 : 0.5)) * Q;
+}
+const sclRenRatioX = v => (v < 1.0 ? 0.625 + Math.log10(v) / Math.log10(0.5) * 0.375 : 0.625 + Math.log10(v) / Math.log10(0.02) * 0.625);
+PU_SCALES["RComp:RatioScale"] = {fwd: (s, q) => sclRenRatioFwd(s * SCL_OG - 0.625, q), inv: v => sclI32(0.5 + SCL_GRAN * sclRenRatioX(v))};
+PU_SCALES["RenAxx:RatioScale"] = {fwd: (s, q) => sclRenRatioFwd(s * SCL_OG - 0.625, q), inv: v => Math.floor(0.5 + SCL_GRAN * sclRenRatioX(v))};
+PU_SCALES["GTRAmp:RatioScale"] = {fwd: (s, q) => sclRenRatioFwd(s * SCL_OG - 0.625, q), inv: v => 0.5 + SCL_GRAN * sclRenRatioX(v)};
+PU_SCALES["RChannel:RatioScale"] = {fwd: (s, q) => sclRenRatioFwd((1.0 - s * SCL_OG) - 0.625, q),
+  inv: v => sclI32(0.5 + SCL_GRAN * (1.0 - sclRenRatioX(v)))};
+
+/* AttackScale (RChannel) — RChannelAlg.cpp:551 / :573: log a..b (0 at state 0), fraction quantized. */
+PU_SCALES["RChannel:AttackScale"] = {
+  fwd(s, q) { return sclQF(s > 0 ? q.min * Math.pow(q.max / q.min, s * SCL_OG) : 0.0, sclRes(q, 0.01)); },
+  inv(v, q) { return v > 0.0 ? sclI32(Math.floor(0.5 + SCL_GRAN * (Math.log(v / q.min) / Math.log(q.max / q.min)))) : 0.0; }};
+
+/* LinearTruncateScale — Common_Sources/Modules/KeyboardAndMidi/cKeyboardAndMidiChainerAlg.cpp:650 / :659, registered by the
+   keyboard-chainer base (:696) that MultiMod Rack / OVox / Vocal Bender / Waves Harmony derive from: floor(x*b) in 0..b-1. */
+PU_SCALES["*:LinearTruncateScale"] = {
+  fwd(s, q) { return sclMM(0.0, q.max - 1.0, Math.floor(s * SCL_OG * q.max)); },
+  inv(v, q) { return sclMM(0.0, SCL_GRAN, v * SCL_GRAN / q.max); }};
+
+/* TriggerScale — Transform/OVox/Code/Plugin/OVoxAlg.cpp:724 / :731 (= VocalBenderAlg.cpp:528 / :535,
+   Waves_HarmonyAlg.cpp:481 / :488): RealWorld = state (a MIDI note), state GRAN <-> -1 (none). */
+const SCL_TRIG = {fwd: s => (s === SCL_GRAN ? -1.0 : s), inv: v => (v === -1.0 ? SCL_GRAN : v)};
+for (const p of ["OVox", "Vocal Bender", "Waves Harmony"]) PU_SCALES[p + ":TriggerScale"] = SCL_TRIG;
+
+/* InputScale — AudioTrack: Gold/AudioTrack/Code/Plugin/AudioTrackAlg.cpp:89 / :107 (inverse +0.5 bias, clamped);
+   TrueVerb: Gold/TrueVerb/Code/Plugin/TrueVerbAlg.cpp:1251 / :1269 (no bias / clamp); both 40*log10(x), -400 at state 0.
+   VComp: Vintage/VComp/Code/Plugin/VCompAlg.cpp:1653 / :1636: min + x^(1/k)*(max-min), k = 1.23861262584667 (VCompConsts.h:41). */
+const sclInFwd = (s, q) => { if (!s) return -400.0; const Q = sclRes(q, 0.1); return Math.floor(40.0 * Math.log10(s * SCL_OG) * (1 / Q) + 0.5) * Q; };
+PU_SCALES["AudioTrack:InputScale"] = {fwd: sclInFwd, inv: v => sclMM(0.0, SCL_GRAN, 0.5 + SCL_GRAN * sclG(v * 0.5))};
+PU_SCALES["TrueVerb:InputScale"] = {fwd: sclInFwd, inv: v => SCL_GRAN * sclG(v * 0.5)};
+const SCL_VCK = 1.23861262584667;
+PU_SCALES["VComp:InputScale"] = {
+  fwd(s, q) { const hi = q.min > q.max ? q.min : q.max, lo = q.min > q.max ? q.max : q.min;
+    return sclQF(lo + Math.pow(SCL_OG * s, 1.0 / SCL_VCK) * (hi - lo), sclRes(q, 0.1)); },
+  inv(v, q) { const hi = q.min > q.max ? q.min : q.max, lo = q.min > q.max ? q.max : q.min;
+    return Math.floor(0.5 + Math.pow((v - lo) / (hi - lo), SCL_VCK) * SCL_GRAN); }};
+
+/* NeedleScale — VCompAlg.cpp:1692 / :1677 = Vintage/VEQ3/Code/Plugin/VEQ3Alg.cpp:2316 / :2301 (kMeterRangeMin 0.009716,
+   VCompConsts.h:43): needle angle^2 -> dB (-40.25..0 dB). */
+const SCL_NMIN = 0.009716, SCL_NDB = 1.0 / (1.0 - 0.009716);
+const SCL_NEEDLE = {
+  fwd(s) { let d = s * SCL_OG; d *= d; d /= SCL_NDB; d += SCL_NMIN; return 20.0 * Math.log10(d); },
+  inv(v) { const g = sclMax(Math.pow(10.0, 0.05 * v), SCL_NMIN); return sclMM(0.0, SCL_GRAN, SCL_GRAN * Math.sqrt((g - SCL_NMIN) * SCL_NDB)); }};
+PU_SCALES["VComp:NeedleScale"] = SCL_NEEDLE;
+PU_SCALES["VEQ3:NeedleScale"] = SCL_NEEDLE;
+
+/* MaxxVolumeScale — Misc/MaxxVolume/Code/Plugin/MaxxVolumeAlg.cpp:1351 / :1384 (builds MaxxVolume, MV2, OKLouder;
+   kScalePow 1.678 :1348); LoAir: Surround/LoAir/Code/Plugin/LoAirAlg.cpp:819 / :852 (same maths, sign tests written
+   differently). Var (c) = -96 for the dB ranges <= 0, +96 for the 0..48 ones (every ParamXML using it). */
+const SCL_MXP = 1.678, sclMxC = q => (q && q.var != null ? q.var : (q.max > 0 ? 96 : -96));
+PU_SCALES["MaxxVolume:MaxxVolumeScale"] = PU_SCALES["MV2:MaxxVolumeScale"] = PU_SCALES["OKLouder:MaxxVolumeScale"] = {
+  fwd(s, q) { const c = sclMxC(q), Q = sclRes(q, 0.1); s = sclMM(0.0, SCL_GRAN, s);
+    const ofs = 1.0 - (q.min / c > 0.0 ? Math.pow(q.min / c, 1.0 / SCL_MXP) : 0.0), mx = 1.0 - (q.max / c > 0.0 ? Math.pow(q.max / c, 1.0 / SCL_MXP) : 0.0);
+    let d = ofs + (mx - ofs) * (s * SCL_OG); d = d < 1.0 ? Math.pow(1.0 - d, SCL_MXP) : 0.0;
+    return Math.floor(d * c * (1 / Q) + 0.5) * Q; },
+  inv(v, q) { const c = sclMxC(q);
+    const cp = 1.0 - (v / c > 0.0 ? Math.pow(v / c, 1.0 / SCL_MXP) : 0.0), ofs = 1.0 - (q.min / c > 0.0 ? Math.pow(q.min / c, 1.0 / SCL_MXP) : 0.0001),
+      mx = 1.0 - (q.max / c > 0.0 ? Math.pow(q.max / c, 1.0 / SCL_MXP) : 0.0);
+    return sclMax(0, ((cp - ofs) / (mx - ofs)) * SCL_GRAN); }};
+PU_SCALES["LoAir:MaxxVolumeScale"] = {
+  fwd(s, q) { const c = sclMxC(q), Q = sclRes(q, 0.1); s = sclMM(0.0, SCL_GRAN, s);
+    const ofs = 1.0 - (q.min !== 0.0 ? Math.pow(q.min / c, 1.0 / SCL_MXP) : 0.0), mx = 1.0 - (q.max !== 0.0 ? Math.pow(q.max / c, 1.0 / SCL_MXP) : 0.0);
+    let d = ofs + (mx - ofs) * (s * SCL_OG); d = d < 1.0 ? Math.pow(1.0 - d, SCL_MXP) : 0.0;
+    return Math.floor(d * c * (1 / Q) + 0.5) * Q; },
+  inv(v, q) { const c = sclMxC(q);
+    const cp = 1.0 - (v < 0.0 ? Math.pow(v / c, 1.0 / SCL_MXP) : 0.0), ofs = 1.0 - (q.min < 0.0 ? Math.pow(q.min / c, 1.0 / SCL_MXP) : 0.0001),
+      mx = 1.0 - (q.max < 0.0 ? Math.pow(q.max / c, 1.0 / SCL_MXP) : 0.0);
+    return ((cp - ofs) / (mx - ofs)) * SCL_GRAN; }};
+
+/* ExpThreshScale — SSL/SSLChannel/Code/Plugin/SSLChannelAlg.cpp:2562 / :2536 (builds SSL E-Channel + G-Channel):
+   4 linear segments -30/-25/-12/5/10 dB at 0/200/500/800/1000; inverse keeps a +0.5 bias. */
+const SCL_EXPTH = {
+  fwd(s, q) { let d = s * SCL_OG;
+    d = d < 0.2 ? -30.0 + d * 5.0 / 0.2 : d < 0.5 ? -25.0 + (d - 0.2) * 13.0 / (0.5 - 0.2) : d < 0.8 ? -12.0 + (d - 0.5) * 17.0 / (0.8 - 0.5) : 5.0 + (d - 0.8) * 5.0 / (1.0 - 0.8);
+    return sclQE(d, sclRes(q, 0.1)); },
+  inv(v) { const r = v < -25.0 ? (v + 30.0) * 0.2 / 5.0 : v < -12.0 ? (v + 25.0) * (0.5 - 0.2) / 13.0 + 0.2 : v < 5.0 ? (v + 12.0) * (0.8 - 0.5) / 17.0 + 0.5 : (v - 5.0) * (1.0 - 0.8) / 5.0 + 0.8;
+    return 0.5 + SCL_GRAN * r; }};
+PU_SCALES["SSL E-Channel:ExpThreshScale"] = PU_SCALES["SSL G-Channel:ExpThreshScale"] = SCL_EXPTH;
+
+/* ReleaseScale — API/API_2500/Code/Plugin/API_2500Alg.cpp:2636 / :2608 (= CLA/CLA_3A/Code/Plugin/CLA_3AAlg.cpp:2717 / :2689):
+   log a..b quantized, then the 0.05-0.1-0.19-0.75 knob segment is stretched to 0.05-0.15-0.25-0.75.
+   CLA-2A registers no "ReleaseScale" (CLA_2AAlg.cpp:2755) -> engine DummyScale (RealWorld = state, sSCALE_INFO.cpp:221). */
+const SCL_REL = {
+  fwd(s, q) { const tb = Math.pow(q.max / q.min, SCL_OG); let f = sclQF(q.min * Math.pow(tb, s), sclRes(q, 0.01));
+    if (f < 0.1) f = (0.15 - 0.05) * (f - 0.05) / (0.1 - 0.05) + 0.05;
+    else if (f < 0.19) f = (0.25 - 0.15) * (f - 0.1) / (0.19 - 0.1) + 0.15;
+    else if (f < 0.75) f = (0.75 - 0.25) * (f - 0.19) / (0.75 - 0.19) + 0.25;
+    return f; },
+  inv(v, q) { let f = v;
+    if (f < 0.15) f = (0.1 - 0.05) * (f - 0.05) / (0.15 - 0.05) + 0.05;
+    else if (f < 0.25) f = (0.19 - 0.1) * (f - 0.15) / (0.25 - 0.15) + 0.1;
+    else if (f < 0.75) f = (0.75 - 0.19) * (f - 0.25) / (0.75 - 0.25) + 0.19;
+    if (f <= 0.0) return 0.0;
+    return Math.log(f / q.min) / Math.log(Math.pow(q.max / q.min, SCL_OG)); }};
+PU_SCALES["API-2500:ReleaseScale"] = PU_SCALES["CLA-3A:ReleaseScale"] = SCL_REL;
+PU_SCALES["CLA-2A:ReleaseScale"] = {fwd: s => s, inv: v => v};
+
+/* OutGainScale / SideChainInGainScale (CLA-2A) — CLA/CLA_2A/Code/Plugin/CLA_2AAlg.cpp:3048 / :2984 and :2912 / :2852
+   (consts CLA_2AConsts.h:15-21). Two log segments of 0..100 around a middle (35 resp. 40 at state 350 / 400); they ignore
+   ScaleInfo, so PARAM_SIDE_CHAIN_IN_GAIN (-20..40 in ParamXML) and PARAM_GAIN_REDUCTION both run 0..100. */
+function sclCla2aPair(mf) {
+  const rwM = 100.0 * mf, stM = SCL_GRAN * mf, sf = 0.25, Q = 0.01;
+  return {
+    fwd(s) { if (s > stM) { const mx = Math.pow((100.0 - rwM) * sf + 1, SCL_OG), t = sclQF(Math.pow(mx, (s - stM) / (1 - mf)), Q); return (t - 1) / sf + rwM; }
+      const mx = Math.pow(rwM * sf + 1, SCL_OG), t = sclQF(Math.pow(mx, (stM - s) / mf), Q); return rwM - (t - 1) / sf; },
+    inv(v) { if (v > rwM) { const t = (v - rwM) * sf + 1, mx = Math.pow((100.0 - rwM) * sf + 1, SCL_OG);
+        return (t <= 0.0 ? 0.0 : Math.log(t / 1) / Math.log(mx)) * (1.0 - mf) + stM; }
+      const t = (rwM - v) * sf + 1, mx = Math.pow(rwM * sf + 1, SCL_OG);
+      return stM - (t <= 0.0 ? 0.0 : Math.log(t / 1) / Math.log(mx)) * mf; }};
+}
+PU_SCALES["CLA-2A:OutGainScale"] = sclCla2aPair(0.35);
+PU_SCALES["CLA-2A:SideChainInGainScale"] = sclCla2aPair(0.4);
+
+/* TwoStepGEQScale (GEQ) — Misc/GEQ/Code/Plugin/GEQAlg.cpp:1036 / :1048 with TwoStepStretch (GEQAlg.h:92 / :113) set to
+   (0.25, 0.5, 1.0, 0.631) at GEQAlg.cpp:201: -20 dB at state 500, -40 at 250. */
+function sclGeqStretch(x) {
+  const ax = Math.abs(x), sg = x >= 0.0 ? 1.0 : -1.0;
+  if (ax > 1) return x;
+  if (ax <= 0.25) return sg * Math.pow(ax / 0.25, 1.0) * 0.5;
+  return sg * (Math.pow((ax - 0.25) / (1.0 - 0.25), 0.631) * (1.0 - 0.5) + 0.5);
+}
+function sclGeqStretchInv(y) {
+  return y <= 0.5 ? Math.pow(y / 0.5, 1.0 / 1.0) * 0.25 : Math.pow((y - 0.5) / (1.0 - 0.5), 1 / 0.631) * (1.0 - 0.25) + 0.25;
+}
+PU_SCALES["GEQ:TwoStepGEQScale"] = {fwd: s => -80.0 * sclGeqStretchInv(1.0 - s / SCL_GRAN), inv: v => (1.0 - sclGeqStretch(v / (-80.0))) * SCL_GRAN};
+
+/* ModulatorScale / CarrierScale — discrete router menus whose allowed values depend on the component (4cc):
+   Morphoder: Transform/Morphoder/Code/Plugin/MorphoderAlg.cpp:766/:781 (Mod WM), :824/:839 (Mod WS), :883/:898 (Car WM),
+   :942/:957 (Car WS), tables :29-64, per-4cc registration :1002-1031 (PopUpRout Track0 L1 R2 LR3 SideChain4 Internal5,
+   MorphoderConsts.h:96); MultiMod Rack: Distortion/MultiModRack/Code/Plugin/MultiModRackAlg.cpp:233/:247, :297/:311,
+   tables :32-53, registration :541-550 (its own enum Track0 SideChain1 Internal2, MultiModRackConsts.h:91).
+   fwd: state < N ? A[(int)state] : A[0]; inv: first i with (int)RW <= A[i], capped at N-1. */
+function sclRouter(tables, byCc, def) {
+  const tab = q => { const k = byCc[sclCC()]; if (k) return tables[k];
+    const n = q && q.res; for (const t of Object.values(tables)) if (t.length === n) return t; return tables[def]; };
+  return {
+    fwd(s, q) { const A = tab(q); return s < A.length ? A[sclI32(s)] : A[0]; },
+    inv(v, q) { const A = tab(q); let i = 0; while (i < A.length && sclI32(v) > A[i]) i++; return sclMin(i, A.length - 1); }};
+}
+const SCL_MOR_CC = {VCWM: "WM", VCWX: "WM", VCNM: "NM", VCNX: "NM", VCWS: "WS", VCNS: "NS"};
+PU_SCALES["Morphoder:ModulatorScale"] = sclRouter({WM: [0, 4], NM: [0], WS: [1, 2, 3, 4], NS: [1, 2, 3]}, SCL_MOR_CC, "WM");
+PU_SCALES["Morphoder:CarrierScale"] = sclRouter({WM: [0, 4, 5], NM: [0, 5], WS: [0, 1, 2, 4, 5], NS: [0, 1, 2, 5]}, SCL_MOR_CC, "WM");
+PU_SCALES["MultiMod Rack:ModulatorScale"] = sclRouter({WM: [0, 1, 2], WS: [0, 1]}, {MDWM: "WM", MDWX: "WM", MDWS: "WS"}, "WM");
+
+/* VUScale (NLS) — Hybrid/NLS/Code/Plugin/NLSAlg.cpp:2956 / :2976 (kVUScaleOfs 0.067 :2953). */
+PU_SCALES["NLS:VUScale"] = {
+  fwd(s, q) { const Q = sclRes(q, 0.1); let d = (s * SCL_OG + 0.067) / (1.0 + 0.067); d = d > 1.0e-7 ? 20.0 * Math.log10(d) : -140.0;
+    return sclI32(d * (1 / Q) + 0.5) * Q; },
+  inv(v) { if (!(v > -140.0)) return 0.0; return sclMax(0.0, sclG(v) * (1.0 + 0.067) - 0.067) * SCL_GRAN; }};
+
+/* DurationScale (Smack Attack) — Transform/SmackAttack/Code/Plugin/SmackAttackAlg.cpp:1709 / :1726 after
+   PrepareDurationScale (:1696, run from InitInstanceDataSelf :463): b' = max/min, c' = (log(Var/min)/log(b') - 0.25)/0.25,
+   so state 500 = Var. Var: PARAM_NOM_ATT 8 (IDLE_ATT / IDLE_REL inherit it), PARAM_NOM_REL 200. */
+const SCL_SMACK_VAR = {PARAM_NOM_ATT: 8.0, PARAM_IDLE_ATT: 8.0, PARAM_IDLE_REL: 8.0, PARAM_NOM_REL: 200.0};
+const sclDur = q => { const v = q.var != null ? q.var : (SCL_SMACK_VAR[q.n] ?? 8.0), r = q.max / q.min;
+  return [r, (Math.log(v / q.min) / Math.log(r) - 0.25) / 0.25]; };
+PU_SCALES["Smack Attack:DurationScale"] = {
+  fwd(s, q) { const [b, c] = sclDur(q); let m = s * SCL_OG; m = m * c + m * m * (1.0 - c);
+    return sclQF(q.min * Math.pow(b, m), sclRes(q, 0.01)); },
+  inv(v, q) { if (v <= 0.0) return 0.0; const [b, p1] = sclDur(q), t = Math.log(v / q.min) / Math.log(b), p2 = 1.0 - p1;
+    return SCL_GRAN * (-p1 + Math.sqrt(p1 * p1 + 4.0 * p2 * t)) / (2.0 * p2); }};
+
+/* SubGainScale (Submarine) — Transform/Submarine/Code/Plugin/SubmarineAlg.cpp:1642 / :1630 (quadratic gain, consts :1625-1627). */
+const SCL_SUB_A = 3.970014412579062, SCL_SUB_B = 0.007121792201354, SCL_SUB_C = 0.003935500754558;
+PU_SCALES["Submarine:SubGainScale"] = {
+  fwd(s, q) { const m = s * SCL_OG, g = (SCL_SUB_A * m + SCL_SUB_B) * m + SCL_SUB_C;
+    return sclQF(20.0 * Math.log(g) * (1.0 / Math.log(10.0)), sclRes(q, 0.1)); },
+  inv(v) { return SCL_GRAN * ((-SCL_SUB_B + Math.sqrt(SCL_SUB_B * SCL_SUB_B - 4.0 * SCL_SUB_A * (SCL_SUB_C - sclG(v)))) / (2.0 * SCL_SUB_A)); }};
+
+/* WidthScale (Vitamin) — Misc/Vitamin/Code/Plugin/VitaminAlg.cpp:2784 / :2805: x + 2x^2 (same as S1:WidthScale). */
+PU_SCALES["Vitamin:WidthScale"] = {
+  fwd(s, q) { const Q = sclRes(q, 0.01), t = s * SCL_OG; return sclI32((t + 2.0 * t * t) * (1 / Q) + 0.5) * Q; },
+  inv(v) { return SCL_GRAN * (Math.sqrt(1.0 + 8 * v) - 1.0) / 4.0; }};
 /* ==== end of plugin graph modules ==== */
 function renderMaster(){
   const r=state.master.rack;
