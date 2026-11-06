@@ -2096,12 +2096,18 @@ const puDefault=n=>PU.defs[PU.pIdx[n]];
    (the tab whose FixedState equals its param hides every group / control the other tabs
    of its TabGroup list and shows its own), or when it belongs to groups and all of them
    are hidden (a hidden group hides its Control_Groups children). */
+/* a control's FixedState for param registration p: "FixedState=N" in GUIXML, or a bare <FixedState/> whose state the
+   plugin sets in code (SetTabHandleFixedState...) -- PU_GRAPHS["<pack>:fixed"] = {control name: state} */
+function puFixedSt(ctl,p){
+  const r=p.reg.find(r=>r.startsWith("FixedState="));if(r)return +r.split("=")[1];
+  const m=p.reg.includes("FixedState")&&puGraph("fixed");return m&&ctl.n in m?m[ctl.n]:null;
+}
 function puVisibility(){
   const hidG=new Set(),hidC=new Set(),showG=new Set(),showC=new Set();
   for(const t of PU.ctrls){
     if(!t.tab)continue;
-    const fp=t.p.find(p=>p.reg.some(r=>r.startsWith("FixedState=")));if(!fp)continue;
-    const st=+fp.reg.find(r=>r.startsWith("FixedState=")).split("=")[1];
+    const fp=t.p.find(p=>puFixedSt(t,p)!==null);if(!fp)continue;
+    const st=puFixedSt(t,fp);
     t.tabOn=puIdx(puQ(fp.n),puVal(fp.n))===st;
     t.tab.groups.forEach(g=>hidG.add(g));t.tab.ctrls.forEach(c=>hidC.add(c));
     if(t.tabOn){t.tab.groups.forEach(g=>showG.add(g));t.tab.ctrls.forEach(c=>showC.add(c));}
@@ -2345,9 +2351,9 @@ function puDown(e){
   }else{
     const {ctl,p,all}=hit,q=puQ(p.n);
     if(e.altKey&&p.reg.includes("OptionReset")){puEdit(all,puDefault(p.n));return;}
-    const kd=puKind(ctl),fs=p.reg.find(r=>r.startsWith("FixedState="));
+    const kd=puKind(ctl),fs=puFixedSt(ctl,p);
     if(kd==="radio"){puEdit(all,puRW(q,hit.div));return;}
-    if(fs){const st=+fs.split("=")[1];puEdit(all,puRW(q,/WithOff/.test(ctl.cls)&&puIdx(q,puVal(p.n))===st?0:st));return;} // Tab / FixedState toggles
+    if(fs!==null){const st=fs;puEdit(all,puRW(q,/WithOff/.test(ctl.cls)&&puIdx(q,puVal(p.n))===st?0:st));return;} // Tab / FixedState toggles
     if(kd==="popup"){puMenu(ctl,p,all);return;}
     if(kd==="incdec"){const d=ctl.const??(/Decrement/.test(ctl.cls)?-1:1);
       puEdit(all,puIsTog(q)?puRW(q,Math.min(puStates(q)-1,Math.max(0,puIdx(q,puVal(p.n))+Math.sign(d)))):puIncStep(q,puVal(p.n),d));return;}
@@ -9144,6 +9150,10 @@ PU_GRAPHS["OVox:groups"]=()=>{
   else hideCtrls.push("Synth Edit Off Tab");
   return {hide,hideCtrls};
 };
+/* the modulator tabs' runtime FixedStates (OVoxAlg.cpp:1250-1260 SetTabHandleFixedState, kModSrc_* / kFixedState*Tab):
+   lets the page draw the selected tab pushed and switch PARAM_MODULATORS_TAB on click */
+PU_GRAPHS["OVox:fixed"]={"ADSR0 Tab":0,"ADSR1 Tab":1,"LFO0 Tab":8,"LFO1 Tab":9,"LFO2 Tab":10,"LFO3 Tab":11,
+  "FORMANT Tab":12,"AMP Tab":13,"PITCH Tab":14,"Eq Tab":15,"Fx Tab":16};
 
 /* PRS Supermodels: PRSSupermodelsAlg.cpp (all stacked controls are HideWhenDisabled).
    - UpdateDisabledModeInLeadClean (:1222): Archon (PSAM/PSAX, m_bIsArchon :61/:70) disables the clean knobs when
@@ -9492,6 +9502,7 @@ PU_GRAPHS["Waves Harmony:groups"]=()=>{
   if(!puVal("PARAM_VOICE_MODE"))r.hide.push("VOICE_MODE");else r.show.push("VOICE_MODE");
   if(puVal("PARAM_VOICE_MODE_QUANTIZE_ONOFF")===1)r.hideCtrls.push("Tolerance Time");
   else r.hideCtrls.push("Tolerance Bar","Tolerance Time Synced Popup");
+  r.hideCtrls.push(...PU.ctrls.filter(c=>/^DBG_TP/.test(c.n)).map(c=>c.n)); // debug test points (DbgTP): developer-only readouts
   return r;
 };
 
@@ -9777,6 +9788,25 @@ PU_SCALES["Submarine:SubGainScale"] = {
 PU_SCALES["Vitamin:WidthScale"] = {
   fwd(s, q) { const Q = sclRes(q, 0.01), t = s * SCL_OG; return sclI32((t + 2.0 * t * t) * (1 / Q) + 0.5) * Q; },
   inv(v) { return SCL_GRAN * (Math.sqrt(1.0 + 8 * v) - 1.0) / 4.0; }};
+
+/* GTRAmp: the amp-model readout is the loaded amp preset's title (GuitarAmpAlg.cpp:4437 m_sAmpProperies.title =
+   the amp preset's name); table AmpID -> <Preset Name> of Waves\Data\WavesGTR\Amps\*\*.xps (V17 install, generated).
+   Other DisplayTheSame readouts (cabinet / folder names) need the plugin's cabinet+mic state: empty. */
+const gtrAmpNames={"0": "Direct", "1": "Clean", "2": "Edgy", "3": "Drive", "4": "Crunch", "5": "Hot", "6": "Modern", "7": "Sweet", "8": "Cream", "9": "OverDrive", "11": "Punchy", "12": "Warm", "13": "Scream", "14": "Scorch", "15": "Supernatural", "16": "Monster", "17": "Crush", "18": "Inferno", "20": "PRS_Scream", "21": "PRS_Scorch", "22": "PRS_Supernatural", "23": "PRS_Monster", "24": "PRS_Crush", "25": "LegatronClean", "26": "LegatronCrunch", "27": "ThermitronClean", "28": "ThermitronCrunch", "29": "PlexitronLite", "30": "PlexitronCrunch", "36": "Shredder", "90": "Mo'Town", "91": "SolidState", "92": "SuperTube", "93": "Thunder", "94": "OverBass", "95": "Directube", "96": "Activator"};
+PU_DISP["GTRAmp:DisplayTheSame"]=(v,q)=>q&&q.n==="PARAM_AMP_MODEL_1"?gtrAmpNames[String(Math.round(v))]||"":"";
+
+/* MultiMod Rack: runtime FixedStates of the modulator tabs (MultiModRackAlg.cpp:775-781 SetTabHAndleFixedState;
+   MultiModRackConsts.h: kModSrc_ModWheel 0, LFO0..3 1..4, Env 5, kFixedStateEqTab 6, kFixedStateXoverTab 7). */
+PU_GRAPHS["MultiMod Rack:fixed"]={"LFO0 Tab":1,"LFO1 Tab":2,"LFO2 Tab":3,"LFO3 Tab":4,"AMP Tab":5,"Eq Tab":6,"Xover Tab":7};
+
+/* Vocal Bender: runtime FixedStates of the modulator tabs (VocalBenderAlg.cpp:920-923; VocalBenderConsts.h enum:
+   kModSrc_LFO0 0, LFO1 1, Env 2, Pitch 3). */
+PU_GRAPHS["Vocal Bender:fixed"]={"LFO0 Tab":0,"LFO1 Tab":1,"AMP Tab":2,"PITCH Tab":3};
+
+/* Waves Harmony: runtime FixedStates of the modulator tabs (Waves_HarmonyAlg.cpp:742-750; Waves_HarmonyConsts.h enum:
+   kModSrc_ADSR0 0, ADSR1 1, LFO0..3 2..5, Env 6, Pitch 7, Spreader 8 -- Formant is commented out there). */
+PU_GRAPHS["Waves Harmony:fixed"]={"ADSR1 Tab":0,"ADSR2 Tab":1,"M1 Tab":2,"M2 Tab":3,"M3 Tab":4,"M4 Tab":5,
+  "Amplitude Mod Tab":6,"Pitch Mod Tab":7,"Spreader Mod Tab":8};
 /* ==== end of plugin graph modules ==== */
 function renderMaster(){
   const r=state.master.rack;
