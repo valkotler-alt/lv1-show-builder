@@ -1759,10 +1759,10 @@ function rackRow(kind,i,r,colspan,stereo){
     <div class="slots">${rows.join("")}</div>
   </div></td></tr>`;
 }
-/* Paste targets: the selected rows of that list when there is a selection,
-   else the strip whose rack is open. */
+/* Paste targets: every selected row when the open rack's strip is one of them
+   (like ✕ / drag), else just the strip whose rack is open. */
 function rackPasteTargets(kind,i){
-  return kind!=="mst"&&sel[kind]&&sel[kind].size?[...sel[kind]].sort((a,b)=>a-b):[i];
+  return kind!=="mst"&&sel[kind]&&sel[kind].has(i)?[...sel[kind]].sort((a,b)=>a-b):[i];
 }
 const holderStereo=(k,h)=>k==="mst"?true:!!h.stereo;
 function rackFits(name,stereo){ // unknown names (legacy) are kept as-is
@@ -3017,7 +3017,7 @@ document.addEventListener("click",e=>{
     if(f==="rkClear"){h.rack={slots:[]};render();setStatus(`All plugins removed from ${rackLabel(k,i)}.`);return;}
     if(f==="rkCopy"){
       rackClip={slots:[...(h.rack||STOCK_RACK()).slots],from:rackLabel(k,i)};
-      render();setStatus(`Rack of ${rackClip.from} copied (${rackClip.slots.length} plugin${rackClip.slots.length===1?"":"s"}) — select strips and press Paste.`);
+      render();setStatus(`Rack of ${rackClip.from} copied (${rackClip.slots.length} plugin${rackClip.slots.length===1?"":"s"}) — open a rack and press Paste (on a selected strip: pastes to every selected strip).`);
       return;
     }
     if(f==="rkPaste"){
