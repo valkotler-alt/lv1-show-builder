@@ -674,6 +674,18 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
 .rackhead .rkacts{margin-left:auto;display:flex;flex-wrap:wrap;gap:6px;}
 .rackhead .rlab{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);font-weight:500;}
 .slots{display:flex;flex-direction:column;gap:3px;}
+.slotrow .pugui{margin-left:auto;}
+.slotrow .pugui+.nudge{margin-left:4px;}
+.slotrow.edited .sname::after{content:" ✎";color:var(--accent);}
+#puWin{position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:12px;}
+#puWin .pubox{background:#1a1a1a;border:1px solid #3a3a3a;border-radius:8px;box-shadow:0 12px 50px rgba(0,0,0,.6);display:flex;flex-direction:column;max-width:100%;}
+#puWin .puhead{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid #333;color:#ddd;font-size:13px;}
+#puWin .puacts{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+#puWin select{width:auto;max-width:220px;}
+#puWin .pustage{padding:8px;display:flex;justify-content:center;background:#0d0d0d;}
+#puWin canvas{display:block;touch-action:none;user-select:none;}
+#puWin .pufoot{padding:6px 10px;color:#8a8a8a;font-size:11.5px;border-top:1px solid #2a2a2a;}
+.puedit{position:fixed;z-index:1000;font:14px Arial,sans-serif;text-align:center;background:#000;color:#fff;border:1px solid var(--accent);padding:0 4px;}
 .slotrow{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:6px;padding:5px 8px;background:var(--panel);min-height:26px;}
 .slotrow .sno{font-family:var(--font-num);font-size:10px;color:var(--dim);width:14px;text-align:right;flex:none;}
 .slotrow .sname{font-family:var(--font-num);font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -1149,7 +1161,9 @@ result in the SD10 offline editor and Save As before it goes near a console.
 <b>Racks</b>: each strip's rack is 8 slots (1–8), exactly like LV1. The default EMO-F2 / EMO-D5 / EMO-Q4 are ordinary rack plugins —
 delete, reorder (drag or ↑↓) or re-add them like anything else. The searchable picker lists only <b>SoundGrid-compatible</b> plugins
 (those shipping SoundGrid-server process code) scanned off this machine's Plug-Ins V16/V17 bundles — the same set LV1's own menus
-show. Plugins load with their factory default preset. “Stock” racks (F2 → D5 → Q4) export no rack field.
+show. Plugins load with their factory default preset. <b>Edit</b> on an EMO-F2 / D5 / Q4 slot opens the plugin's own
+window (its real GUI, no audio): change its settings, load factory or user presets, export / import Waves .xps — the
+settings go into the .emo and come back on import. Untouched “stock” racks (F2 → D5 → Q4) export no rack field.
 </p>
 <div class="brandfoot"><svg viewBox="44 44 286 222" fill="currentColor" aria-hidden="true"><use href="#wavesMark"/></svg>
   <span>Waves Audio · eMotion LV1 Show Builder</span></div>
@@ -1511,7 +1525,7 @@ const DEFNAME={ch:i=>`Channel ${i+1}`,grp:i=>`Group ${i+1}`,fx:i=>`Fx ${i+1}`,au
 
 let state=defaultShow();
 let rackOpen=null; // "ch-3" | "grp-0" | "fx-1" | "mst-0" | null
-let rackClip=null; // copied rack: {slots:[...], from:"KICK"}
+let rackClip=null; // copied rack: {slots:[...], params:[...], from:"KICK"}
 let pendingCfg=null; // two-click confirm when switching config would drop named strips
 const sel={ch:new Set(),grp:new Set(),fx:new Set(),aux:new Set(),mtx:new Set()};
 const lastSel={ch:-1,grp:-1,fx:-1,aux:-1,mtx:-1}; // anchor row for Shift-click range select
@@ -1713,10 +1727,20 @@ function renderConfig(){
 const STOCK_SLOTS=["EMO-F2","EMO-D5","EMO-Q4"];
 const RACK_SIZE=8;
 const STOCK_RACK=()=>({slots:[...STOCK_SLOTS]});
-const isStock=r=>!r||(r.slots.length===STOCK_SLOTS.length&&r.slots.every((n,x)=>n===STOCK_SLOTS[x]));
+/* rack.params (spec v12): per-slot plugin settings parallel to slots, each
+   null or {"<param index>": RealWorld value} over the plugin's default preset. */
+const hasP=p=>!!p&&Object.keys(p).length>0;
+const rackHasParams=r=>!!r&&(r.params||[]).some(hasP);
+function rackParams(r){ // keep params as long as slots
+  r.params=(r.params||[]).slice(0,r.slots.length);
+  while(r.params.length<r.slots.length)r.params.push(null);
+  return r.params;
+}
+const isStock=r=>!r||(r.slots.length===STOCK_SLOTS.length&&r.slots.every((n,x)=>n===STOCK_SLOTS[x])&&!rackHasParams(r));
 function rackHolder(k,i){return k==="mst"?state.master:(listFor[k]()[i]);}
 function rackSummary(r){
   if(isStock(r))return"stock";
+  if(r.slots.length===STOCK_SLOTS.length&&r.slots.every((n,x)=>n===STOCK_SLOTS[x]))return"stock ✎";
   return r.slots.length+" plugin"+(r.slots.length===1?"":"s");
 }
 function rackCell(kind,i,r){
@@ -1730,8 +1754,9 @@ function rackRow(kind,i,r,colspan,stereo){
   const need=stereo?/[SX]/:/[MX]/;
   const avail=PLUGINS.filter(([,f])=>need.test(f));
   const cats=[...new Set(avail.map(p=>p[2]||"Other"))].sort();
-  const plugRow=(x)=>`<div class="slotrow ins" draggable="true" data-k="${kind}" data-i="${i}" data-x="${x}" title="Drag to reorder">
+  const plugRow=(x)=>`<div class="slotrow ins${hasP((r.params||[])[x])?" edited":""}" draggable="true" data-k="${kind}" data-i="${i}" data-x="${x}" title="Drag to reorder">
       <span class="sno">${x+1}</span><span class="grip">⋮⋮</span><span class="sname">${esc(r.slots[x])}</span>
+      ${puHasGui(r.slots[x])?`<button class="small pugui" data-k="${kind}" data-i="${i}" data-f="rkGui" data-n="${x}" title="Open ${esc(r.slots[x])} — see and change its settings, load / save presets">Edit</button>`:""}
       <button class="small nudge danger" data-k="${kind}" data-i="${i}" data-f="rkDel" data-n="${x}" title="Remove plugin">✕</button></div>`;
   const addRow=(slot)=>`<div class="slotrow add" data-k="${kind}" data-i="${i}">
       <span class="sno">${slot+1}</span>
@@ -1774,6 +1799,610 @@ function rackLabel(kind,i){
   const it=listFor[kind]()[i];
   return (it&&it.name.trim())||DEFNAME[kind](i);
 }
+/* ---------- plugin GUI (Rack › a plugin's own window) ----------
+   Draws a Waves plugin's real GUI from its bundle data — site/plugui/<name>.json
+   (build_plugui.py: base bitmaps, GUIXML controls, per-variant ParamXML scales,
+   factory presets) with the WavesLib engine's rules (scales, knob frames,
+   images, markers, display functions). No audio: meters rest; graphs are the
+   plugins' own curve maths. Edits land in rack.params[slot] as
+   {"<param index>": value} over the default preset (plugui/index.json
+   defaults = what the .emo export starts from).
+   Recipe for another plugin: add it to build_plugui.PLUGINS and rebuild;
+   only code-drawn parts need code here — custom graph classes (PU_GRAPHS),
+   plugin display functions (PU_DISP), L/R twins and hidden-side rules. */
+const _puPacks={};
+function plugUiPack(name){
+  if(!_puPacks[name])_puPacks[name]=fetch(EMO_ROOT+"plugui/"+encodeURIComponent(name)+".json")
+    .then(r=>{if(!r.ok)throw new Error("plugin GUI fetch failed ("+r.status+")");return r.json();})
+    .then(async p=>{
+      p.img={};
+      await Promise.all(Object.entries(p.images).map(([id,src])=>new Promise(res=>{
+        const im=new Image();im.onload=im.onerror=()=>res();im.src=src;p.img[id]=im;})));
+      return p;
+    }).catch(e=>{delete _puPacks[name];throw e;});
+  return _puPacks[name];
+}
+let PU_INDEX=null; // plugui/index.json once loaded (rack rows then show "Edit")
+const puHasGui=name=>!!(PU_INDEX&&PU_INDEX.plugins.includes(name));
+setTimeout(()=>plugUiIndex().then(ix=>{PU_INDEX=ix;if(rackOpen)render();}).catch(()=>{})); // after the script (EMO_ROOT)
+
+/* ---- scales (WavesLib WCParam_Base / sSCALE_INFO): state 0..1000 <-> RealWorld ---- */
+const PU_GRAN=1000;
+function puRound(q,t){ // quantize: Resolution<=1 steps the fraction, >1 rounds to multiples
+  const r=q.res>0?q.res:1;
+  if(r>1)return Math.floor(t/r+0.5)*r;
+  const f=Math.floor(t);return +(f+Math.floor((t-f)/r+0.5)*r).toFixed(10);
+}
+const puIsTog=q=>q.st==="toggle";
+const puStates=q=>puIsTog(q)?Math.max(1,Math.round(q.res||2)):0; // toggle: Resolution = number of states
+function puState(q,v){ // RealWorld -> state (0..1000; toggle: 0..N-1)
+  if(puIsTog(q))return v;
+  if(q.st==="logarithmic")return v>0&&q.min>0?Math.log(v/q.min)/Math.log(q.max/q.min)*PU_GRAN:0;
+  return q.max===q.min?0:(v-q.min)/(q.max-q.min)*PU_GRAN;
+}
+function puRW(q,s){ // state -> RealWorld (quantized)
+  if(puIsTog(q)){const n=puStates(q);return ((Math.round(s)%n)+n)%n;}
+  s=Math.min(PU_GRAN,Math.max(0,s));
+  return puRound(q,q.st==="logarithmic"?q.min*Math.pow(q.max/q.min,s/PU_GRAN):q.min+s*(q.max-q.min)/PU_GRAN);
+}
+const puNorm=(q,v)=>puIsTog(q)?v/Math.max(1,puStates(q)-1):puState(q,v)/PU_GRAN;
+const puClampRW=(q,v)=>puRW(q,puState(q,v));
+
+/* ---- display functions: DefaultDisplayFuncs + the plugins' own ---- */
+const puF1=v=>(+v).toFixed(1);
+const puPick=(...s)=>v=>s[Math.round(v)]??s[0];
+const PU_DISP={
+  DisplayOnOff:v=>v<=0?"Off":"On",
+  DisplayInOutDefaultOut:v=>Math.trunc(v)?"In":"Out",
+  DisplayVuHold:v=>v>-99.9?puF1(v):"-Inf",
+  DisplayGate:(v,q)=>puState(q,v)<0.5?"-Inf":puF1(v),
+  DisplayGateExp:puPick("Gate","Exp"),DisplayIntExt:puPick("Int","Ext"),DisplayCompSC:puPick("Int","DeS","Ext"),
+  DisplayRelMode:puPick("Manual","Auto"),DisplayKnee:puPick("Soft","Normal","Hard"),DisplayWeighting:puPick("None","C"),
+  DisplayDeesserMode:puPick("Shelf","Bell","Notch"),DisplayGateReacSpeed:puPick("Slow","Medium","Fast"),
+  DisplayLowType:puPick("Bell","Low-Shelf","Hi-Pass","Low-RShelv"),DisplayHighType:puPick("Bell","Hi-Shelf","Low-Pass","Hi-RShelv"),
+  DisplayLR:v=>v===0?"Left":v===1?"Right":"",
+};
+function puText(q,v){
+  if(v===null||v===undefined||!q)return "";
+  const f=PU_DISP[q.disp];if(f)return f(v,q);
+  const m=/^DisplayFloat(\d)$/.exec(q.disp||"");
+  return (+v).toFixed(m?+m[1]:1);
+}
+
+let PU=null; // the open window: {k,i,x,name,cc,pack,P(params),pIdx,vals,defs,ctrls,cv,ctx,...}
+const puQ=n=>PU.P[PU.pIdx[n]];
+const puVal=n=>{const k=PU.pIdx[n];return k===undefined?null:PU.vals[k];};
+
+async function openPlugUi(k,i,x){
+  const h=rackHolder(k,i);if(!h)return;
+  const r=h.rack||STOCK_RACK(),name=r.slots[x];
+  setStatus("Opening "+name+"…");
+  let pack,ix;
+  try{[pack,ix]=await Promise.all([plugUiPack(name),plugUiIndex()]);}
+  catch(e){setStatus("Could not load the "+name+" GUI: "+e.message,true);return;}
+  const st=holderStereo(k,h);
+  const cc=pack.ccs.find(c=>/[SX]$/.test(c)===st)||pack.ccs[0];
+  const P=pack.params[cc],defs=(ix.defaults[cc]||[]).map(t=>t==="*"?null:+t);
+  const p=(r.params||[])[x]||{};
+  closePlugUi();
+  PU={k,i,x,name,cc,pack,P,pIdx:Object.fromEntries(P.map((q,j)=>[q.n,j])),defs,
+    vals:defs.map((d,j)=>j in p?+p[j]:d),head:(ix.head||{})[cc],ctrls:pack.controls[cc],drag:null};
+  const [w,hh]=pack.view[cc];
+  const d=document.createElement("div");d.id="puWin";
+  d.innerHTML=`<div class="pubox" role="dialog" aria-modal="true" aria-label="${esc(name)}">
+    <div class="puhead">
+      <span class="putitle"><b>${esc(name)}</b> · ${esc(rackLabel(k,i))} · slot ${x+1} · ${st?"stereo":"mono"}</span>
+      <span class="puacts">
+        <select id="puPreset" title="Load a preset"></select>
+        <button class="small" id="puSave" title="Save the current settings as a user preset (kept in this browser)">Save preset…</button>
+        <button class="small" id="puXpsOut" title="Download the current settings as a Waves .xps preset file">Export .xps</button>
+        <button class="small" id="puXpsIn" title="Load a Waves .xps preset file">Import .xps</button>
+        <button class="small" id="puReset" title="Back to the default (factory) settings">Reset</button>
+        <button class="small primary" id="puClose">Close</button>
+      </span></div>
+    <div class="pustage"><canvas id="puCv" width="${w}" height="${hh}"></canvas></div>
+    <div class="pufoot">Drag knobs / values (Ctrl = fine) · wheel · Alt+click = default · double-click a value to type it · graph dots: drag, Alt+drag = Q / ratio, double-click = on/off · no audio: meters rest</div>
+  </div>`;
+  document.body.append(d);
+  PU.cv=d.querySelector("#puCv");PU.ctx=PU.cv.getContext("2d");PU.w=w;PU.h=hh;
+  puFit();puPresetMenu();puDraw();
+  PU.cv.addEventListener("pointerdown",puDown);
+  PU.cv.addEventListener("dblclick",puDbl);
+  PU.cv.addEventListener("pointermove",puHover);
+  PU.cv.addEventListener("wheel",puWheel,{passive:false});
+  d.querySelector("#puClose").onclick=closePlugUi;
+  d.querySelector("#puReset").onclick=()=>{PU.vals=[...PU.defs];puCommit();setStatus(name+" reset to its default settings.");};
+  d.querySelector("#puSave").onclick=puSaveUser;
+  d.querySelector("#puXpsOut").onclick=puXpsOut;
+  d.querySelector("#puXpsIn").onclick=puXpsIn;
+  d.querySelector("#puPreset").onchange=e=>{puLoadPreset(e.target.value);e.target.value="";};
+  d.addEventListener("click",e=>{if(e.target===d)closePlugUi();});
+  document.addEventListener("keydown",puKey,true);
+  addEventListener("resize",puFit);
+  setStatus("");
+}
+function closePlugUi(){
+  const d=$("#puWin");if(d)d.remove();
+  document.removeEventListener("keydown",puKey,true);removeEventListener("resize",puFit);
+  PU=null;
+}
+function puKey(e){
+  if(!PU||!$("#cfm").hidden||document.querySelector(".pw-dlg")||e.target.closest?.(".puedit"))return;
+  if(e.key==="Escape"){e.preventDefault();e.stopPropagation();closePlugUi();}
+}
+function puFit(){
+  if(!PU)return;
+  const s=Math.min(1.25,(innerWidth-40)/PU.w,(innerHeight-130)/PU.h);
+  PU.cv.style.width=Math.round(PU.w*s)+"px";PU.cv.style.height=Math.round(PU.h*s)+"px";
+}
+
+/* ---- state: vals -> rack.params ---- */
+function puCommit(){
+  const h=rackHolder(PU.k,PU.i);if(!h)return closePlugUi();
+  if(!h.rack)h.rack=STOCK_RACK();
+  const ps=rackParams(h.rack),p={};
+  PU.vals.forEach((v,j)=>{const q=PU.P[j];if(v!==null&&v!==PU.defs[j]&&!(q&&q.ro))p[j]=v;});
+  ps[PU.x]=hasP(p)?p:null;
+  puDraw();
+  const btn=document.querySelector(`.rackbtn[data-k="${PU.k}"][data-i="${PU.i}"]`);
+  if(btn)btn.textContent="▾ "+rackSummary(h.rack);
+  const row=document.querySelector(`.slotrow.ins[data-k="${PU.k}"][data-i="${PU.i}"][data-x="${PU.x}"]`);
+  if(row)row.classList.toggle("edited",!!ps[PU.x]);
+}
+/* Stereo link (F2 LINK, Q4 L+R): an edit moves the other side's twin by the
+   same state amount (an existing offset is kept). */
+function puTwin(n){
+  if(PU.name==="EMO-F2")return n.replace(/^PARAM_([LR])_/,(m,s)=>`PARAM_${s==="L"?"R":"L"}_`);
+  if(PU.name==="EMO-Q4"){
+    const b1={STATE:"STATE",TYPE:"TYPE",GAIN:"GAIN",FRQ:"FREQ",QF:"Q"},m1=/^PARAM_BAND_(\w+)$/.exec(n);
+    if(m1&&b1[m1[1]])return "PARAM_BAND1_"+b1[m1[1]]+"_R";
+    const m2=/^PARAM_BAND1_(\w+)_R$/.exec(n),r1=Object.fromEntries(Object.entries(b1).map(([a,b])=>[b,a]));
+    if(m2&&r1[m2[1]])return "PARAM_BAND_"+r1[m2[1]];
+    if(/^PARAM_BAND[2-4]_\w+_[LR]$|^PARAM_OUT_GAIN_[LR]$/.test(n))return n.replace(/_([LR])$/,(m,s)=>"_"+(s==="L"?"R":"L"));
+  }
+  return null;
+}
+function puSetOne(n,v){ // sets one param (+ its linked twin), no redraw
+  const q=puQ(n);if(!q||v===null||v===undefined||!isFinite(v))return;
+  const nv=puClampRW(q,v),old=puVal(n);
+  const t=/S$/.test(PU.cc)&&puVal("PARAM_LINK_MODE")&&puTwin(n),tq=t&&puQ(t);
+  if(tq&&old!==null)PU.vals[PU.pIdx[t]]=puIsTog(q)?nv:puRW(tq,puState(tq,puVal(t))+puState(q,nv)-puState(q,old));
+  PU.vals[PU.pIdx[n]]=nv;
+}
+/* names = every param the control drives (e.g. Q4 mono's ganged OUT_GAIN_L/R) */
+function puEdit(names,v){for(const n of names)puSetOne(n,v);puCommit();}
+const puDefault=n=>PU.defs[PU.pIdx[n]];
+
+/* ---- per-plugin visibility: Q4 stereo stacks its L and R band controls; the L/R display switch picks the side ---- */
+function puShown(ctl){
+  if(PU.name==="EMO-Q4"&&/S$/.test(PU.cc)){
+    const side=puVal("PARAM_LR_DISPLAY")?"R":"L",m=/^(.*)-([LR])$/.exec(ctl.n);
+    if(m&&m[2]!==side){ // hidden only where its twin sits on the same spot
+      const tw=PU.ctrls.find(c=>c.n===m[1]+"-"+side);
+      return !(tw&&tw.r.join()===ctl.r.join());
+    }
+  }
+  return true;
+}
+
+/* ---- drawing (WCGUIControl draw order: Idle selection image, control, text windows) ---- */
+function puImg(id,x,y){const im=id!==undefined&&PU.pack.img[id];if(im&&im.naturalWidth)PU.ctx.drawImage(im,x,y);return im;}
+function puDraw(){
+  const P=PU,c=P.ctx;c.clearRect(0,0,P.w,P.h);
+  for(const [id,l,t] of P.pack.bases[P.cc])puImg(id,l,t);
+  P.markers=[];P.shown=P.ctrls.filter(puShown);
+  for(const ctl of P.shown){
+    const [l,t,w,h]=ctl.r,p0=ctl.p[0],q=p0&&puQ(p0.n),v=p0?puVal(p0.n):null;
+    if(ctl.cls==="Marker")continue; // drawn by its graph, on top
+    if(ctl.img&&ctl.img.Idle)puImg(ctl.img.Idle,l,t);
+    switch(ctl.cls){
+      case "RotationKnob":{
+        const im=(ctl.cimg||[])[0];if(!im||!q||v===null)break;
+        puImg(im.ResID+Math.min(im.SequenceSteps-1,Math.max(0,Math.round(puNorm(q,v)*(im.SequenceSteps-1)))),l,t);break;}
+      case "RadioButton":{
+        if(!q||v===null)break;
+        const dv=(ctl.div||[])[Math.round(v)];if(dv&&dv[1]!==null)puImg(dv[1],l,t);break;}
+      case "VU":if(ctl.img&&ctl.img.BackGround)puImg(ctl.img.BackGround,l,t);break;
+      default:{
+        const g=PU_GRAPHS[P.name+":"+ctl.n];
+        if(g||/Graph/.test(ctl.cls)){
+          if(ctl.img&&ctl.img.BackGround)puImg(ctl.img.BackGround,l,t);
+          if(g){c.save();c.beginPath();c.rect(...(ctl.area||ctl.r));c.clip();g.draw(ctl.area||ctl.r);c.restore();}
+        }
+      }
+    }
+    for(const pp of ctl.p){ // bitmap windows (AlgBitmap: image k for value k), then value text
+      const pq=puQ(pp.n),pv=puVal(pp.n);
+      if(pp.bmp&&pq&&pv!==null&&puIsTog(pq))puImg(pp.bmp[Math.round(pv)],l,t);
+      if(pp.text&&!pp.text.hover)puDrawText(pp);
+    }
+  }
+  for(const ctl of P.shown)if(ctl.cls==="Marker")puDrawMarker(ctl);
+}
+function puDrawText(pp){
+  const q=puQ(pp.n),v=puVal(pp.n);if(!q||v===null)return;
+  const t=pp.text,[l,tt,w,h]=t.r,c=PU.ctx;
+  if(t.erase)puImg(t.erase,l,tt);
+  c.font=`${t.size||14}px ${t.font||"Arial"},sans-serif`;
+  c.fillStyle=t.color?`rgb(${t.color.join(",")})`:"#bebebe";
+  c.textAlign="center";c.textBaseline="middle";
+  c.fillText(puText(q,v),l+w/2,tt+h/2+1);
+}
+/* Marker point (X_CMarker): x = left + state·W/1000 from its MouseHorizontal
+   param, y = bottom − state·H/1000 from MouseVertical — only params with
+   UpdateGraphics move it; else centred. A "Graph" param = plugin-computed. */
+function puMarkerPos(ctl){
+  const area=PU_GRAPHS[PU.name+":area"]?.(ctl)||ctl.r,[l,t,w,h]=area;
+  const g=PU_GRAPHS[PU.name+":markerPos"];if(g){const p=g(ctl,area);if(p)return p;}
+  const by=r=>ctl.p.find(p=>p.ug&&p.reg.includes(r));
+  const ph=by("MouseHorizontal"),pv=by("MouseVertical");
+  return [ph?l+puState(puQ(ph.n),puVal(ph.n))*w/PU_GRAN:l+w/2, pv?t+h-puState(puQ(pv.n),puVal(pv.n))*h/PU_GRAN:t+h/2];
+}
+function puDrawMarker(ctl){
+  const [x,y]=puMarkerPos(ctl);
+  const on=ctl.p.find(p=>p.reg.includes("OnOff")),onV=on?puVal(on.n):1;
+  const c=PU.ctx,ctr=id=>{const im=PU.pack.img[id];if(im&&im.naturalWidth)c.drawImage(im,Math.round(x-im.naturalWidth/2),Math.round(y-im.naturalHeight/2));return im;};
+  const idle=ctl.img&&ctr(ctl.img.Idle);
+  const img=(ctl.cimg||[]).find(i=>i.Type===(onV?"On":"Off"));
+  const im=img&&ctr(img.ResID)||idle;
+  PU.markers.push({ctl,x,y,r:im&&im.naturalWidth?im.naturalWidth/2:12});
+}
+
+/* ---- interaction (drag: 500 px = full range, TextKnob 200 px, Ctrl ÷4; up / right = more) ---- */
+function puPt(e){const b=PU.cv.getBoundingClientRect();return [(e.clientX-b.left)*PU.w/b.width,(e.clientY-b.top)*PU.h/b.height];}
+const puIn=(r,x,y)=>r&&x>=r[0]&&y>=r[1]&&x<r[0]+r[2]&&y<r[1]+r[3];
+const PU_TEXTKNOBS=new Set(["TextKnob","EMO_D5TextKnob"]);
+function puHit(x,y){
+  for(let j=PU.markers.length-1;j>=0;j--){const m=PU.markers[j];if(Math.hypot(m.x-x,m.y-y)<=m.r)return {marker:m};}
+  for(let j=PU.shown.length-1;j>=0;j--){
+    const c=PU.shown[j];if(c.cls==="Marker"||c.cls==="VU"||!puIn(c.r,x,y))continue;
+    const p=c.p.find(pp=>{const q=puQ(pp.n);return q&&!q.ro&&pp.reg.some(r=>/^(Mouse|RadioButton)/.test(r));});
+    if(!p)continue;
+    const all=c.p.filter(pp=>pp.reg[0]===p.reg[0]&&puQ(pp.n)).map(pp=>pp.n);
+    if(c.cls==="RadioButton"){
+      const dv=(c.div||[]).find(d=>d[2]&&puIn([c.r[0]+d[2][0],c.r[1]+d[2][1],d[2][2],d[2][3]],x,y));
+      if(dv)return {ctl:c,p,all,div:dv[0]};continue;
+    }
+    return {ctl:c,p,all};
+  }
+  return null;
+}
+function puHover(e){
+  if(!PU||PU.drag)return;
+  const [x,y]=puPt(e),hit=puHit(x,y);
+  const q=hit&&!hit.marker&&puQ(hit.p.n);
+  PU.cv.style.cursor=!hit?"":hit.marker?"move":puIsTog(q)?"pointer":hit.p.reg[0].startsWith("MouseHorizontal")?"ew-resize":"ns-resize";
+  PU.cv.title=q?(q.lab||hit.p.n)+": "+puText(q,puVal(hit.p.n))+(q.unit?" "+q.unit:""):"";
+}
+function puDown(e){
+  if(!PU||e.button!==0)return;
+  const [x,y]=puPt(e),hit=puHit(x,y);if(!hit)return;
+  e.preventDefault();
+  if(hit.marker){
+    PU.drag={marker:hit.marker.ctl,alt:e.altKey,x0:x,y0:y,st:{}};
+    for(const p of hit.marker.ctl.p){const q=puQ(p.n);if(q)PU.drag.st[p.n]=puState(q,puVal(p.n));}
+  }else{
+    const {ctl,p,all}=hit,q=puQ(p.n);
+    if(e.altKey&&p.reg.includes("OptionReset")){puEdit(all,puDefault(p.n));return;}
+    if(ctl.cls==="RadioButton"){puEdit(all,hit.div);return;}
+    if(puIsTog(q)){const n=puStates(q);puEdit(all,(Math.round(puVal(p.n))+1)%n);return;}
+    PU.drag={p:p.n,all,q,x0:x,y0:y,s0:puState(q,puVal(p.n)),horiz:p.reg[0].startsWith("MouseHorizontal"),span:PU_TEXTKNOBS.has(ctl.cls)?200:500};
+  }
+  PU.cv.setPointerCapture(e.pointerId);
+  PU.cv.onpointermove=puMove;
+  PU.cv.onpointerup=PU.cv.onpointercancel=()=>{if(PU){PU.drag=null;PU.cv.onpointermove=null;}};
+}
+function puMove(e){
+  const D=PU&&PU.drag;if(!D)return;
+  const [x,y]=puPt(e),fine=e.ctrlKey||e.metaKey?0.25:1;
+  if(D.marker){ // marker: its registered params move with the pointer (Alt = the Alt-registered one)
+    const [l,t,w,h]=PU_GRAPHS[PU.name+":area"]?.(D.marker)||D.marker.r;
+    for(const p of D.marker.p){
+      const q=puQ(p.n);if(!q||puIsTog(q))continue;
+      const alt=p.reg.some(r=>r.endsWith(":Alt"));if(alt!==D.alt)continue;
+      for(const r of p.reg){
+        const [axis]=r.split(":");
+        if(axis==="MouseHorizontal")puSetOne(p.n,puRW(q,D.st[p.n]+(x-D.x0)*PU_GRAN/w*fine));
+        else if(axis==="MouseVertical")
+          puSetOne(p.n,puRW(q,D.st[p.n]-(y-D.y0)*PU_GRAN/h*fine));
+      }
+    }
+    puCommit();return;
+  }
+  const d=D.horiz?(x-D.x0):(D.y0-y);
+  puEdit(D.all,puRW(D.q,D.s0+d*PU_GRAN/D.span*fine));
+}
+function puWheel(e){
+  if(!PU)return;
+  const [x,y]=puPt(e),hit=puHit(x,y);if(!hit||hit.marker)return;
+  const q=puQ(hit.p.n);if(puIsTog(q))return;
+  e.preventDefault();
+  puEdit(hit.all,puRW(q,puState(q,puVal(hit.p.n))+(e.deltaY<0?1:-1)*(e.ctrlKey?2:10)));
+}
+function puDbl(e){
+  if(!PU)return;
+  const [x,y]=puPt(e),hit=puHit(x,y);if(!hit)return;
+  if(hit.marker){ // MarkerSwitchOnDoubleClick
+    const on=hit.marker.ctl.p.find(p=>p.reg.includes("OnOff"));
+    if(on)puEdit([on.n],puVal(on.n)?0:1);
+    return;
+  }
+  const {ctl,p,all}=hit,q=puQ(p.n);
+  if(!(ctl.fl||[]).includes("ReciveTextEntery")||puIsTog(q))return;
+  const tr=(p.text&&p.text.r)||ctl.r,b=PU.cv.getBoundingClientRect(),s=b.width/PU.w;
+  const inp=document.createElement("input");inp.className="puedit";
+  inp.value=puText(q,puVal(p.n));
+  Object.assign(inp.style,{left:(b.left+tr[0]*s)+"px",top:(b.top+tr[1]*s)+"px",width:Math.max(56,tr[2]*s)+"px",height:Math.max(20,tr[3]*s)+"px"});
+  const done=ok=>{if(!inp.isConnected)return;
+    if(ok&&PU){const m=/^\s*(-?[\d.]+)\s*(k)?/i.exec(inp.value);if(m)puEdit(all,+m[1]*(m[2]?1000:1));}
+    inp.remove();};
+  inp.onkeydown=ev=>{if(ev.key==="Enter")done(true);else if(ev.key==="Escape"){ev.stopPropagation();done(false);}};
+  inp.onblur=()=>done(true);
+  document.body.append(inp);inp.focus();inp.select();
+}
+
+/* ---- presets: factory (bundle), user (this browser), .xps files ----
+   Tokens follow the engine: '*' = not in the preset (keep), display-only
+   params are written as '*'. */
+const PU_USER_KEY="lv1.pluginPresets";
+function puUserPresets(){try{return JSON.parse(localStorage.getItem(PU_USER_KEY)||"{}");}catch(_){return {};}}
+function puPresetMenu(){
+  const sel=$("#puPreset"),u=puUserPresets()[PU.name]||[];
+  sel.innerHTML=`<option value="">Load preset…</option>`+
+    `<optgroup label="Factory">${PU.pack.presets.map((p,j)=>`<option value="f${j}">${esc(p.name)}</option>`).join("")}</optgroup>`+
+    (u.length?`<optgroup label="User (this browser)">${u.map((p,j)=>`<option value="u${j}">${esc(p.name)}</option>`).join("")}</optgroup>`:"");
+}
+function puApplyTokens(tokens){
+  tokens.forEach((t,j)=>{
+    const q=PU.P[j];if(!q||q.ro||t==="*")return;
+    const v=t==="R"?PU.defs[j]:+String(t).replace(",",".");
+    if(v!==null&&isFinite(v))PU.vals[j]=v; // as stored (the engine does not re-quantize preset values)
+  });
+  puCommit();
+}
+function puLoadPreset(v){
+  if(!v)return;
+  const src=v[0]==="f"?PU.pack.presets[+v.slice(1)]:(puUserPresets()[PU.name]||[])[+v.slice(1)];
+  if(!src)return;
+  puApplyTokens(src.values);setStatus(`${PU.name}: preset “${src.name}” loaded.`);
+}
+const puTokens=()=>PU.vals.map((v,j)=>{const q=PU.P[j];return v===null||(q&&q.ro)?"*":String(v);});
+function puAskName(title){
+  return new Promise(res=>{
+    const d=document.createElement("div");d.className="pw-dlg";d.style.zIndex=1100;
+    d.innerHTML=`<div class="pw-dlgbox" role="dialog" aria-modal="true"><p><b>${esc(title)}</b></p>
+      <input class="puname" value="${esc(PU.name+" "+rackLabel(PU.k,PU.i))}" style="width:100%;margin-bottom:12px">
+      <div class="pw-dlgbtns"><button class="small" data-r="0">Cancel</button><button class="small primary" data-r="1">Save</button></div></div>`;
+    const inp=d.querySelector("input");
+    const done=ok=>{d.remove();res(ok?inp.value.trim():"");};
+    d.addEventListener("click",e=>{const b=e.target.closest("[data-r]");if(b)done(b.dataset.r==="1");});
+    inp.addEventListener("keydown",e=>{if(e.key==="Enter")done(true);else if(e.key==="Escape"){e.stopPropagation();done(false);}});
+    document.body.append(d);inp.focus();inp.select();
+  });
+}
+async function puSaveUser(){
+  const name=await puAskName("Save user preset");
+  if(!name||!PU)return;
+  const all=puUserPresets(),list=all[PU.name]=(all[PU.name]||[]).filter(p=>p.name!==name);
+  list.push({name,values:puTokens()});list.sort((a,b)=>a.name.localeCompare(b.name));
+  try{localStorage.setItem(PU_USER_KEY,JSON.stringify(all));}catch(_){setStatus("Could not save: browser storage unavailable.",true);return;}
+  puPresetMenu();setStatus(`${PU.name}: user preset “${name}” saved in this browser.`);
+}
+function puXpsText(name){ // PresetChunkXMLTree v3, Setup CURRENT — LV1 / SuperRack load it
+  const [pn,gt,ver]=PU.head||[PU.name,"",""],toks=puTokens(),lines=[];
+  for(let j=0;j<toks.length;j+=10)lines.push(toks.slice(j,j+10).join(" "));
+  const x=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
+  return `<?xml version="1.0"?>\n<PresetChunkXMLTree version="3">\n    <Preset Name="${x(name)}" GenericType="${x(gt)}">\n`+
+    `        <PresetHeader>\n            <PluginName>${x(pn)}</PluginName>\n            <PluginSubComp>${PU.cc}</PluginSubComp>\n`+
+    `            <PluginVersion>${x(ver)}</PluginVersion>\n            <ReadOnly>false</ReadOnly>\n        </PresetHeader>\n`+
+    `        <PresetData Setup="CURRENT">\n            <Parameters Type="RealWorld">\n${lines.join("\n")}\n</Parameters>\n`+
+    `            <PluginSpecificXMLData />\n        </PresetData>\n    </Preset>\n</PresetChunkXMLTree>\n`;
+}
+async function puXpsOut(){
+  const name=await puAskName("Export .xps preset");if(!name||!PU)return;
+  try{await dl.save({filename:name.replace(/[\\/:*?"<>|]/g,"_")+".xps",data:new Blob([puXpsText(name)],{type:"application/xml"})});}
+  catch(e){setStatus("Export cancelled.",true);}
+}
+function puXpsIn(){
+  const f=document.createElement("input");f.type="file";f.accept=".xps,.xml";
+  f.onchange=async()=>{
+    const file=f.files[0];if(!file||!PU)return;
+    const t=await file.text();
+    const pick=[...t.matchAll(/<Preset\b[^>]*Name="([^"]*)"[\s\S]*?<\/Preset>/g)].find(m=>/<Parameters Type="RealWorld">/.test(m[0]));
+    if(!pick){setStatus(file.name+": no RealWorld preset inside.",true);return;}
+    const plug=(/<PluginName>([^<]*)</.exec(pick[0])||[])[1]||"";
+    const norm=s=>s.toUpperCase().replace(/[^A-Z0-9]/g,"");
+    if(plug&&norm(plug)!==norm(PU.name)&&norm(plug)!==norm((PU.head||[])[0]||""))
+      if(!await askConfirm(`${file.name} is a preset for “${plug}”, not ${PU.name}. Load it anyway?`,"Load"))return;
+    puApplyTokens(/<Parameters Type="RealWorld">([^<]*)</.exec(pick[0])[1].trim().split(/[\s;]+/));
+    setStatus(`${PU.name}: “${pick[1]}” loaded from ${file.name}.`);
+  };
+  f.click();
+}
+
+/* ---- code-drawn graphs: the plugins' own curve maths (digital biquads at 48 kHz,
+   100 points on the graph param's 15.625–21357.44 Hz log axis) ---- */
+const PU_GRAPHS={};
+const PU_SR=48000,PU_FMIN=15.625,PU_FMAX=21357.44,PU_NPTS=100;
+const puW=f=>2*Math.PI*Math.min(0.49999999,f/PU_SR); // Translate_Frequency
+const puDb2G=db=>Math.pow(10,db/20);
+const puFlat=()=>({g:1,a:0,b:0,c:0,d:0});
+function puSqMag(B,w){ // |g + a z^-1 + b z^-2|^2 / |1 + c z^-1 + d z^-2|^2, z = e^{jw}
+  const c1=Math.cos(w),s1=Math.sin(w),c2=Math.cos(2*w),s2=Math.sin(2*w);
+  const nr=B.g+B.a*c1+B.b*c2,ni=-(B.a*s1+B.b*s2),dr=1+B.c*c1+B.d*c2,di=-(B.c*s1+B.d*s2);
+  return (nr*nr+ni*ni)/(dr*dr+di*di);
+}
+const puFreqs=Array.from({length:PU_NPTS},(_,i)=>PU_FMIN*Math.pow(PU_FMAX/PU_FMIN,i/(PU_NPTS-1)));
+function puLine(area,ys,color,width){ // ys: state units 0..1000 bottom->top, one per point
+  const [l,t,w,h]=area,c=PU.ctx;c.beginPath();
+  ys.forEach((y,i)=>{const px=l+i*w/(PU_NPTS-1),py=t+h-y*h/PU_GRAN;i?c.lineTo(px,py):c.moveTo(px,py);});
+  c.strokeStyle=color;c.lineWidth=width||2;c.lineJoin="round";c.stroke();
+}
+// Filters.cpp helpers
+function puO1Allp90(w){const s=Math.sin(w),c=Math.cos(w);if(!c)return 0;const a1=(-1+s)/c,a2=(-1-s)/c;return Math.abs(a1)>1?a2:a1;}
+function puBilinear(P,f){
+  const T=puO1Allp90(puW(f)),T2=T*T,n=1/(1+P.c*T+P.d*T2);
+  return {g:n*(P.g+P.a*T+P.b*T2),a:n*(2*P.g*T+P.a*(T2+1)+2*P.b*T),b:n*(P.g*T2+P.a*T+P.b),
+    c:n*(2*T+P.c*(T2+1)+2*P.d*T),d:n*(T2+P.c*T+P.d)};
+}
+function puO2Butterworth(hp,f){
+  const g=hp?2.92893218813453e-1:2.92893218813452e-1;
+  return puBilinear({g,a:(hp?-2:2)*g,b:g,c:0,d:1.71572875253810e-1},f);
+}
+
+/* EMO-F2 (EMO_F2Alg Ord3CutFilter / Cut3FilterToBQs): HP + LP, 3rd order each,
+   y = 500 + (5000/18)·log10|H|² (±18 dB); L orange, R green. */
+function puCut3(on,hp,f,q){
+  if(!on)return [puFlat(),puFlat()];
+  const w=puW(f),cw=Math.cos(w),a=cw?(Math.sin(w)-1)/cw:0;
+  let tq=Math.tan(Math.atan(0.5)/q);tq=(1-tq)/(1+tq);
+  const n=1/(1+tq*a*a),b=n*2*a*(1+tq),c=n*(a*a+tq),sg=hp?-1:1;
+  const A=sg*a+c,B=1+a*b+sg*(a*c+b);
+  return [{g:1,a:sg,b:0,c:a,d:0},{g:0.5*A,a:sg*0.5*(B-A),b:0.5*A,c:b,d:c}];
+}
+PU_GRAPHS["EMO-F2:Graph"]={draw(area){
+  const sides=/S$/.test(PU.cc)?[["R","#3fbf4f"],["L","#e8902a"]]:[["L","#e8902a"]];
+  for(const [s,col] of sides){
+    const v=k=>puVal(`PARAM_${s}_${k}`);
+    const bq=[...puCut3(v("HPF_ON"),true,v("HPF_FREQ"),v("HPF_Q")),...puCut3(v("LPF_ON"),false,v("LPF_FREQ"),v("LPF_Q"))];
+    puLine(area,puFreqs.map(f=>500+Math.round(5000/18*Math.log10(Math.max(1e-6,bq.reduce((m,B)=>m*puSqMag(B,puW(f)),1))))),col,sides.length>1?1.5:2);
+  }
+}};
+
+/* EMO-Q4 (EMO_Q4Alg SetSect + AnalogBell / AnalogShelv / O2Butterworth / ResShelv):
+   bands 1-2 are "low" (HP / low shelf), 3-4 "high"; curve = Σ band dB on the
+   ±18 dB gain scale; L / mono yellow, R blue. */
+function puAnalogShelv(isHigh,f,gDb,Q){
+  if(gDb===0)return puFlat();
+  const G=puDb2G(gDb*0.5),AG=puDb2G(Math.abs(0.5*G)); // AG: the plugin's kept "old bug" (G taken as dB)
+  let w0=puW(f),dB=w0*Math.SQRT2/Q;dB*=dB;dB/=AG;w0=w0*w0;w0=w0*w0;
+  let d1,d3,dn1,dn3;
+  if(isHigh){w0=Math.tan(0.5*Math.sqrt(0.5*(Math.sqrt(dB*dB+4*w0)-dB)));d1=w0*w0;d3=1/G;dn3=G;dn1=d1;}
+  else{w0=Math.tan(0.5*Math.min(Math.sqrt(0.5*(Math.sqrt(dB*dB+4*w0)+dB)),3.14));d1=w0*w0/G;d3=1;dn3=1;dn1=w0*w0*G;}
+  const d2=w0/(Math.sqrt(AG)*Q),n=1/(d1+d2+d3);
+  return {c:n*2*(d1-d3),d:n*(d1-d2+d3),g:n*(dn1+d2+dn3),a:n*2*(dn1-dn3),b:n*(dn1-d2+dn3)};
+}
+function puAnalogBell(f,gDb,Q){ // symmetric (EMO)
+  if(Math.abs(gDb)<=0.099)return puFlat();
+  const g=puDb2G(gDb);
+  let R=(1+Math.sqrt(1+Q*Q*4))/(2*Q);R=Math.min(R,Math.pow(0.5*PU_SR/f,0.9));
+  let t1=1-R*R;t1*=t1;
+  let t2=g<1?R/(g*Q):R*g/Q;t2*=t2;const nom=t1+t2;
+  t2=R/Q;t2*=t2;const den=t1+t2;
+  const gbs=g<1?den/nom:nom/den,g0=1,g0s=1,gs=g*g;
+  let w=puW(f),dw=w*(R-1/R);const w0s=w*w,dw0s=dw*dw,pis=Math.PI*Math.PI;
+  t1=(w0s-pis);t1*=t1;t2=(gbs-g0s)/(gs-gbs);
+  let g1=(g0s*t1+gs*pis*dw0s*t2)/(t1+pis*dw0s*t2);const g1s=g1;g1=Math.sqrt(g1);
+  w=Math.tan(w*0.5);const ws=w*w;
+  t1=Math.sqrt((gs-g1s)/(gs-g0s));
+  dw=(1+Math.sqrt((gbs-g0s)/(gbs-g1s))*t1*ws)*Math.tan(dw*0.5);
+  const dws=dw*dw,WW=t1*ws;
+  const C=dws*Math.abs(gbs-g1s)-2*WW*(Math.abs(gbs-g0*g1)-Math.sqrt((gbs-g0s)*(gbs-g1s)));
+  const D=2*WW*(Math.abs(gs-g0*g1)-Math.sqrt((gs-g0s)*(gs-g1s)));
+  const A=Math.sqrt((C+D)/Math.abs(gs-gbs)),B=Math.sqrt((gs*C+gbs*D)/Math.abs(gs-gbs)),n=1+WW+A;
+  return {g:(g1+g0*WW+B)/n,a:-2*(g1-g0*WW)/n,b:(g1+g0*WW-B)/n,c:-2*(1-WW)/n,d:(1+WW-A)/n};
+}
+function puResShelv(hp,f,gDb,Q){
+  if(gDb===0)return puFlat();
+  let og=1,G;
+  if(hp){og=puDb2G(gDb);G=puDb2G(-gDb*0.5);}else G=puDb2G(gDb*0.5);
+  const w0=Math.tan(0.5*puW(f)),d1=w0*w0;
+  let d2=w0/(Math.sqrt(G)*Q),d3=1/G,n=1/(d1+d2+d3);
+  const c=n*2*(d1-d3),d=n*(d1-d2+d3);
+  d2=w0*Math.sqrt(G)/Q;d3=G;n*=og;
+  return {c,d,g:n*(d1+d2+d3),a:n*2*(d1-d3),b:n*(d1-d2+d3)};
+}
+const Q4_BANDS=s=>s==="L"?[["PARAM_BAND_","STATE","TYPE","GAIN","FRQ","QF"],...[2,3,4].map(n=>[`PARAM_BAND${n}_`,"STATE_L","TYPE_L","GAIN_L","FREQ_L","Q_L"])]
+  :[1,2,3,4].map(n=>[`PARAM_BAND${n}_`,"STATE_R","TYPE_R","GAIN_R","FREQ_R","Q_R"]);
+function q4Biquad(b,n){
+  const [pre,st,ty,gn,fq,qq]=b,v=k=>puVal(pre+k),low=n<2;
+  if(!v(st))return puFlat();
+  const f=Math.min(v(fq),PU_SR*0.4999),g=v(gn),q=v(qq);
+  switch(v(ty)){
+    case 0:return puAnalogBell(f,g,q);
+    case 1:return puAnalogShelv(!low,f,g,q);
+    case 2:return puO2Butterworth(low,f);
+    default:return puResShelv(low,f,g,q);
+  }
+}
+PU_GRAPHS["EMO-Q4:Graph"]={draw(area){
+  const gq=puQ("PARAM_BAND_GAIN"),st=db=>Math.round(puState(gq,db));
+  const sides=/S$/.test(PU.cc)?(puVal("PARAM_LR_DISPLAY")?[["L","#e5d43a"],["R","#2e9be0"]]:[["R","#2e9be0"],["L","#e5d43a"]]):[["L","#e5d43a"]];
+  for(const [s,col] of sides){
+    const bq=Q4_BANDS(s).map(q4Biquad);
+    puLine(area,puFreqs.map(f=>500+bq.reduce((y,B)=>y+st(10*Math.log10(Math.max(1e-10,puSqMag(B,puW(f)))))-500,0)),col,2);
+  }
+}};
+
+/* EMO-D5 (EMO_D5Alg): transfer graph — comp soft knee × gate / expander,
+   input −100..0 dB on both axes; limiter + leveller lines; threshold markers
+   sit on the curve. Side-chain EQ graph: comp / gate HP-LP (Butterworth,
+   y = 1000 + (10000/12)·log10|H|², 0..−12 dB) and the de-esser range. */
+function d5SoftKnee(x,K){
+  const e=Math.pow(x,K.Order);let n=((1-K.Mode)*e+K.Mode*K.Thresh)/(e+K.Thresh);
+  n+=K.Mix-K.Mix*n;return Math.pow(n,K.Ratio);
+}
+function d5Curve(){
+  const v=puVal,gq=puQ("PARAM_COMP_GATE_GRAPH");
+  const ko=[2,5,10][v("PARAM_COMP_KNEE")]||5,cOn=v("PARAM_COMP_ON")>0;
+  const comp={Order:ko,Mode:1,Thresh:puDb2G(ko*v("PARAM_COMP_THRESH")),
+    Ratio:(cOn?1-1/v("PARAM_COMP_RATIO"):0)/ko,Mix:cOn?Math.pow(1-v("PARAM_COMP_MIX")*0.01,ko):1};
+  const gOn=v("PARAM_GATE_ON")>0,eo=v("PARAM_GATE_KNEE"),er=v("PARAM_GATE_RATIO")-1;
+  const exp={Order:eo,Mode:0,Thresh:puDb2G(eo*v("PARAM_GATE_THRESH")),Ratio:er/eo,Mix:gOn?puDb2G(eo/er*v("PARAM_GATE_FLOOR")):1};
+  const open=puDb2G(v("PARAM_GATE_THRESH")),floor=gOn?puDb2G(v("PARAM_GATE_FLOOR")):1;
+  const lOn=v("PARAM_LIMITER_ON")>0,mk=lOn?v("PARAM_LIMITER_MAKEUP")-(v("PARAM_LIMITER_AUTO_MAKEUP")>0?v("PARAM_LIMITER_THRESH"):0):0;
+  const isExp=Math.trunc(v("PARAM_GATE_EXP"))!==0;
+  return Array.from({length:PU_NPTS},(_,i)=>{
+    const sx=Math.floor(i*PU_GRAN/PU_NPTS+0.5),x=puDb2G(puRW(gq,sx));
+    const gate=isExp?d5SoftKnee(x,exp):(x>=open?1:floor);
+    return [sx,puState(gq,20*Math.log10(gate*d5SoftKnee(x,comp)*x)+mk)];
+  });
+}
+PU_GRAPHS["EMO-D5:Graph"]={draw(area){
+  const [l,t,w,h]=area,c=PU.ctx,gq=puQ("PARAM_COMP_GATE_GRAPH"),pts=d5Curve();
+  const X=s=>l+s*w/PU_GRAN,Y=s=>t+h-s*h/PU_GRAN;
+  if(puVal("PARAM_LIMITER_ON")>0){ // limiter ceiling
+    const y=Y(puState(gq,puVal("PARAM_LIMITER_THRESH")));
+    c.fillStyle="rgba(230,70,60,.18)";c.fillRect(l,t,w,y-t);
+  }
+  if(puVal("PARAM_LEVELLER_ON")>0){ // leveller window: target .. target+range
+    const a=X(puState(gq,puVal("PARAM_LEVELLER_TARGET"))),b=X(puState(gq,puVal("PARAM_LEVELLER_TARGET")+puVal("PARAM_LEVELLER_RANGE")));
+    c.fillStyle="rgba(80,170,255,.15)";c.fillRect(a,t,b-a,h);
+  }
+  c.beginPath();pts.forEach(([sx,sy],i)=>{i?c.lineTo(X(sx),Y(sy)):c.moveTo(X(sx),Y(sy));});
+  c.strokeStyle="#f0c419";c.lineWidth=2;c.stroke();
+}};
+function d5Sc(on,hp,f){return on?puO2Butterworth(hp,f):puFlat();}
+PU_GRAPHS["EMO-D5:Eq Graph"]={draw(area){
+  const v=puVal,y=bqs=>puFreqs.map(f=>PU_GRAN+Math.round(10000/12*Math.log10(Math.max(1e-6,bqs.reduce((m,B)=>m*puSqMag(B,puW(f)),1)))));
+  const gate=[d5Sc(v("PARAM_GATE_HPF_ON"),true,v("PARAM_GATE_HPF_FREQ")),d5Sc(v("PARAM_GATE_LPF_ON"),false,v("PARAM_GATE_LPF_FREQ"))];
+  const comp=[d5Sc(v("PARAM_COMP_HPF_ON"),true,v("PARAM_COMP_HPF_FREQ")),d5Sc(v("PARAM_COMP_LPF_ON"),false,v("PARAM_COMP_LPF_FREQ"))];
+  if(v("PARAM_DEESSER_ON")>0){ // de-esser range (shape simplified: a shelf / bell at its frequency)
+    const f=v("PARAM_DEESSER_FREQ"),r=v("PARAM_DEESSER_RANGE"),m=v("PARAM_DEESSER_MODE"),q=v("PARAM_DEESSER_Q");
+    const B=m===0?puAnalogShelv(true,f/Math.SQRT2,r,q):puAnalogBell(f,r,m===2?q*Math.SQRT2:q);
+    puLine(area,y([B]),"#d070ff",1.5);
+  }
+  puLine(area,y(gate),"#3fbf4f",1.5);
+  puLine(area,y(comp),"#f0c419",1.5);
+}};
+PU_GRAPHS["EMO-D5:area"]=ctl=>{const g=PU.ctrls.find(c=>c.cls==="Graph"&&(c.n==="Graph"?/Thresh/.test(ctl.n):c.n==="Eq Graph"&&/DeEsser/.test(ctl.n)));return g&&(g.area||g.r);};
+PU_GRAPHS["EMO-D5:markerPos"]=(ctl,[l,t,w,h])=>{
+  const X=s=>l+s*w/PU_GRAN,Y=s=>t+h-s*h/PU_GRAN;
+  if(/Thresh/.test(ctl.n)){
+    const gq=puQ("PARAM_COMP_GATE_GRAPH");
+    if(/Limiter/.test(ctl.n)){const s=puState(gq,puVal("PARAM_LIMITER_THRESH"));return [X(0),Y(s)];} // the limiter pipe's point 0
+    const pts=d5Curve(),s=puState(gq,puVal(/Comp/.test(ctl.n)?"PARAM_COMP_THRESH":"PARAM_GATE_THRESH"))*PU_NPTS/PU_GRAN;
+    const p=pts[Math.min(PU_NPTS-1,Math.max(0,/Gate/.test(ctl.n)?Math.ceil(s+0.5):Math.trunc(s+0.5)))];
+    return [X(p[0]),Y(p[1])];
+  }
+  if(/DeEsser/.test(ctl.n)){
+    const sx=puState(puQ("PARAM_DEESSER_FREQ"),puVal("PARAM_DEESSER_FREQ"));
+    const r=puVal("PARAM_DEESSER_RANGE");
+    return [X(sx),Y(PU_GRAN+10000/12*(r/10))];
+  }
+  return null;
+};
+
 function renderMaster(){
   const r=state.master.rack;
   $("#mstTable tbody").innerHTML=
@@ -3011,12 +3640,14 @@ document.addEventListener("click",e=>{
   const t=e.target.closest("button");if(!t||!t.dataset.k)return;
   const k=t.dataset.k,i=+t.dataset.i,f=t.dataset.f;
   if(f==="rack"){const key=k+"-"+i;rackOpen=rackOpen===key?null:key;render();return;}
+  if(f==="rkGui"){openPlugUi(k,i,+t.dataset.n);return;}
   if(["rkDel","rkReset","rkClear","rkCopy","rkPaste"].includes(f)){
     const h=rackHolder(k,i);if(!h)return;
     if(f==="rkReset"){h.rack=null;render();return;}
     if(f==="rkClear"){h.rack={slots:[]};render();setStatus(`All plugins removed from ${rackLabel(k,i)}.`);return;}
     if(f==="rkCopy"){
-      rackClip={slots:[...(h.rack||STOCK_RACK()).slots],from:rackLabel(k,i)};
+      const src=h.rack||STOCK_RACK();
+      rackClip={slots:[...src.slots],params:rackParams(src).map(p=>hasP(p)?{...p}:null),from:rackLabel(k,i)};
       render();setStatus(`Rack of ${rackClip.from} copied (${rackClip.slots.length} plugin${rackClip.slots.length===1?"":"s"}) — open a rack and press Paste (on a selected strip: pastes to every selected strip).`);
       return;
     }
@@ -3026,8 +3657,9 @@ document.addEventListener("click",e=>{
       for(const j of tg){
         const o=rackHolder(k,j);if(!o)continue;
         const st=holderStereo(k,o);
-        const slots=rackClip.slots.filter(n=>rackFits(n,st)||(skipped.add(`${n} (${st?"stereo":"mono"})`),false));
-        o.rack={slots};
+        const keep=rackClip.slots.map(n=>rackFits(n,st)||(skipped.add(`${n} (${st?"stereo":"mono"})`),false));
+        o.rack={slots:rackClip.slots.filter((_,x)=>keep[x]),
+          params:rackClip.params.filter((_,x)=>keep[x]).map(p=>p&&{...p})};
       }
       render();
       setStatus(`Rack of ${rackClip.from} pasted to ${tg.length===1?rackLabel(k,tg[0]):tg.length+" strips"}`
@@ -3035,8 +3667,8 @@ document.addEventListener("click",e=>{
       return;
     }
     if(!h.rack)h.rack=STOCK_RACK();
-    const arr=h.rack.slots,n=+t.dataset.n;
-    arr.splice(n,1);
+    const n=+t.dataset.n;
+    rackParams(h.rack).splice(n,1);h.rack.slots.splice(n,1);
     render();return;
   }
   if(!listFor[k])return;
@@ -3263,7 +3895,7 @@ function rackAdd(k,i,name){
   const h=rackHolder(k,+i);if(!h)return;
   if(!h.rack)h.rack=STOCK_RACK();
   if(h.rack.slots.length>=RACK_SIZE){setStatus("Rack is full (8 slots).",true);return;}
-  h.rack.slots.push(name);render();
+  rackParams(h.rack).push(null);h.rack.slots.push(name);render();
 }
 document.addEventListener("mousedown",e=>{
   const t=e.target.closest('button[data-f="rkPick"]');if(!t)return;
@@ -3309,9 +3941,10 @@ document.addEventListener("drop",e=>{
   if(!t||!dragSrc||t.dataset.k!==dragSrc.k||+t.dataset.i!==dragSrc.i)return;
   e.preventDefault();
   const h=rackHolder(dragSrc.k,dragSrc.i);if(!h||!h.rack){dragSrc=null;return;}
-  const arr=h.rack.slots;
-  const [m]=arr.splice(dragSrc.x,1);
-  arr.splice(t.classList.contains("add")?arr.length:+t.dataset.x,0,m);
+  const arr=h.rack.slots,ps=rackParams(h.rack);
+  const [m]=arr.splice(dragSrc.x,1),[mp]=ps.splice(dragSrc.x,1);
+  const to=t.classList.contains("add")?arr.length:+t.dataset.x;
+  arr.splice(to,0,m);ps.splice(to,0,mp);
   dragSrc=null;render();
 });
 
@@ -3372,14 +4005,16 @@ function buildSpec(){
   const noDest=o=>o.dest===NO_MAIN?{unassigned:true}:{};
   // A stock rack exports as no rack field at all (the converter leaves the
   // template's default rack untouched). Unnamed strips don't export.
-  const rackOut=r=>isStock(r)?undefined:{slots:[...r.slots]};
+  const rackOut=r=>isStock(r)?undefined:{slots:[...r.slots],
+    ...(rackHasParams(r)?{params:rackParams(r).map(p=>hasP(p)?{...p}:null)}:{})};
   const withRack=(o,r)=>{const rr=rackOut(r);if(rr)o.rack=rr;return o;};
   const spec={
-    format:"lv1-input-list",version:11,
+    format:"lv1-input-list",version:12,
     show:{...state.show},
     config:{id:c.id,inputs:c.ch,groups:c.grp,aux:c.mon,fx:FX_COUNT,matrix:MTX_COUNT,mains:c.mains},
     // v7: the I/O inventory in slot order; v9: each device's id (the pins' d).
     io:state.io.map(d=>IO_MODELS[d.model].chunk?{id:d.id,model:d.model,gain:[...d.gain],phantom:[...d.phantom]}:{id:d.id,model:d.model}),
+    // v12: a rack may carry params (per-slot plugin settings, see rackParams)
     // v9: the resolved patch as LV1 route rows (slot / channel index) — what the converters write
     routes:patchRoutes(),
     // v11: a placeholder (unnamed row above the last named input) is {name:"", placeholder:true}: built
@@ -3446,7 +4081,7 @@ function loadSpec(spec){
   const colIn=o=>{const v=o.color;return (typeof v==="number"&&v>=0&&v<=31)?Math.round(v):null;};
   const rackIn=r=>{ // v4 {slots}; v3 {filter,dyn,eq,inserts} converted to slots
     if(!r)return null;
-    if(r.slots)return {slots:[...r.slots]};
+    if(r.slots)return {slots:[...r.slots],...(Array.isArray(r.params)?{params:r.params.map(p=>p&&typeof p==="object"?{...p}:null)}:{})};
     const ins=[...(r.inserts||[])];
     const slots=[];
     if(r.filter!==false)slots.push("EMO-F2");
@@ -5783,6 +6418,26 @@ function emoSql(){
   })();
   return _sqlP;
 }
+/* Default RealWorld tokens per 4cc — what a slot's params are relative to:
+   the GUI packs' defaults (EMO modules: the factory templates' own rows),
+   else the catalog pack's preset text. */
+let _plugDefP=null;
+function plugDefaultTokens(){
+  if(!_plugDefP)_plugDefP=Promise.all([emoDataPack(),plugUiIndex()]).then(([pack,ix])=>{
+    const out={...ix.defaults};
+    for(const [cc,t] of Object.entries(pack.presets))
+      if(typeof t==="string"&&!out[cc]){const k=presetTokens(t);if(k)out[cc]=k;}
+    return out;
+  }).catch(e=>{_plugDefP=null;throw e;});
+  return _plugDefP;
+}
+let _plugUiIdxP=null;
+function plugUiIndex(){
+  if(!_plugUiIdxP)_plugUiIdxP=fetch(EMO_ROOT+"plugui/index.json")
+    .then(r=>{if(!r.ok)throw new Error("plugin GUI index fetch failed ("+r.status+")");return r.json();})
+    .catch(e=>{_plugUiIdxP=null;throw e;});
+  return _plugUiIdxP;
+}
 let _emoDataP=null;
 function emoDataPack(){
   if(!_emoDataP)_emoDataP=fetch(EMO_ROOT+"emodata/presets.json")
@@ -5819,6 +6474,21 @@ function ioChunk(model,gain,phantom){
   return L.join("\n");
 }
 
+/* The preset text with a slot's settings ({"<index>": value}) written over the
+   ACTIVE setup's <Parameters Type="RealWorld"> tokens (index = ParamXML order;
+   layout kept). Mirrors make_lv1_session._preset_with_params (keep in sync). */
+function presetWithParams(text,params){
+  if(!hasP(params))return text;
+  const setup=(/<ActiveSetup>(\w+)</.exec(text)||[])[1]||"SETUP_A";
+  return text.replace(new RegExp('(<PresetData Setup="'+setup+'">\\s*<Parameters Type="RealWorld">)([^<]*)'),
+    (m,head,body)=>{let n=0;return head+body.replace(/\S+/g,t=>{const k=n++;return k in params?String(params[k]):t;});});
+}
+/* The active setup's RealWorld tokens of a preset text, or null. */
+function presetTokens(text){
+  const setup=(/<ActiveSetup>(\w+)</.exec(text)||[])[1]||"SETUP_A";
+  const m=new RegExp('<PresetData Setup="'+setup+'">\\s*<Parameters Type="RealWorld">([^<]*)').exec(text||"");
+  return m?m[1].trim().split(/\s+/):null;
+}
 function emoPresetFindOrInsert(db,text){
   const digest=sha3_256(text);
   const hit=eq(db,"SELECT id FROM plugin_preset WHERE hash = ?",[digest]);
@@ -5965,18 +6635,18 @@ async function emoExport(spec){
       erun(db,"DELETE FROM snapshot_plugin WHERE plug_id IN "+
         "(SELECT id FROM plug WHERE chainer_id = ? AND plug_role IN (1, 2, 4))",[cid]);
       erun(db,"DELETE FROM plug WHERE chainer_id = ? AND plug_role IN (1, 2, 4)",[cid]);
-      slots.forEach((nm,idx)=>plugsToAdd.push([cid,nm,resolveCc(nm,st),idx]));
+      slots.forEach((nm,idx)=>plugsToAdd.push([cid,nm,resolveCc(nm,st),idx,(rack.params||[])[idx]||null]));
     }
     if(plugsToAdd.length){
       const texts={};
       for(const cc of [...new Set(plugsToAdd.map(p=>p[2]))].sort())
         texts[cc]=emoResolvePresetText(cc,pack,tplTexts);
       let nextId=eq(db,"SELECT MAX((SELECT MAX(id) FROM plug), (SELECT MAX(id) FROM snapshot_plugin))")[0][0]+1;
-      for(const [cid,nm,cc,slot] of plugsToAdd){
+      for(const [cid,nm,cc,slot,params] of plugsToAdd){
         erun(db,"INSERT INTO plug VALUES (?, ?, ?, ?, ?, '', 0, 0, 0, -1, 'Waves', 0, 0)",
           [nextId,cid,slot,nm,cc]);
         erun(db,"INSERT INTO snapshot_plugin VALUES (?, ?, ?, -1, -1, 0, 0, 1, -9999, -9999, 125, 0)",
-          [nextId,nextId,emoPresetFindOrInsert(db,texts[cc])]);
+          [nextId,nextId,emoPresetFindOrInsert(db,presetWithParams(texts[cc],params))]);
         nextId++;
       }
     }
@@ -6210,17 +6880,32 @@ async function emoImport(bytes,fileStemName){
     const lmOf=cid=>({...(links[cid]!==undefined?{link:linkLab(links[cid])}:{}),
       ...(mutes[cid]?{mute:mutes[cid]}:{})});
     // racks: untouched fixed modules -> null; otherwise role-0 slot list
+    // Each plug's settings come back as params: the tokens that differ from
+    // the default preset (same token count only, else the defaults show).
+    let defTok={};try{defTok=await plugDefaultTokens();}catch(_){/* offline: no settings */}
+    const paramsOf=(cc,text)=>{
+      const d=defTok[cc],t=presetTokens(text||"");if(!d||!t||d.length!==t.length)return null;
+      const p={};
+      t.forEach((v,k)=>{const x=+v;if(v==="*"||!isFinite(x)||(d[k]!=="*"&&+d[k]===x))return;p[k]=x;});
+      return hasP(p)?p:null;
+    };
     const rackRows={};
-    for(const [cid,slot,nm,cc,role] of eq(db,
-      "SELECT chainer_id, slot, plugin_name, plugin_4cc, plug_role FROM plug ORDER BY chainer_id, slot"))
-      (rackRows[cid]=rackRows[cid]||[]).push([slot,cc2name[cc]||nm,role]);
+    for(const [cid,slot,nm,cc,role,text] of eq(db,
+      "SELECT p.chainer_id, p.slot, p.plugin_name, p.plugin_4cc, p.plug_role, pp.preset FROM plug p "+
+      "LEFT JOIN snapshot_plugin sp ON sp.plug_id = p.id AND sp.snapshot_id = -1 "+
+      "LEFT JOIN plugin_preset pp ON pp.id = sp.preset_id ORDER BY p.chainer_id, p.slot"))
+      (rackRows[cid]=rackRows[cid]||[]).push([slot,cc2name[cc]||nm,role,paramsOf(cc,text)]);
     const rackOf=cid=>{
       const rws=rackRows[cid]||[];
       // Every factory strip carries its fixed modules: none left = emptied rack.
       if(!rws.length)return {slots:[]};
-      const r0=rws.filter(r=>r[2]===0);
-      if(!r0.length)return null; // factory modules only = untouched
-      return {slots:r0.sort((a,b)=>a[0]-b[0]).map(r=>r[1])};
+      let r0=rws.filter(r=>r[2]===0);
+      if(!r0.length){ // factory modules only = untouched, unless their settings changed
+        if(!rws.some(r=>r[3]))return null;
+        r0=rws;
+      }
+      r0=r0.sort((a,b)=>a[0]-b[0]);
+      return {slots:r0.map(r=>r[1]),...(r0.some(r=>r[3])?{params:r0.map(r=>r[3])}:{})};
     };
     // A plugin in the rack is content; an emptied rack alone does not make an
     // unused default-named strip worth importing.
