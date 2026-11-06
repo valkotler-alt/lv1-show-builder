@@ -1869,11 +1869,26 @@ function puRound(q,t){ // quantize: Resolution<=1 steps the fraction, >1 rounds 
    linearranges[withrounding] (state 0..1000 piecewise-linear over q.sv / q.rw), logarithmic,
    linear; plugin-coded scales (STDFreq, …) fall back to logarithmic / linear. */
 const puSt=q=>q?(q.st||"").toLowerCase():"";
+/* Plugin-coded scales (a ScaleType the plugin registers itself), per pack:
+   PU_SCALES["<pack>:<ScaleType>"] = {fwd(state) -> RealWorld, inv(RealWorld) -> state}.
+   Mirrored in build_plugui.CUSTOM_SCALES for the display defaults (keep in sync). */
+const PU_SCALES={};
+const puCScale=q=>q&&PU&&PU.pack&&PU_SCALES[PU.pack.name+":"+q.st];
+PU_SCALES["C1:RatioScale"]={ // C1Alg.cpp RatioScale / InverseRatioScale
+  fwd(s){const d=s/PU_GRAN,t=d<0.8+0.001?0.5*Math.pow(9.152473109,d+2*d*d):-5*Math.pow(100000,(1-d)*0.2/(0.2-0.001));
+    return +(Math.trunc(t/0.01+(t<0?-0.5:0.5))*0.01).toFixed(10);},
+  inv(v){return v>0?Math.trunc(0.5+PU_GRAN*(-1+Math.sqrt(1+8.32*Math.log10(2*v)))*0.25)
+    :Math.trunc(0.5+PU_GRAN*(1-(0.2-0.001)*Math.log10(v*-0.2)));}};
+PU_SCALES["C1:FloorScale"]={ // C1Alg.cpp FloorScale / InverseFloorScale (RealWorld = signed linear gain)
+  fwd(s){let t=2.562341325*s/PU_GRAN-0.562341325;t*=Math.abs(t);
+    return +(Math.trunc(t)+Math.trunc((t-Math.trunc(t))*100000+(t<0?-0.5:0.49999))*0.00001).toFixed(10);},
+  inv(v){const t=(Math.sign(v||1)*Math.sqrt(Math.abs(v))+0.562341325)/2.562341325;return Math.trunc(t*PU_GRAN);}};
 const puDisc=q=>/^toggle(ranges|map)$/.test(puSt(q))&&q.rw&&q.rw.length>0;
 const puIsTog=q=>!!q&&(puSt(q)==="toggle"||puDisc(q));
 const puStates=q=>puDisc(q)?q.rw.length:puIsTog(q)?Math.max(1,Math.round(q.res||2)):0; // toggle: Resolution = number of states
 function puState(q,v){ // RealWorld -> state (0..1000; discrete: 0..N-1)
   if(!q||v===null||v===undefined)return 0;
+  const cs=puCScale(q);if(cs)return cs.inv(v);
   const st=puSt(q);
   if(st==="toggle")return v;
   if(st==="togglemap"&&q.rw){const k=q.rw.findIndex(x=>x===v);return k<0?0:(q.sv?q.sv[k]:k);}
@@ -1887,6 +1902,7 @@ function puState(q,v){ // RealWorld -> state (0..1000; discrete: 0..N-1)
   return q.max===q.min||typeof q.max!=="number"?0:(v-q.min)/(q.max-q.min)*PU_GRAN;
 }
 function puRW(q,s){ // state -> RealWorld (quantized)
+  const cs=puCScale(q);if(cs)return cs.fwd(Math.min(PU_GRAN,Math.max(0,s)));
   const st=puSt(q);
   if(puDisc(q)){const n=q.rw.length;if(st==="togglemap"&&q.sv){const k=q.sv.indexOf(Math.round(s));return q.rw[k<0?0:k];}
     return q.rw[((Math.round(s)%n)+n)%n];}
@@ -1915,6 +1931,8 @@ const PU_DISP={
   DisplayDeesserMode:puPick("Shelf","Bell","Notch"),DisplayGateReacSpeed:puPick("Slow","Medium","Fast"),
   DisplayLowType:puPick("Bell","Low-Shelf","Hi-Pass","Low-RShelv"),DisplayHighType:puPick("Bell","Hi-Shelf","Low-Pass","Hi-RShelv"),
   DisplayLR:v=>v===0?"Left":v===1?"Right":"",
+  DisplayRatioFloat2:v=>(+v).toFixed(2)+":1",DisplayRatioFloat1:v=>(+v).toFixed(1)+":1",
+  DisplayFloor:v=>v?(20*Math.log10(Math.abs(v))).toFixed(1)+(v<0?" N":""):"-Inf", // C1
 };
 function puText(q,v){
   if(v===null||v===undefined||!q)return "";
@@ -2068,6 +2086,25 @@ function puVisibility(){
   const gHidden=g=>{for(let x=g,n=0;x&&n<20;x=par[x],n++)if(hidG.has(x))return true;return false;};
   PU.hidden=c=>(c.fl||[]).includes("Hidden")||hidC.has(c.n)||(!!c.groups&&c.groups.every(gHidden));
 }
+/* Stacked per-band controls (same rect; the plugin's code shows only the selected band's — by group
+   "Band1".."Band6" (REQ) or by disabling the others, HideWhenDisabled, "Band 2 Gain" (F6)): keep the one
+   whose band number (group name, else control name) matches the band-select param (a discrete
+   PARAM_…SELECTED… param; 0-based values map to band 1), else the first of the stack. */
+function puStackPick(shown){
+  const sel=PU.P.find(q=>/(^|_)(BAND_)?SELECT(ED)?(_BAND)?$|BAND_SELECT/i.test(q.n)&&puIsTog(q)&&!q.ro);
+  const sv=sel?puVal(sel.n):null,target=sv===null?null:(typeof sel.min==="number"&&sel.min>=1?sv:sv+1);
+  const stacks=new Map();
+  for(const c of shown){const k=puKind(c);
+    if(k==="marker"||k==="graph"||!(c.groups||(c.fl||[]).includes("HideWhenDisabled")))continue;
+    const key=c.r.join();if(!stacks.has(key))stacks.set(key,[]);stacks.get(key).push(c);}
+  const hide=new Set(),num=c=>{const m=c.groups?/(\d+)\D*$/.exec(c.groups[0]):/(\d+)/.exec(c.n);return m?+m[1]:null;};
+  for(const cs of stacks.values()){
+    if(cs.length<2||new Set(cs.map(num)).size<2)continue;
+    const keep=cs.find(c=>target!==null&&num(c)===target)||cs[0];
+    for(const c of cs)if(c!==keep)hide.add(c);
+  }
+  return hide.size?shown.filter(c=>!hide.has(c)):shown;
+}
 function puShown(ctl){
   if(PU.hidden&&PU.hidden(ctl))return false;
   if(PU.name==="EMO-Q4"&&/S$/.test(PU.cc)){
@@ -2095,7 +2132,7 @@ function puImg(id,x,y){const im=id!==undefined&&PU.pack.img[id];if(im&&im.natura
 function puDraw(){
   const P=PU,c=P.ctx;c.clearRect(0,0,P.w,P.h);
   for(const [id,l,t] of P.pack.bases[P.cc])puImg(id,l,t);
-  puVisibility();P.markers=[];P.shown=P.ctrls.filter(c=>c.r&&puShown(c)); // a control without a ControlRect is not drawn
+  puVisibility();P.markers=[];P.shown=puStackPick(P.ctrls.filter(c=>c.r&&puShown(c))); // a control without a ControlRect is not drawn
   for(const ctl of P.shown){
     const [l,t,w,h]=ctl.r,p0=ctl.p[0],q=p0&&puQ(p0.n),v=p0?puVal(p0.n):null;
     const kind=puKind(ctl);
@@ -2117,7 +2154,7 @@ function puDraw(){
         const dv=(ctl.div||[])[puIdx(q,v)];if(dv&&dv[1]!==null)puImg(dv[1],l,t);break;}
       case "vu":if(ctl.img&&ctl.img.BackGround)puImg(ctl.img.BackGround,l,t);break;
       default:{
-        const g=PU_GRAPHS[P.name+":"+ctl.n];
+        const g=puGraph(ctl.n);
         if(g||kind==="graph"){
           if(ctl.img&&ctl.img.BackGround)puImg(ctl.img.BackGround,l,t);
           if(g){c.save();c.beginPath();c.rect(...(ctl.area||ctl.r));c.clip();g.draw(ctl.area||ctl.r);c.restore();}
@@ -2175,8 +2212,8 @@ function puDrawText(pp,tw,str){ // a param's Value TextWin (or tw + fixed text: 
    UpdateGraphics move it; else centred. A "Graph" param = plugin-computed.
    Kept inside its movement rect (a curve point can fall off the graph). */
 function puMarkerPos(ctl){
-  const area=PU_GRAPHS[PU.name+":area"]?.(ctl)||ctl.r,[l,t,w,h]=area;
-  const g=PU_GRAPHS[PU.name+":markerPos"],by=r=>ctl.p.find(p=>p.ug&&p.reg.includes(r)&&puQ(p.n));
+  const area=puGraph("area")?.(ctl)||ctl.r,[l,t,w,h]=area;
+  const g=puGraph("markerPos"),by=r=>ctl.p.find(p=>p.ug&&p.reg.includes(r)&&puQ(p.n));
   const ph=by("MouseHorizontal"),pv=by("MouseVertical");
   const [x,y]=(g&&g(ctl,area))||[ph?l+puState(puQ(ph.n),puVal(ph.n))*w/PU_GRAN:l+w/2, pv?t+h-puState(puQ(pv.n),puVal(pv.n))*h/PU_GRAN:t+h/2];
   return [Math.min(l+w,Math.max(l,x)),Math.min(t+h,Math.max(t,y))];
@@ -2245,7 +2282,7 @@ function puMove(e){
   const D=PU&&PU.drag;if(!D)return;
   const [x,y]=puPt(e),fine=e.ctrlKey||e.metaKey?0.25:1;
   if(D.marker){ // marker: its registered params move with the pointer (Alt = the Alt-registered one)
-    const [l,t,w,h]=PU_GRAPHS[PU.name+":area"]?.(D.marker)||D.marker.r;
+    const [l,t,w,h]=puGraph("area")?.(D.marker)||D.marker.r;
     for(const p of D.marker.p){
       const q=puQ(p.n);if(!q||puIsTog(q))continue;
       const alt=p.reg.some(r=>r.endsWith(":Alt"));if(alt!==D.alt)continue;
@@ -2505,6 +2542,9 @@ function puXpsIn(){
 /* ---- code-drawn graphs: the plugins' own curve maths (digital biquads at 48 kHz,
    100 points on the graph param's 15.625–21357.44 Hz log axis) ---- */
 const PU_GRAPHS={};
+/* Code-drawn parts are registered per pack (bundle) — "F6:Graph" serves F6 and F6-RTA; the
+   catalog name is the fallback (the EMO packs share it). */
+const puGraph=key=>PU_GRAPHS[PU.pack.name+":"+key]||PU_GRAPHS[PU.name+":"+key];
 const PU_SR=48000,PU_FMIN=15.625,PU_FMAX=21357.44,PU_NPTS=100;
 const puW=f=>2*Math.PI*Math.min(0.49999999,f/PU_SR); // Translate_Frequency
 const puDb2G=db=>Math.pow(10,db/20);
@@ -2685,6 +2725,640 @@ PU_GRAPHS["EMO-D5:markerPos"]=(ctl,[l,t,w,h])=>{
   return null;
 };
 
+/* ==== plugin graph modules (per pack; ports of each plugin's own graph code) ==== */
+/* F6 / F6-RTA (Plugins/EMO/F6: F6Alg.cpp, F6AlgT.cpp, F6Consts.h, F6Param.xml).
+   "Graph" is a CAnalyzerGraph = plain WCGraph: it draws its registered params in order —
+   8 DrawGradientPipe_short (PARAM_BAND_1..8_FRQ: band curve vs 0 dB, fill only) then
+   PARAM_GRAPH_ATTN (DrawLineStrip, the "Total Curve"). PARAM_GRAPH_SHADE is alpha 0 and
+   __USE_SHADE_GRAPH_IN_PLUGIN__ is off (F6Consts.h:14). RTA params (F6-RTA) are audio-only.
+   400 points (nGRAPH_POINTS, F6Consts.h:423) on GRAPH_SHADE's 15.625–21357.437 Hz log axis;
+   y = ScaleEQGraph (F6Alg.cpp:1242): 500 + 500·(20/18)·log10|H| → ±18 dB. Mono and stereo
+   draw the same single curve (no L/R / M-S split in ComputeAttnGraph). */
+const F6_N=400,F6_FMIN=15.625,F6_FMAX=21357.437;
+const f6Fts=f=>f>0?PU_GRAN*Math.log(f/F6_FMIN)/Math.log(F6_FMAX/F6_FMIN):0; // GRAPH_SHADE RealWorldToState
+const F6_X=(()=>{const st=PU_GRAN/(F6_N-1),x=[];let s=0;for(let i=0;i<F6_N;i++,s+=st)x.push(Math.floor(s));return x;})(); // InitGraph F6Alg.cpp:1183-1192
+const F6_W=F6_X.map(s=>puW(F6_FMIN*Math.pow(F6_FMAX/F6_FMIN,s/PU_GRAN))); // ScaleFunc(int state) → Translate_Frequency
+// Param.xml DrawClass FillColor (alpha 50 bands 1-6, 25 HP/LP); ATTN LineColor 207,250,222,240, thickness 2
+const F6_FILL=[[232,114,91],[184,227,118],[103,215,215],[42,185,230],[105,118,207],[240,84,139],[250,250,250],[250,250,250]]
+  .map((c,k)=>`rgba(${c},${(k<6?50:25)/255})`);
+function f6Scale(m){const v=0.5*(PU_GRAN+PU_GRAN*(20/18)*Math.log10(Math.max(m,0.001)));return Math.sign(v)*Math.round(Math.abs(v));}
+function f6Mag(bqs,w){return Math.sqrt(bqs.reduce((m,B)=>m*puSqMag(B,w),1));}
+
+/* Bands 1-6: SetAudiopathBiquadPrototype (F6Alg.cpp:223) = s-prototype (s²+(w0/Qp)s+w0²)/(same),
+   w0 = tan(πf/Fs), f / Q pre-warped by CalcWarpedBandpassParams (Filters.cpp:10); gain applied by
+   GetBilinearTransformedResponseMag (F6Alg.cpp:1251): bell √G on s¹, shelves √G on s⁰ / s² and G^¼ on s¹,
+   then bilinear s = (1−z⁻¹)/(1+z⁻¹). Type: 0 low shelf, 1 bell, 2 high shelf (eEqualizerTypes = eVecMultiplexer order). */
+function f6Band(f,Q,G,type){
+  const Fs=PU_SR,rq=1/Q,flo=0.5*f*(Math.sqrt(rq*rq+4)-rq);
+  const F1=2*Fs*Math.tan(0.5*(2*Math.PI*flo/Fs)),Fc=2*Fs*Math.tan(0.5*(2*Math.PI*f/Fs)),F2=Fc*Fc/F1;
+  const Qp=Fc/Math.abs(F2-F1),w0=0.5*Fc/Fs,a=w0/Qp,b=w0*w0;
+  let nS2=1,nS1=1,nS0=1,dS2=1,dS1=1,dS0=1;
+  if(type===1){nS1=Math.sqrt(G);dS1=1/nS1;}
+  else if(type===0){nS0=Math.sqrt(G);dS0=1/nS0;nS1=Math.sqrt(nS0);dS1=1/nS1;}
+  else if(type===2){nS2=Math.sqrt(G);dS2=1/nS2;nS1=Math.sqrt(nS2);dS1=1/nS1;}
+  const N0=nS2,N1=a*nS1,N2=b*nS0,D0=dS2,D1=a*dS1,D2=b*dS0,n=1/(D2+D0+D1);
+  return {g:(N0+N2+N1)*n,a:2*(N2-N0)*n,b:(N0+N2-N1)*n,c:2*(D2-D0)*n,d:(D2+D0-D1)*n};
+}
+/* Filters.h:103 Bilinear: N(s) = num[0]s² + num[1]s + num[2], s = fv·(1−z⁻¹)/(1+z⁻¹) */
+function f6Bilin(num,den,fv){
+  const n1=num[1]*fv,d1=den[1]*fv,n0=num[0]*fv*fv,d0=den[0]*fv*fv,dt=den[2]+d0,n=1/(dt+d1),nt=num[2]+n0;
+  return {g:(nt+n1)*n,a:2*(num[2]-n0)*n,b:(nt-n1)*n,c:2*(den[2]-d0)*n,d:(dt-d1)*n};
+}
+/* HP (band 7) / LP (band 8): Calc_Lp_Hp_ButterworthBiquads (F6Alg.cpp:1753), order = Q+1 (1..4 = 6..24 dB/oct,
+   GetFrontEndFreqAndOrder F6Alg.cpp:976); the padding biquads of SetFrontEndFilter (F6AlgT.cpp:1110) are unity. */
+function f6Cut(f,order,lp){
+  const fv=PU_SR/(PU_SR*Math.tan(Math.PI*f/PU_SR)),k=lp?2:0,bq=[];
+  let nb=(order+1)>>1;
+  if(order&1){const num=[0,0,0];num[k>>1]=1;num[(k>>1)+1]=1;bq.push(f6Bilin(num,[1,2,1],fv));nb--;}
+  for(let i=0;i<nb;i++){const num=[0,0,0];num[k]=1;bq.push(f6Bilin(num,[1,-2*Math.cos((2*i+order+1)*Math.PI/(2*order)),1],fv));}
+  return bq;
+}
+/* Band state. Bypass = PARAM_BAND_n_BYPASS (GetBypassState F6Alg.cpp:854; kept = !PARAM_SELECTED_n_STATE);
+   mono forces bypass on a band set to Sides (F6AlgT.cpp:783, 1330). Gain = PARAM_BAND_n_MAKEUP. */
+function f6Bands(){
+  const mono=/M$/.test(PU.cc);
+  return [1,2,3,4,5,6,7,8].map(n=>{
+    const v=k=>puVal(`PARAM_BAND_${n}_${k}`);
+    let byp=v("BYPASS");
+    if(byp===null){const s=puVal(`PARAM_SELECTED_${n}_STATE`);byp=s===null?0:!s;}
+    if(mono&&v("STEREO_MS_SELECTOR")===2)byp=1;
+    return {f:v("FRQ"),q:v("Q"),g:puDb2G(v("MAKEUP")||0),type:Math.trunc(v("EQUALIZER_TYPE")??1),byp:!!byp};
+  });
+}
+
+PU_GRAPHS["F6:Graph"]={draw(area){
+  const [l,t,w,h]=area,c=PU.ctx,X=s=>l+s*w/PU_GRAN,Y=s=>t+h-s*h/PU_GRAN;
+  const P=f6Bands(),zero=f6Scale(1);
+  const eq=P.slice(0,6).map(p=>f6Band(p.f,p.q,p.g,p.type));
+  const cut=[f6Cut(P[6].f,Math.trunc(P[6].q)+1,false),f6Cut(P[7].f,Math.trunc(P[7].q)+1,true)];
+  const path=ys=>{c.beginPath();F6_X.forEach((s,i)=>i?c.lineTo(X(s),Y(ys[i])):c.moveTo(X(s),Y(ys[i])));};
+  // Pipes (ComputeDynEQGraph F6Alg.cpp:2296-2361): each band's static curve (gain = makeup) vs 0 dB,
+  // float data; computed for every band whether bypassed or not.
+  [...eq.map(B=>[B]),...cut].forEach((bqs,k)=>{
+    path(F6_W.map(wz=>f6Scale(Math.fround(f6Mag(bqs,wz)))));
+    c.lineTo(X(F6_X[F6_N-1]),Y(zero));c.lineTo(X(F6_X[0]),Y(zero));c.closePath();
+    c.fillStyle=F6_FILL[k];c.fill();
+  });
+  // Total curve (ComputeAttnGraph F6AlgT.cpp:1730 + GetExtraBands_AttenuatedResponse :1868) at rest:
+  // compressor out = 1, so band gain = makeup; bypassed bands are flat; the grid point nearest each band's
+  // Fc is evaluated exactly at Fc (GetClosestPeakIndex_ExtraBands F6Alg.cpp:2405).
+  const pk=P.slice(0,6).map(p=>Math.floor(0.5+f6Fts(p.f)*(F6_N-1)/PU_GRAN));
+  path(F6_W.map((wz,i)=>{
+    let m=1;
+    eq.forEach((B,k)=>{if(!P[k].byp)m*=Math.sqrt(puSqMag(B,i===pk[k]?puW(P[k].f):wz));});
+    cut.forEach((bqs,k)=>{if(!P[6+k].byp)m*=f6Mag(bqs,wz);});
+    return f6Scale(m);
+  }));
+  c.strokeStyle="rgba(207,250,222,0.941)";c.lineWidth=2;c.lineJoin="round";c.stroke();
+}};
+
+/* Markers follow their MAKEUP param's Point graph (ComputeMarkPoint F6Alg.cpp:1351):
+   x = (short) freq state, y = (short) makeup state; HP/LP makeup is fixed 0 dB → centre line. */
+PU_GRAPHS["F6:markerPos"]=(ctl,[l,t,w,h])=>{
+  const mk=(ctl.p.find(p=>/^PARAM_BAND_\d_MAKEUP$/.test(p.n))||{}).n;
+  if(!mk)return null;
+  const fq=mk.replace("MAKEUP","FRQ"),mv=puVal(mk);
+  const sx=Math.trunc(f6Fts(puVal(fq))),sy=mv===null?PU_GRAN/2:Math.trunc(puState(puQ(mk),mv));
+  return [l+sx*w/PU_GRAN,t+h-sy*h/PU_GRAN];
+};
+
+/* C1 (Plugins/Gold/C1/Code/Plugin/C1Alg.cpp): I/O transfer graphs (comp = PARAM_COMP_GRAPH, yellow;
+   gate / expander = PARAM_EXP_GRAPH, cyan; 100 points, state units of the -100..0 dB graph params, 1 px —
+   ParamXML DrawLineStrip LineColor) and the side-chain filter graph (PARAM_FGRAPH red, its power
+   complement PARAM_CFRQ_GRAPH blue). The energy "worms" (PARAM_COMP_ENERGY / PARAM_READ_ENERGY,
+   DrawEnergy / DrawGateEnergy) follow live audio: not drawn. */
+const C1_NPTS=100; // nGRAPH_POINTS (C1Alg.h:248)
+const c1X=i=>Math.floor(i/C1_NPTS*PU_GRAN+0.5); // InitGraph (:3370): x state of point i (last = 990)
+const c1Short=y=>Math.min(32767,Math.max(-32768,y)); // WTPoint2s
+function c1CompCoefs(){ // SetCurve (:2011-2037) + SetAutoMakeup (:1966)
+  const r=puVal("PARAM_COMPRESSOR_RATIO");
+  let G,tOfs=0;
+  if(r>=0.5){
+    if(r<=1.25)tOfs=25-20*r;
+    G=r<=1?Math.pow(256,1-r):1.0061983/Math.pow(r,3-Math.log10(r))-0.0061983;
+  }else G=-0.3*(Math.pow(0.35,-r*0.2)-2.758547354e-5)/(0.35-2.758547354e-5); // negative ratios
+  const K=G<1?1.5:1.25,B=puDb2G(puVal("PARAM_COMPRESSOR_THRESH")+tOfs);
+  let auto=0;
+  if(Math.trunc(puVal("PARAM_MODE"))){ // auto makeup
+    const aG=Math.abs(G);let t=B/(1+B);t=aG+(1-aG)*t*(1+K*t*(1-t));auto=-20*Math.log10(Math.abs(t));
+  }
+  return {G,K,B,auto};
+}
+function c1CompPts(){ // UpdateDisplaySelf PARAM_COMP_GRAPH (:2874) → SlowCompGraph (:2801)
+  const {G,K,B,auto}=c1CompCoefs(),tq=puQ("PARAM_COMPRESSOR_THRESH");
+  const range=puRW(tq,PU_GRAN)-puRW(tq,0); // dThreshRange (:3590)
+  const out=Math.trunc(PU_GRAN*Math.min(40,puVal("PARAM_COMP_MAKEUP")+auto)/range+0.5);
+  return Array.from({length:C1_NPTS},(_,i)=>{
+    const sx=c1X(i),x=puDb2G(puRW(tq,sx)); // dGraphX (:3372)
+    let c=B/(x+B);c=G+(1-G)*(c+K*c*c*(1-c));
+    return [sx,c1Short(sx+Math.trunc(Math.max(-1e6,puState(tq,20*Math.log10(Math.abs(c)))))-PU_GRAN+out)];
+  });
+}
+function c1ExpPts(){ // SlowExpGraph (:2753): gate = step at Open, expander = smooth to unity at Open+6 dB
+  const tq=puQ("PARAM_COMPRESSOR_THRESH"),oq=puQ("PARAM_EXP_OPEN"),open=puVal("PARAM_EXP_OPEN");
+  const fl=puVal("PARAM_EXP_FLOOR"),div=Math.trunc(puVal("PARAM_EXP_MODE"))?puDb2G(-open):0,os=puState(oq,open);
+  return Array.from({length:C1_NPTS},(_,i)=>{
+    const sx=c1X(i);
+    let t=div>0?Math.min(2,puDb2G(puRW(tq,sx))*div):(os>sx?0:2);
+    t-=0.25*t*t;t=fl+(1-fl)*t; // floor = linear gain (FloorScale RealWorld)
+    return [sx,t>0?c1Short(sx+Math.trunc(puState(oq,20*Math.log10(t)))-PU_GRAN):sx-32768];
+  });
+}
+function c1Strip([l,t,w,h],pts,col){ // DrawLineStrip in graph-param states
+  const c=PU.ctx;c.beginPath();
+  pts.forEach(([sx,sy],i)=>{const x=l+sx*w/PU_GRAN,y=t+h-sy*h/PU_GRAN;i?c.lineTo(x,y):c.moveTo(x,y);});
+  c.strokeStyle=col;c.lineWidth=1;c.lineJoin="round";c.stroke();
+}
+// COM* "C1-IO Graph": comp + gate; C1C* "C1-IO Graph": comp only (param list); CMP* / GAT* "IO Graph"
+PU_GRAPHS["C1:C1-IO Graph"]={draw(area){
+  c1Strip(area,c1CompPts(),"#ffff00");
+  if(/^COM/.test(PU.cc))c1Strip(area,c1ExpPts(),"#00ffff");
+}};
+PU_GRAPHS["C1:IO Graph"]={draw(area){
+  if(/^GAT/.test(PU.cc))c1Strip(area,c1ExpPts(),"#00ffff");else c1Strip(area,c1CompPts(),"#ffff00");
+}};
+
+/* Side-chain filter: SetFilter (:892-946) → ComputeBSplitFilter (:619); flat when both
+   Comp / Exp filter modes are Off. Types (C1Alg.h enum): 0 LOW, 1 MID, 2 HIGH, 3 BAND_REJECT. */
+function c1SplitBQ(){
+  const v=puVal,mode=Math.max(Math.trunc(v("PARAM_EXP_FILTER_ON")),Math.trunc(v("PARAM_COMP_FILTER_ON")));
+  if(!mode)return puFlat();
+  const Q=v("PARAM_Q"),lh=()=>{const t=1/(Q*Q)-2;return Math.sqrt(0.5*(t+Math.sqrt(t*t+4)));}; // FindLowHighRatio (:601)
+  let w=2*Math.tan(Math.PI*Math.min(0.49,v("PARAM_FRQ")/PU_SR)),g,a,b,d;
+  switch(Math.trunc(v("PARAM_FTYPE"))){
+    case 0:w*=lh();g=1;a=2;b=1;break;                     // LOW
+    case 1:d=2/(Q*w);g=d;a=0;b=-d;break;                  // MID (band-pass; dInvert sign drops out of |H|²)
+    case 3:d=(2/w)**2;g=1+d;a=2-2*d;b=g;break;            // BAND_REJECT
+    default:w/=lh();d=4/(w*w);g=d;a=-2*d;b=d;             // HIGH
+  }
+  const n=1/(1+2/(Q*w)+4/(w*w));
+  return {g:g*n,a:a*n,b:b*n,c:n*(2-8/(w*w)),d:n*(1-2/(Q*w)+4/(w*w))};
+}
+PU_GRAPHS["C1:Frq Graph"]={draw(area){ // Compute_Split_Curve (:386) via UpdateDisplaySelf PARAM_FGRAPH (:2953)
+  const B=c1SplitBQ(),fq=puQ("PARAM_FGRAPH"),norm=PU_GRAN*10/33,off=Math.trunc(PU_GRAN*0.833333333-1); // 0 dB at 832, 30.3 states/dB
+  const m=Array.from({length:PU_NPTS},(_,i)=>puSqMag(B,puW(puRW(fq,i*PU_GRAN/(PU_NPTS-1))))); // WUInit_ZPlain_Axes
+  const y=f=>m.map(s=>off+Math.trunc(norm*Math.log10(Math.max(1e-5,f(s)))));
+  puLine(area,y(s=>1-s),"#0000ff",1); // PARAM_CFRQ_GRAPH (param-list order: drawn first)
+  puLine(area,y(s=>s),"#ff0000",1);   // PARAM_FGRAPH
+}};
+// "Frq Mark" (Marker: x = PARAM_FRQ, y = PARAM_Q states) and the threshold / gate sliders need no hook.
+
+/* Q10 — Q1…Q10 paragraphic EQ (Plugins/Gold/Q10/Code/Plugin: QnAlg.cpp, QnAlg.h, Q10Graph.cpp; Q10 ParamXML).
+   One curve per channel: Σ of the bands' biquads (no In/Out gain, no polarity: QnAlg.cpp:341 puts them only
+   into the DSP coefs). 200 points (PARAM_GRAPH_L DataSize) on PARAM_GRAPH_L's log 15.625–21357.4366798 Hz axis;
+   y = 500 + Σ trunc((1000·5/21)·log10|H|²) (dGraphLogNorm, QnAlg.cpp:75) → ±21 dB.
+   Drawn as DrawGradientPipe_short: fill curve↔0 dB line + 2 px border in the selected band's colour. */
+const Q10_N=200,Q10_LO=15.625,Q10_HI=21357.4366798,Q10_NORM=PU_GRAN*5/21;
+/* ParamXML PARAM_GRAPH_L <Colors Index>: [r,g,b, line alpha, fill alpha]. 0-9 = band colours (fill alpha 60 top /
+   50 bottom → 55 here); 10 / 11 = inactive L / R channel (line only, alpha 220). 12 / 13 are the Classic skin's. */
+const Q10_COLORS=[[48,203,254],[38,124,255],[176,78,255],[240,56,248],[253,72,131],[249,119,59],[255,242,26],
+  [94,211,2],[80,235,155],[1,210,218]].map(c=>[...c,1,55/255]).concat([[255,255,255,220/255,0],[255,80,80,220/255,0]]);
+let q10G=null;
+function q10Grid(){ // WUInit_ZPlain_Axes (Filters.cpp:503): state s += 1000/199, x = round(s), f = LogScale(s) quantized to 0.01
+  if(q10G)return q10G;
+  const b=Math.pow(Q10_HI/Q10_LO,1/PU_GRAN),st=PU_GRAN/(Q10_N-1),x=[],w=[];
+  for(let i=0,s=0;i<Q10_N;i++,s+=st){const f=Q10_LO*Math.pow(b,s),fl=Math.floor(f);x.push(Math.round(s));w.push(puW(fl+Math.floor((f-fl)*100+0.5)*0.01));}
+  return q10G={x,w};
+}
+function q10Mitra(f,Q,gDb){ // ComputeMitraBiquad(bSymetric=true) Filters.cpp:1080: 20 dB Mitra bell, num/den interpolated to gDb
+  if(gDb===0)return puFlat();
+  const w0=puW(f),tn=Math.tan(Math.min(w0/Q*0.5,1.5)),k2=(1-tn)/(1+tn),G=puDb2G(gDb),T=10;
+  const NG=(1-T)/2,DG=(1+T)/2,D=[1,-Math.cos(w0)*(1+k2),k2],N=[DG+NG*k2,D[1],DG*k2+NG];
+  const I=(G*T-1)/((T-1)*(G+1)),mix=(p,q)=>p*I+q*(1-I),dn=mix(D[0],N[0]);
+  return {g:mix(N[0],D[0])/dn,a:mix(N[1],D[1])/dn,b:mix(N[2],D[2])/dn,c:mix(D[1],N[1])/dn,d:mix(D[2],N[2])/dn};
+}
+function q10ShelvCf(hp,f,gDb){ // ShelvCf Filters.cpp:866 — 1st order; hp=true gives DC gain G (Q10 uses it for Low-Shelf)
+  if(gDb===0)return puFlat();
+  const G=puDb2G(gDb);let c=(G-1)/(G+1),NG=0.5*(1-G);const s=-Math.sqrt(1-c*c),DG=0.5*(1+G);
+  if(hp){c=-c;NG=-NG;}
+  const w0=puW(f),fc=Math.cos(-w0),fs=Math.sin(-w0),a=(c-fc)/(1-c*fc+s*fs);
+  return {g:a*NG+DG,a:NG+a*DG,b:0,c:a,d:0};
+}
+/* SetSect QnAlg.cpp:235 → {B, wf (dFocusArg), ic (iCenter from iFocusArg)}; null = band off (num = den → 0 dB).
+   Types (QnAlg.h:34): 0 Bell, 1 Low-Shelf, 2 Hi-Shelf, 3 Low-Pass, 4 Hi-Pass, 5 PQ-Bell. */
+function q10Band(ch,k){
+  const p=n=>`PARAM_BAND_${n}_${ch}_${k}`,v=n=>puVal(p(n));
+  if(!v("STATE"))return null;
+  const f=Math.min(v("FREQ"),PU_SR*0.4999),g=v("GAIN"),ty=v("TYPE");
+  let B,wf,is;
+  if(ty===0||ty===5){
+    let Q=v("Q");if(f/Q>=PU_SR/3.999)Q=3.999*f/PU_SR; // keeps the bell from flattening toward Nyquist
+    if(ty===5)Q*=0.042214*g*g+0.0081993*Math.abs(g)+1.2861; // ProportionalQforGain QnAlg.cpp:199
+    B=q10Mitra(f,Q,g);wf=puW(f);is=Math.trunc(puState(puQ(p("FREQ")),f));
+  }else if(ty===3){B=puO2Butterworth(false,f);wf=puW(Q10_HI);is=PU_GRAN;}
+  else if(ty===4){B=puO2Butterworth(true,f);wf=puW(Q10_LO);is=0;}
+  else{B=q10ShelvCf(ty===1,f,g);wf=puW(ty===1?Q10_LO:Q10_HI);is=ty===1?0:PU_GRAN;}
+  if(puVal("PARAM_DOUBLE_PRECISION")===0)for(const c of "gabcd")B[c]=Math.fround(B[c]); // single precision rounds the coefs (QnAlg.cpp:352)
+  return {B,wf,ic:Math.min(Q10_N-1,Math.max(0,Math.trunc(is*(Q10_N-1)/PU_GRAN+0.5)))};
+}
+function q10Curve(ch,n){ // Compute_Eq_Curve Filters.cpp:530: per band trunc(short) curve, walked out from the focus point until a 0
+  const {w}=q10Grid(),y=new Array(Q10_N).fill(PU_GRAN/2);
+  const val=(B,z)=>Math.trunc(Q10_NORM*Math.log10(Math.max(1e-5,puSqMag(B,z))));
+  for(let k=0;k<n;k++){
+    const bd=q10Band(ch,k);if(!bd)continue;
+    const c0=val(bd.B,bd.wf);y[bd.ic]+=c0;
+    for(let i=bd.ic-1,l=c0;i>=0&&l;i--)y[i]+=l=val(bd.B,w[i]);
+    for(let i=bd.ic+1,l=c0;i<Q10_N&&l;i++)y[i]+=l=val(bd.B,w[i]);
+  }
+  return y;
+}
+/* UpdateGraphColors QnAlg.cpp:772: the selected band's colour if that band is on, else the colour index stays —
+   at load that is m_LastActivatedBand (SetSect:337) after UpdateAlgSelf's order: all bands, then band 0 (SetInGain)
+   and band n-1 (SetOutGain), channel by channel. */
+function q10ColorIdx(chs,act,n){
+  const on=(ch,k)=>puVal(`PARAM_BAND_STATE_${ch}_${k}`)==1,sel=puVal("PARAM_BAND_SELECTED")|0;
+  if(sel<n&&on(act,sel))return sel;
+  let last=0;
+  for(const ch of chs){for(let k=0;k<n;k++)if(on(ch,k))last=k;if(on(ch,0))last=0;if(on(ch,n-1))last=n-1;}
+  return last;
+}
+function q10Pipe(area,y,ci){ // WCDrawGraph_GradientPipeBase::GetDrawInstructions DefaultDrawClasses.cpp:1868
+  const [l,t,w,h]=area,{x}=q10Grid(),c=PU.ctx,[r,g,b,la,fa]=Q10_COLORS[ci];
+  const X=i=>l+x[i]*w/PU_GRAN,Y=v=>t+h-v*h/PU_GRAN;
+  if(fa){ // triangle strip between the curve and the 0 dB bottom line (y = 500)
+    c.beginPath();c.moveTo(X(0),Y(PU_GRAN/2));y.forEach((v,i)=>c.lineTo(X(i),Y(v)));c.lineTo(X(Q10_N-1),Y(PU_GRAN/2));c.closePath();
+    c.fillStyle=`rgba(${r},${g},${b},${fa})`;c.fill();
+  }
+  c.beginPath();y.forEach((v,i)=>i?c.lineTo(X(i),Y(v)):c.moveTo(X(i),Y(v))); // BorderLineColorTop, BorderLineThickness 2
+  c.strokeStyle=`rgba(${r},${g},${b},${la})`;c.lineWidth=2;c.lineJoin="round";c.stroke();
+}
+/* Mono: "Graph" draws PARAM_GRAPH_L. Stereo: CQ10Graph (Q10Graph.cpp:36) draws the inactive channel first, in
+   colour 10 (L) / 11 (R), then the active one; PARAM_LRB_MODE 0-1 = Left active, 2-3 = Right (QnAlg.cpp:858). */
+PU_GRAPHS["Q10:Graph"]={draw(area){
+  const c=PU.cc[2],n=c==="A"?10:+c,lrb=puVal("PARAM_LRB_MODE")??1;
+  if(!/S$/.test(PU.cc)){q10Pipe(area,q10Curve("L",n),q10ColorIdx(["L"],"L",n));return;}
+  const act=lrb>=2?"R":"L",idle=act==="R"?"L":"R";
+  q10Pipe(area,q10Curve(idle,n),idle==="L"?10:11);
+  q10Pipe(area,q10Curve(act,n),q10ColorIdx(["L","R"],act,n));
+}};
+/* The LRB control (X_CLRB.cpp:214) re-registers the markers to the _R_ params while Right is active. */
+PU_GRAPHS["Q10:markerPos"]=(ctl,area)=>{
+  if(!/S$/.test(PU.cc)||(puVal("PARAM_LRB_MODE")??1)<2)return null;
+  const [l,t,w,h]=area,by=r=>ctl.p.find(p=>/_R_\d+$/.test(p.n)&&p.reg.includes(r)&&puQ(p.n));
+  const ph=by("MouseHorizontal"),pv=by("MouseVertical");if(!ph||!pv)return null;
+  return [l+puState(puQ(ph.n),puVal(ph.n))*w/PU_GRAN,t+h-puState(puQ(pv.n),puVal(pv.n))*h/PU_GRAN];
+};
+
+/* REQ — Renaissance EQ 2/4/6 (Plugins/Renaissance/REQ/Code/Plugin: REQAlg.cpp, REQConsts.h, R_REQ.h; REQ ParamXML).
+   One curve per channel: Σ over the graph sections of (float)10·log10|H|² (Compute_REQ_Curve REQAlg.cpp:296),
+   200 points (DataSize) on PARAM_GRAPH_L's log 15.625–21357.44 Hz axis; y = (short)InverseScale of
+   PARAM_BAND_GAIN (linear −18..18 dB) → ±18 dB, the same scale as the markers. DrawLineStrip, 2 px. */
+const REQ_N=200,REQ_LO=15.625,REQ_HI=21357.4366798; // LOW/HIGH_FRQ_REF (REQConsts.h:16-17)
+const REQ_SECS={RQ2:[0,5],RQ4:[0,1,4,5],RQ6:[0,1,2,3,4,5]}; // ActiveSects (REQAlg.cpp:81): REQ2 = bands 1+6, REQ4 = 1,2,5,6
+let reqG=null;
+function reqGrid(){ // WUInit_ZPlain_Axes (Filters.cpp:503) on PARAM_GRAPH_L (15.625..21357.44, Resolution 0.01)
+  if(reqG)return reqG;
+  const lo=15.625,b=Math.pow(21357.44/lo,1/PU_GRAN),st=PU_GRAN/(REQ_N-1),x=[],w=[];
+  for(let i=0,s=0;i<REQ_N;i++,s+=st){const f=lo*Math.pow(b,s),fl=Math.floor(f);x.push(Math.round(s));w.push(puW(fl+Math.floor((f-fl)*100+0.5)*0.01));}
+  return reqG={x,w};
+}
+function reqAnalogBell(f,gDb,Q){ // AnalogBell(isSymetric=false) REQAlg.cpp:984 — REQ's bell is the asymmetric one (cuts are narrower)
+  if(Math.abs(gDb)<=0.099)return puFlat();
+  const g=puDb2G(gDb),gs=g*g,pis=Math.PI*Math.PI;
+  const R=Math.min((1+Math.sqrt(1+Q*Q*4))/(2*Q),Math.pow(0.5*PU_SR/f,0.9));
+  let t1=(1-R*R)**2;const gbs=(t1+(R*g/Q)**2)/(t1+(R/Q)**2);
+  let w=puW(f),dw=w*(R-1/R);
+  t1=(w*w-pis)**2;const t2=(gbs-1)/(gs-gbs),g1s=(t1+gs*pis*dw*dw*t2)/(t1+pis*dw*dw*t2),g1=Math.sqrt(g1s);
+  w=Math.tan(w*0.5);const ws=w*w,r=Math.sqrt((gs-g1s)/(gs-1));
+  dw=(1+Math.sqrt((gbs-1)/(gbs-g1s))*r*ws)*Math.tan(dw*0.5);
+  const WW=r*ws,C=dw*dw*Math.abs(gbs-g1s)-2*WW*(Math.abs(gbs-g1)-Math.sqrt((gbs-1)*(gbs-g1s)));
+  const D=2*WW*(Math.abs(gs-g1)-Math.sqrt((gs-1)*(gs-g1s)));
+  const A=Math.sqrt((C+D)/Math.abs(gs-gbs)),B=Math.sqrt((gs*C+gbs*D)/Math.abs(gs-gbs)),n=1+WW+A;
+  return {g:(g1+WW+B)/n,a:-2*(g1-WW)/n,b:(g1+WW-B)/n,c:-2*(1-WW)/n,d:(1+WW-A)/n};
+}
+// Band s (0-5) params: L band 1 = PARAM_BAND_STATE/TYPE/GAIN/FRQ/QF, else PARAM_BAND{s+1}_{STATE,TYPE,GAIN,FREQ,Q}_{L|R}
+const reqP=(ch,s,k)=>ch==="L"&&!s?"PARAM_BAND_"+({FREQ:"FRQ",Q:"QF"}[k]||k):`PARAM_BAND${s+1}_${k}_${ch}`;
+/* SetSect REQAlg.cpp:1229 → graph sections [{bq:[biquads multiplied], wf focus w, ic focus point}]; [] = off (ForceOffBiquad).
+   Types (REQConsts.h:67): 0 Bell, 1 Shelf, 2 Cut, 3 Res-Shelf. Bands 1-3 are "low" (HP / low shelves), 4-6 "high". */
+function reqSect(ch,s){
+  const v=k=>puVal(reqP(ch,s,k));if(!v("STATE"))return [];
+  const f=Math.min(v("FREQ"),PU_SR*0.4999),g=v("GAIN"),low=s<3;
+  const Q=()=>Math.min(Math.SQRT2,Math.max(Math.SQRT1_2,v("Q"))); // ShelvsQ (REQAlg.cpp:1118) for cut / shelves
+  const end={wf:puW(low?REQ_LO:REQ_HI),ic:low?0:REQ_N-1}; // refFreq / refState
+  switch(v("TYPE")){
+    case 0:return [{bq:[reqAnalogBell(f,g,v("Q"))],wf:puW(f),ic:Math.trunc(Math.trunc(puState(puQ(reqP(ch,s,"FREQ")),f))*(REQ_N-1)/PU_GRAN+0.5)}];
+    case 1:return [{bq:[puAnalogShelv(!low,f,g,Q())],...end}];
+    case 2:{
+      if(s>0&&s<5)return [{bq:[puO2Butterworth(low,f)],...end}]; // middle bands: 12 dB/oct
+      /* Bands 1 / 6: Ord3CutFilter (REQAlg.cpp:503), 18 dB/oct. HP = 2nd-order section + Ord11 mirror (two graph
+         sections); LP = parallel allpass 0.5·(A1+A2) graphed as one section — the same transfer function as
+         puCut3's cascade (zero at Nyquist factored out), so its |H|² is reused. */
+      const [o1,o2]=puCut3(true,low,f,Q());
+      return low?[{bq:[o2],...end},{bq:[o1],...end}]:[{bq:[o1,o2],...end}];
+    }
+    default:return [{bq:[puResShelv(low,f,g,Q())],...end}]; // ResShelv(!isHigh)
+  }
+}
+function reqCurve(ch,secs){ // centre point at the exact focus freq (floor 1e-5), elsewhere the grid (floor 1e-10); float32 sums
+  const {w}=reqGrid(),tot=new Float32Array(REQ_N),gq=puQ("PARAM_BAND_GAIN");
+  for(const s of secs)for(const S of reqSect(ch,s))for(let i=0;i<REQ_N;i++){
+    const c=i===S.ic,z=c?S.wf:w[i];
+    tot[i]+=Math.fround(10*Math.log10(Math.max(c?1e-5:1e-10,S.bq.reduce((m,B)=>m*puSqMag(B,z),1))));
+  }
+  return Array.from(tot,db=>Math.trunc(puState(gq,db))); // (short)InverseLinearScale, unclamped
+}
+/* CAnalyzerGraph = WCGraph: registered params drawn in order — stereo PARAM_GRAPH_R then PARAM_GRAPH_L (L on top).
+   LineColor: L 255,255,100; R 255,49,0 (ParamXML PARAM_GRAPH_L / _R). Analyzer layers need audio: skipped. */
+PU_GRAPHS["REQ:Graph"]={draw(area){
+  const [l,t,w,h]=area,{x}=reqGrid(),c=PU.ctx,secs=REQ_SECS[PU.cc.slice(0,3)]||REQ_SECS.RQ6;
+  const sides=/S$/.test(PU.cc)?[["R","rgb(255,49,0)"],["L","rgb(255,255,100)"]]:[["L","rgb(255,255,100)"]];
+  for(const [ch,col] of sides){
+    c.beginPath();reqCurve(ch,secs).forEach((y,i)=>{const px=l+x[i]*w/PU_GRAN,py=t+h-y*h/PU_GRAN;i?c.lineTo(px,py):c.moveTo(px,py);});
+    c.strokeStyle=col;c.lineWidth=2;c.lineJoin="round";c.stroke();
+  }
+}};
+
+/* C6 / C6-SideChain (all ccs: C6QM C6QS C6SM C6SS) — Plugins/Misc/C6/Code/Plugin/C6Alg.cpp.
+   Graph: 100 points on PARAM_GRAPH_SHADE's 15.625–21357.437 Hz log axis (InitGraph l.4161:
+   x state = floor of the accumulated 1000/99 step, z taken at its truncated state).
+   y = ScaleEQGraph (l.212) = round(0.5·(1000 + 1000·(20/18)·log10(max(v,0.001)))): ±18 dB for a
+   linear gain; the crossover band lines are |H|², so they fall at twice the rate.
+   Drawn in the Graph's ParameterList order: 4 crossover band lines (BANDS_GRAPHS, l.972),
+   gain/range shade (ComputeDynEQGraph l.557), 2 floating-band side-chain band-passes,
+   attenuation line (ComputeAttnGraph l.1061) at rest = no gain reduction. */
+const C6_FMIN=15.625,C6_FMAX=21357.437,C6_N=100;
+const C6_BANDS=["LOW","MID","PRSNC","HIGH","EXTRABAND_1","EXTRABAND_2"];
+const c6St=f=>PU_GRAN*Math.log(f/C6_FMIN)/Math.log(C6_FMAX/C6_FMIN); // RealWorldToState, shade scale
+const c6Lim=f=>Math.min(C6_FMAX,Math.max(C6_FMIN,f));                 // LimitRealWorld
+const c6Y=v=>{const y=0.5*(PU_GRAN+PU_GRAN*(20/18)*Math.log10(Math.max(v,0.001)));return Math.sign(y)*Math.round(Math.abs(y));};
+let C6_AX=null;
+function c6Axis(){ // [x states, w]
+  if(C6_AX)return C6_AX;
+  const X=[],W=[];
+  for(let i=0,s=0;i<C6_N;i++,s+=PU_GRAN/(C6_N-1)){X.push(Math.floor(s));W.push(puW(C6_FMIN*Math.pow(C6_FMAX/C6_FMIN,Math.trunc(s)/PU_GRAN)));}
+  return C6_AX={X,W};
+}
+function c6H(B,w){ // complex (g + a z + b z²)/(1 + c z + d z²), z = e^{-jw}
+  const c1=Math.cos(w),s1=-Math.sin(w),c2=Math.cos(2*w),s2=-Math.sin(2*w);
+  const nr=B.g+B.a*c1+B.b*c2,ni=B.a*s1+B.b*s2,dr=1+B.c*c1+B.d*c2,di=B.c*s1+B.d*s2,dd=dr*dr+di*di;
+  return [(nr*dr+ni*di)/dd,(ni*dr-nr*di)/dd];
+}
+// GetAllPassStructureResponseMagnitude (l.347): |0.5·((1+AP) + g·(1-AP))|
+function c6ApMag(B,w,g){const [r,i]=c6H(B,w);return 0.5*Math.hypot(1+g+(1-g)*r,(1-g)*i);}
+// GetBandPassStructureResponseMagnitude (l.301): |0.5·(AP1·AP2 − AP0)|
+function c6BpMag(P,w){const [a,b]=c6H(P[1],w),[c,d]=c6H(P[2],w),[e,f]=c6H(P[0],w);return 0.5*Math.hypot(a*c-b*d-e,a*d+b*c-f);}
+function c6Ord2AP(f,Q){ // My_Ord2_AP (l.269)
+  const w=puW(f),k1=-Math.cos(w),t=Math.tan(w/(2*Q)),k2=(1-t)/(1+t),a=k1*(1+k2);
+  return {g:k2,a,b:1,c:a,d:k2};
+}
+function c6Ord2APf(f,Q){ // Filters.cpp Ord2_AP (l.427)
+  let t=Math.tan(Math.atan(0.5)/Q);t=(1-t)/(1+t);
+  const a=puO1Allp90(puW(f)),n=1/(1+t*a*a),b=n*2*a*(1+t),c=n*(a*a+t);
+  return {g:c,a:b,b:1,c:b,d:c};
+}
+function c6Ord1AP(f){const w=puW(f),cw=Math.cos(w),c=cw?(Math.sin(w)-1)/cw:0;return {g:c,a:1,b:0,c,d:0};} // Filters.cpp Ord1_AP
+const c6Dbl=(p,q)=>({g:p.g*q.g,a:p.g*q.a+p.a*q.g,b:p.a*q.a,c:p.c+q.c,d:p.c*q.c}); // DoubleOrd1
+function c6Split(f,Q){ // ComputeSplitFilter (l.1572) + FindLowHighRatio (l.1553)
+  const t=1/(Q*Q)-2,w=Math.tan(puW(f)*0.5)*2*Math.sqrt(0.5*(t+Math.sqrt(t*t+4))),ws=w*w,n=1/(1+2/(Q*w)+4/ws);
+  return {g:n,a:2*n,b:n,c:n*(2-8/ws),d:n*(1-2/(Q*w)+4/ws)};
+}
+function c6Wns(k){ // SetWNSFiltersSec (l.4448): audio-path triple + side-chain band-pass of floating band k
+  const p=n=>puVal(`PARAM_WNS_FILTER_BAND_0${k+1}_${n}`),fc=p("FC");
+  let Q=p("Q");if(fc>4000&&Q<0.55)Q=0.55;                 // LimitQ_forHighFrequencies
+  const warp=(q,f)=>q*(1+(f/(PU_SR/2))**2);                 // QWarpAdjustment
+  const m=Math.pow(2,p("FREQ_MULT")/(12*Q)),ap=[];
+  for(let i=0,fa=fc/m;i<3;i++,fa*=m){const f=c6Lim(fa);ap.push(Object.assign(c6Ord2AP(f,warp(Q,f)),{f}));}
+  const q=warp(Q,fc),al=(q/(q*q)+Math.sqrt(1/(q*q)+4))*0.5*1.5,lo=c6Lim(fc/al),hi=c6Lim(fc*al);
+  const fpk=ap[1].f,wpk=puW(fpk); // floating band peak: centre bell's frequency, nearest graph bin
+  return {ap,bp:[c6Dbl(c6Ord1AP(lo),c6Ord1AP(hi)),c6Ord2APf(lo,1),c6Ord2APf(hi,1)],
+    wfc:puW(c6Lim(fc)),wpk,ipk:Math.floor(0.5+c6St(fpk)*(C6_N-1)/PU_GRAN)};
+}
+function c6Resp(W,g,i){ // cascaded audio-path triple at graph bin i (peak bin taken at Fc exactly)
+  const {W:ws}=c6Axis(),w=i===W.ipk?W.wpk:ws[i];
+  return W.ap.reduce((m,B)=>m*c6ApMag(B,w,g),1);
+}
+const c6AtFc=(gDb,W)=>W.ap.reduce((s,B)=>s+20*Math.log10(c6ApMag(B,W.wfc,puDb2G(gDb))),0); // WnsGetGainDbAtFc (l.380)
+function c6Search(t,W){ // WnsSearchTheBest_gValueDB (l.438): bisection, ≤ 0.01 dB, 50 iterations
+  let L=Math.min(0.1*t,t),R=Math.max(0.1*t,t),best=1000,bg=0;
+  for(let it=1;;it++){
+    const g=0.5*(L+R),d=c6AtFc(g,W)-t,ad=Math.abs(d);
+    if(ad<best){best=ad;bg=g;}
+    if(ad<=0.01||it>50)return it>50?bg:g;
+    if(d>0)R=g;else L=g;
+  }
+}
+function c6Model(){ // SetBandGain (l.2197) + SetBandCompressor (l.2488) + solo / listen / bypass rules (l.2796-2994)
+  const v=puVal,B=C6_BANDS,on=n=>!!v(n);
+  const solo=B.map(b=>on("PARAM_SOLO_"+b)),lis=B.map(b=>on("PARAM_LISTEN_SC_"+b));
+  const any=(a,i,j)=>a.slice(i,j).some(x=>x);
+  const S={solo,lis,soloMain:any(solo,0,4),soloX:any(solo,4,6),lisMain:any(lis,0,4),lisX:any(lis,4,6)};
+  S.soloAll=S.soloMain||S.soloX;S.lisAll=S.lisMain||S.lisX;
+  const q=v("PARAM_XOVER_Q"),s=["LOW_MID","MID_PRSNC","PRSNC_HIGH"].map(n=>c6Split(v(`PARAM_${n}_FRQ`),q));
+  S.W=[c6Wns(0),c6Wns(1)];
+  S.xb=c6Axis().W.map(w=>{const [a,b,c]=s.map(B=>puSqMag(B,w));return [b*a,b*(1-a),(1-b)*c,(1-b)*(1-c)];}); // XOverBandsGraph
+  S.band=B.map((b,k)=>{
+    const mk=v("PARAM_MAKEUP_"+b),rg=v("PARAM_RANGE_"+b);
+    const byp=on("PARAM_BYPASS_"+b)||(k>=4&&S.soloAll&&!solo[k])||S.lisAll; // IsBandInBypass
+    const o={byp,mk};
+    if(k<4){
+      o.gain=byp?1:puDb2G(mk);
+      if((S.soloMain&&!solo[k])||(S.lisMain&&!lis[k]))o.gain=0;
+      const g2=o.gain*puDb2G(byp?0:rg); // dGain · GetBandMaxAttn
+      [o.top,o.bot]=rg>=0?[g2,o.gain]:[o.gain,g2];
+    }else{
+      const W=S.W[k-4],sr=c6Search(mk,W),ref=byp?0:sr,from=byp?0:c6Search(rg+mk,W);
+      o.gain=byp?1:puDb2G(sr);o.active=ref; // dActiveGainDB
+      [o.top,o.bot]=(rg>=0?[from,ref]:[ref,from]).map(puDb2G);
+    }
+    return o;
+  });
+  return S;
+}
+function c6Shade(S){ // ComputeDynEQGraph shade top / bottom (l.858-962)
+  const ch=S.solo[5]?1:0,top=[],bot=[];
+  for(let i=0;i<C6_N;i++){
+    let t=1,b=1;
+    if(!S.soloAll||S.soloMain||S.lisMain){
+      const mix=key=>Math.abs(S.band.slice(0,4).reduce((m,o,k)=>m+o[key]*S.xb[i][k],0));
+      t=mix("top")*c6Resp(S.W[0],S.band[4].top,i)*c6Resp(S.W[1],S.band[5].top,i);
+      b=mix("bot")*c6Resp(S.W[0],S.band[4].bot,i)*c6Resp(S.W[1],S.band[5].bot,i);
+    }else if(S.soloX){
+      const bp=c6BpMag(S.W[ch].bp,c6Axis().W[i]);
+      t=c6Resp(S.W[0],S.band[4].top,i)*c6Resp(S.W[1],S.band[5].top,i)*bp;
+      b=c6Resp(S.W[0],S.band[4].bot,i)*c6Resp(S.W[1],S.band[5].bot,i)*bp;
+    }
+    if(S.lisAll)t=b=1;
+    top.push(c6Y(t));bot.push(c6Y(b));
+  }
+  return [top,bot];
+}
+function c6Attn(S){ // ComputeAttnGraph at rest: band meters = makeup gain (no reduction); floating bands add dActiveGainDB (l.1089-1110)
+  const at=[4,5].map(k=>puDb2G(20*Math.log10(S.band[k].gain)+S.band[k].active));
+  const sx=S.soloX||S.lisX,ext=(e,i)=>c6Resp(S.W[e],at[e],i)*(sx?c6BpMag(S.W[e].bp,c6Axis().W[i]):1);
+  const ch=S.solo[4]||S.lis[4]?0:S.solo[5]||S.lis[5]?1:0;
+  let c=0;
+  return Array.from({length:C6_N},(_,i)=>{
+    if((!S.soloAll||S.soloMain)&&!S.lisX)c=Math.abs(S.band.slice(0,4).reduce((m,o,k)=>m+o.gain*S.xb[i][k],0))*ext(0,i)*ext(1,i);
+    else if(sx)c=ext(ch,i);
+    return c6Y(c);
+  });
+}
+function c6Line(area,ys,color,width,dash){ // ys in state units at the axis' x states
+  const [l,t,w,h]=area,X=c6Axis().X,c=PU.ctx;c.save();c.beginPath();
+  ys.forEach((y,i)=>{const px=l+X[i]*w/PU_GRAN,py=t+h-y*h/PU_GRAN;i?c.lineTo(px,py):c.moveTo(px,py);});
+  c.setLineDash(dash?[1,1]:[]);c.strokeStyle=color;c.lineWidth=width;c.lineJoin="round";c.stroke();c.restore();
+}
+function c6Pipe(area,top,bot){ // DrawGradientPipe_short: fill top->bottom line, FillColorTop at the top line, FillColorBottom at the bottom
+  const [l,t,w,h]=area,X=c6Axis().X,c=PU.ctx,px=i=>l+X[i]*w/PU_GRAN,py=y=>t+h-y*h/PU_GRAN;
+  for(let i=0;i<C6_N-1;i++){
+    const yt=py((top[i]+top[i+1])/2),yb=py((bot[i]+bot[i+1])/2);
+    if(Math.abs(yb-yt)<0.5)continue;
+    const g=c.createLinearGradient(0,yt,0,yb);g.addColorStop(0,"rgba(80,0,80,0.627)");g.addColorStop(1,"rgba(230,0,230,0.373)");
+    c.beginPath();c.moveTo(px(i),py(top[i]));c.lineTo(px(i+1),py(top[i+1]));c.lineTo(px(i+1),py(bot[i+1]));c.lineTo(px(i),py(bot[i]));c.closePath();
+    c.fillStyle=g;c.fill();
+  }
+  for(const ys of [top,bot])c6Line(area,ys,"rgba(160,0,160,0.627)",2);
+}
+PU_GRAPHS["C6:Graph"]={draw(area){
+  const S=c6Model();
+  for(let k=0;k<4;k++)c6Line(area,S.xb.map(r=>c6Y(r[k])),"rgba(65,66,71,0.863)",2,true); // DrawLineStrip + Pattern 0xAAAA
+  const [top,bot]=c6Shade(S);c6Pipe(area,top,bot);
+  const ws=c6Axis().W;
+  c6Line(area,ws.map(w=>c6Y(c6BpMag(S.W[0].bp,w))),"rgba(23,252,255,0.98)",1);
+  c6Line(area,ws.map(w=>c6Y(c6BpMag(S.W[1].bp,w))),"rgba(23,127,255,0.98)",1);
+  c6Line(area,c6Attn(S),"rgb(255,156,0)",2);
+}};
+/* Band markers (ComputeMarkPoint l.1336): x = band centre (GetBandCenterFrq l.1382: √(f·f′), 20 Hz / 20 kHz
+   at the ends, Fc for floating bands) on the shade scale; y = ScaleEQGraph(makeup gain) — for floating
+   bands the gain actually reached at Fc; a band muted by another's solo / listen sits at its Gain state. */
+PU_GRAPHS["C6:markerPos"]=(ctl,[l,t,w,h])=>{
+  const m=/^Band (\d) Marker$/.exec(ctl.n);if(!m)return null;
+  const k=[4,0,1,2,3,5][m[1]-1],b=C6_BANDS[k],S=c6Model(),o=S.band[k],v=puVal;
+  const f=[()=>Math.sqrt(v("PARAM_LOW_MID_FRQ")*20),()=>Math.sqrt(v("PARAM_LOW_MID_FRQ")*v("PARAM_MID_PRSNC_FRQ")),
+    ()=>Math.sqrt(v("PARAM_MID_PRSNC_FRQ")*v("PARAM_PRSNC_HIGH_FRQ")),()=>Math.sqrt(v("PARAM_PRSNC_HIGH_FRQ")*20000),
+    ()=>v("PARAM_WNS_FILTER_BAND_01_FC"),()=>v("PARAM_WNS_FILTER_BAND_02_FC")][k]();
+  let y;
+  if((S.soloAll&&!S.solo[k])||(S.lisAll&&!S.lis[k]))y=puState(puQ("PARAM_MAKEUP_"+b),o.mk);
+  else y=k<4?c6Y(Math.max(o.gain,0.001)):c6Y(Math.max(puDb2G(c6AtFc(20*Math.log10(o.gain),S.W[k-4])),0.001));
+  return [l+Math.trunc(c6St(f))*w/PU_GRAN,t+h-y*h/PU_GRAN];
+};
+
+/* TRACT (all ccs: STOM STOS STPM STPS — min- and linear-phase share the IIR graph) —
+   Plugins/Live/TRACT/Code/Plugin/TRACTAlg.cpp. "Filters Graph" draws PARAM_GRAPH_IIR: 500 points on a
+   20–20000 Hz log axis (26.6–250 Hz with Sub Zoom, UpdateZoom l.7134), x = round(accumulated 1000/499
+   step) (WUInit_ZPlain_Axes, Filters.cpp l.503); y = (short) PARAM_GRAPH_Y_SCALE state of Σ band dB
+   (±18 dB, UpdateChanGraph l.3426 / Compute_TRACT_Curve l.526). Each band's biquads come from SetSect
+   (l.1307); FlatBiquads sections (numerator = denominator) are |H| = 1 and are left out.
+   Skipped: PARAM_FILTERS_GRAPH (FIR + IIR, the FIR comes from captures) and the hover cursors. */
+const TRACT_N=500;
+const tractZoom=()=>puVal("PARAM_SUB_ZOOM")?[26.6,250]:[20,20000];
+const tractSt=(f,[a,b])=>PU_GRAN*Math.log(f/a)/Math.log(b/a); // log RealWorldToState on the (zoomed) graph scale
+// Butterworth digital prototypes at Nyquist/2 (OrderNCutFilter l.886), per order: [g,a,b,d] per biquad (c = 0)
+const TRACT_BUTTER=[
+  [[0.5,0.5,0,0]],
+  [[0.292893218813452,0.585786437626905,0.292893218813452,0.171572875253810]],
+  [[0.166666666666667,0.166664916273280,0,0],[1,2.000010502360317,1.000010502470619,0.333333333333333]],
+  [[0.93980851433794,1.87961708631245,0.93980852766606,0.039566129896580],[0.1,0.1999999938672026,0.0999999985818274,0.446462692171690]],
+  [[0.52786404500042,0.52726608620141,0,0],[1,2.001832207474572,1.001833489429724,0.105572809000084],[0.1,0.1999300581933378,0.0999301864669077,0.527864045000421]],
+  [[0.29588223638661,0.59176633388805,0.29587728940363,0.017332380120999],[1,2.004793726888917,1.004816751723141,0.171572875253810],[0.1,0.1995199983058479,0.0995222977718848,0.588790706480863]],
+  [[0.16565293819973,0.16720471396579,0,0],[1,2.011712841225422,1.011800737619280,0.052095083601687],[1,1.995851630066537,0.995939804015427,0.231914113479617],[0.1,0.1983067896700279,0.0983156250494679,0.635963805975585]],
+  [[0.09267285584089,0.18540236759687,0.09270052362171,0.009700556535264],[1,2.025019373931624,1.025340049972401,0.092019210455573],[1,1.999389212067056,0.999702296645625,0.285702154455406],[0.1,0.1974980060066227,0.0975285456788754,0.673513677715994]],
+];
+function tractCut(N,hp,shape,f){ // OrderNCutFilter: shape 0 Butterworth, 1 Linkwitz-Riley (odd orders -> Butterworth)
+  const P=o=>TRACT_BUTTER[o-1].map(([g,a,b,d])=>({g,a:hp?-a:a,b,c:0,d})),bl=p=>puBilinear(p,f);
+  if(shape!==1||N%2)return P(N).map(bl);
+  const half=P(N/2),out=half.map(bl);
+  if(N%4===0)return out.concat(out);              // two even Butterworths
+  const p=half[0];                                 // N = 2: the duplicated 1st-order sections unified (DoubleOrd1)
+  out[0]=bl({g:p.g*p.g,a:2*p.g*p.a,b:p.a*p.a,c:0,d:0});
+  return out;                                      // (N = 6 is unreachable: slopes give 1, 2, 3, 4, 8)
+}
+function tractAnalogShelv(isHigh,f,gDb,Q){ // AnalogShelv l.662 — fixed dAGain (EMO's puAnalogShelv keeps the old bug)
+  if(gDb===0)return puFlat();
+  const G=puDb2G(gDb*0.5),AG=puDb2G(Math.abs(0.5*gDb));
+  let w0=puW(f),dB=w0*Math.SQRT2/Q;dB=dB*dB/AG;w0=w0*w0;w0*=w0;
+  let d1,d3,dn1,dn3;
+  if(isHigh){w0=Math.tan(0.5*Math.sqrt(0.5*(Math.sqrt(dB*dB+4*w0)-dB)));d1=dn1=w0*w0;d3=1/G;dn3=G;}
+  else{w0=Math.tan(0.5*Math.min(Math.sqrt(0.5*(Math.sqrt(dB*dB+4*w0)+dB)),3.14));d1=w0*w0/G;d3=dn3=1;dn1=w0*w0*G;}
+  const d2=w0/(Math.sqrt(AG)*Q),n=1/(d1+d2+d3);
+  return {c:n*2*(d1-d3),d:n*(d1-d2+d3),g:n*(dn1+d2+dn3),a:n*2*(dn1-dn3),b:n*(dn1-d2+dn3)};
+}
+function tractRaise(a0,a1,a2,m){ // RaisedSOS (Common_Sources/AlgFuncs/AlgFilters.h l.22): m-th roots of the SOS's root -> m SOS [a0,a1,a2]
+  const re=-a1/(2*a2),im=Math.sqrt(Math.abs(a1*a1-4*a2*a0))/(2*a2),r=Math.pow(Math.hypot(re,im),1/m),out=[];
+  for(let i=0,ar=Math.atan2(im,re)/m;i<m;i++,ar+=2*Math.PI/m)out.push([r*r,-2*Math.cos(ar)*r,1]);
+  return out;
+}
+function tractHiShelv(fn,g,Q,m){ // HighOrderShelv (AlgFilters.h l.55): 2m-order high shelf, gain g at fn = f/SR
+  const g2=Math.sqrt(g),g4=Math.sqrt(g2),Nm=tractRaise(1,g4/Q,g2,m),Dn=tractRaise(1,1/(g4*Q),1/g2,m);
+  const K=1/Math.tan(Math.PI*fn),K2=K*K; // biq_wrraped (Utilities/Bilinear/bilinear.cpp l.76), prewarped at the prototype cutoff
+  const z=([n0,n1,n2])=>[n0+K*n1+K2*n2,2*n0-2*K2*n2,n0-K*n1+K2*n2];
+  return Nm.map((N,i)=>{
+    const D=Dn[i],nb=z(N),db=z(D),s=1/db[0];
+    let g0=nb[0]*s,a=nb[1]*s,b=nb[2]*s,c=db[1]*s,d=db[2]*s;
+    a/=g0;b/=g0;g0=1;                                       // normalize zeros
+    let k=1/Math.max(1,b);b*=k*k;a*=k;                      // zeros into the unit circle
+    k=1/Math.max(1,d);d*=k*k;c*=k;                          // poles into the unit circle
+    k=(1+c+d)/(g0+a+b);                                     // DC = 1
+    return {g:g0*k,a:a*k,b:b*k,c,d};
+  });
+}
+function tractBand(n,Z){ // SetSect (l.1307) -> {bq, flat, fw: focus ω, fs: focus state}
+  const v=k=>puVal(`PARAM_BAND_${n}_${k}`),SR=PU_SR,ny=SR*0.4999,iir=puVal("PARAM_IIR_ONOFF")!==0;
+  const type=v("TYPE"),lh=v("LOWHIGH"),g=v("GAIN"),Q=v("Q"),st=iir&&v("STATE");
+  const solo=iir&&puVal("PARAM_BAND_SOLO")===1&&puVal("PARAM_SELECTED_BAND")===n-1;
+  let f=Math.min(v("FRQ"),ny),fHi=f,iPar=Math.trunc(tractSt(f,Z)),iHi=iPar,soloBq=[],bq=[],fw=f,fs=iPar;
+  if(type===0){fHi=Math.min(f*Math.pow(2,v("WIDTH")),ny);iHi=Math.trunc(tractSt(fHi,Z));}
+  switch(type){
+    case 1:{ // Bell (+ 8th-order band-pass when soloed)
+      if(solo){
+        let fH=f*(1+0.5/Q),fL=f/(1+0.5/Q);
+        if(fL*2.3>fH){fL*=Math.sqrt(fH/(fL*2.3));fH=fL*2.3;}
+        fH=Math.min(fH,ny);fL=Math.max(fL,20);
+        if(fH<SR*0.49)soloBq.push(...tractCut(4,false,0,fH));
+        if(fL>20)soloBq.push(...tractCut(4,true,0,fL));
+      }
+      bq=[puAnalogBell(f,g,Q)];break;
+    }
+    case 4:{ // Cut: Low = high-pass (focus 20 Hz), High = low-pass (focus 20 kHz / state 1000)
+      const s=v("SLOPE");bq=tractCut(s===4?8:s+1,lh===0,v("SHAPE"),f);
+      fw=lh===0?20:20000;fs=lh===0?Math.trunc(tractSt(20,Z)):PU_GRAN;break;
+    }
+    case 2:{ // Shelf
+      let q=v("Q_SHELF");
+      if(lh===0)q=Math.max(q,Math.min(0.71,0.1*Math.log2(f/500)+0.05));
+      bq=[tractAnalogShelv(lh!==0,f,g,q)];fw=lh===0?20:20000;fs=lh===0?0:PU_GRAN;break;
+    }
+    case 3:{ // Tilt: symmetric low + high ResShelv pair
+      const q=Math.max(v("Q_SHELF"),0.3),R=Math.pow(2,1-Math.min(0.49,Math.max(0,2.5*(q-0.6)+0.5*f/SR)));
+      let lo=Math.max(10,f/R),hi=f*R;
+      if(hi>SR*0.49){hi=SR*0.49;lo=hi/(R*R);}
+      bq=[puResShelv(true,lo,-g,q),puResShelv(false,hi,g,q)];fw=20;fs=0;break;
+    }
+    case 0:{ // Flat-top: two 10th-order shelves (+gain at f, −gain at f·2^width), or a 12th-order band-pass in solo
+      if(!solo)bq=[...tractHiShelv(f/SR,puDb2G(g),v("Q_LOW"),5),...tractHiShelv(fHi/SR,1/puDb2G(g),v("Q_HI"),5)];
+      else{
+        if(f*1.4>fHi){fHi=Math.min(f*1.4,ny);iHi=Math.trunc(tractSt(fHi,Z));}
+        if(fHi<0.49*SR)soloBq.push(...tractCut(fHi>0.25*SR?2:fHi>0.125*SR?4:6,false,0,fHi));
+        const hp=tractCut(6,true,0,f),k=st?puDb2G(g):1,L=hp[2];
+        hp[2]={...L,g:L.g*k,a:L.a*k,b:L.b*k};soloBq.push(...hp);
+      }
+      fw=Math.sqrt(f*fHi);fs=Math.trunc((iPar+iHi)/2);break;
+    }
+    // 5 = All-Pass: |H| = 1, and drawn flat
+  }
+  return {bq:st?soloBq.concat(bq):soloBq,flat:type===5||(!v("STATE")&&puVal("PARAM_BAND_SOLO")!==1),fw:puW(fw),fs};
+}
+PU_GRAPHS["TRACT:Filters Graph"]={draw([l,t,w,h]){
+  const Z=tractZoom(),tot=new Float64Array(TRACT_N),X=[],W=[];
+  for(let i=0,s=0;i<TRACT_N;i++,s+=PU_GRAN/(TRACT_N-1)){X.push(Math.round(s));W.push(puW(Z[0]*Math.pow(Z[1]/Z[0],s/PU_GRAN)));}
+  for(let n=1;n<=8;n++){
+    const B=tractBand(n,Z);if(B.flat)continue;
+    const db=(w,lo)=>10*Math.log10(B.bq.reduce((m,q)=>m*Math.max(lo,puSqMag(q,w)),1));
+    const ic=Math.trunc(B.fs*(TRACT_N-1)/PU_GRAN+0.5); // focus point: exact response at the band's focus frequency
+    for(let i=0;i<TRACT_N;i++)tot[i]+=i===ic?db(B.fw,1e-5):db(W[i],1e-10);
+  }
+  const c=PU.ctx;c.beginPath();
+  tot.forEach((d,i)=>{const y=Math.max(-32768,Math.min(32767,Math.trunc((d+18)/36*PU_GRAN))),px=l+X[i]*w/PU_GRAN,py=t+h-y*h/PU_GRAN;i?c.lineTo(px,py):c.moveTo(px,py);});
+  c.strokeStyle="rgb(206,206,206)";c.lineWidth=2.5;c.lineJoin="round";c.stroke();
+}};
+/* Band markers (UpdateMarkerPos l.7111): x = PARAM_FREQUENCY_CURSOR state of the frequency (same zoomed log
+   scale), y = PARAM_MAGNITUDE_CURSOR state (−18..18 dB) of the gain — not the gain's own ±15 dB scale. */
+PU_GRAPHS["TRACT:markerPos"]=(ctl,[l,t,w,h])=>{
+  const m=/^Band (\d) Marker$/.exec(ctl.n);if(!m)return null;
+  const f=puVal(`PARAM_BAND_${m[1]}_FRQ`),g=puVal(`PARAM_BAND_${m[1]}_GAIN`);
+  return [l+Math.trunc(tractSt(f,tractZoom()))*w/PU_GRAN,t+h-Math.trunc((g+18)/36*PU_GRAN)*h/PU_GRAN];
+};
+/* ==== end of plugin graph modules ==== */
 function renderMaster(){
   const r=state.master.rack;
   $("#mstTable tbody").innerHTML=
