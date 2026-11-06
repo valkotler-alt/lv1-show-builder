@@ -685,6 +685,26 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
 #puWin .pustage{padding:8px;display:flex;justify-content:center;background:#0d0d0d;}
 #puWin canvas{display:block;touch-action:none;user-select:none;}
 #puWin .pufoot{padding:6px 10px;color:#8a8a8a;font-size:11.5px;border-top:1px solid #2a2a2a;}
+#puWin .pupre{position:relative;display:inline-flex;gap:2px;}
+#puPresetBtn{min-width:150px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;}
+#puPop{position:absolute;top:100%;left:0;margin-top:4px;z-index:5;width:320px;background:#232323;border:1px solid #4a4a4a;border-radius:6px;box-shadow:0 10px 30px rgba(0,0,0,.55);padding:6px;}
+#puPop[hidden]{display:none;}
+#puPop input{width:100%;margin-bottom:6px;}
+#puPop .pulist{max-height:min(60vh,420px);overflow:auto;}
+#puPop .pusec{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8d8d8d;padding:6px 6px 3px;}
+#puPop .pudir,#puPop .puit{display:flex;gap:6px;align-items:center;padding:4px 6px;border-radius:4px;cursor:pointer;font-size:13px;color:#ddd;}
+#puPop .pudir{color:#cfcfcf;font-weight:600;}
+#puPop .pusub{padding-left:14px;}
+#puPop small{color:#8d8d8d;font-weight:400;font-size:11px;}
+#puPop .puit small{margin-left:auto;text-align:right;}
+#puPop .puit:hover,#puPop .pudir:hover,#puPop .puit.hi{background:#333;}
+#puPop .puit.on{color:var(--accent);}
+#puPop .pudel{margin-left:auto;padding:0 5px;opacity:.6;}
+#puPop .puit small+.pudel{margin-left:6px;}
+#puPop .pudel:hover{opacity:1;}
+#puPop .puempty{color:#8d8d8d;font-size:12px;padding:4px 6px;}
+.pw-dlgbox .pufield{display:flex;flex-direction:column;align-items:stretch;gap:3px;margin-bottom:10px;font-size:12px;}
+.pw-dlgbox .pufield input{width:100%;}
 .puedit{position:fixed;z-index:1000;font:14px Arial,sans-serif;text-align:center;background:#000;color:#fff;border:1px solid var(--accent);padding:0 4px;}
 .slotrow{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:6px;padding:5px 8px;background:var(--panel);min-height:26px;}
 .slotrow .sno{font-family:var(--font-num);font-size:10px;color:var(--dim);width:14px;text-align:right;flex:none;}
@@ -1893,7 +1913,8 @@ async function openPlugUi(k,i,x){
     <div class="puhead">
       <span class="putitle"><b>${esc(name)}</b> · ${esc(rackLabel(k,i))} · slot ${x+1} · ${st?"stereo":"mono"}</span>
       <span class="puacts">
-        <select id="puPreset" title="Load a preset"></select>
+        <span class="pupre"><button class="small" id="puPrev" title="Previous preset">◀</button><button class="small" id="puPresetBtn" aria-haspopup="listbox"></button><button class="small" id="puNext" title="Next preset">▶</button>
+          <div id="puPop" hidden><input type="search" placeholder="Search presets…" aria-label="Search presets"><div class="pulist" role="listbox"></div></div></span>
         <button class="small" id="puSave" title="Save the current settings as a user preset (kept in this browser)">Save preset…</button>
         <button class="small" id="puXpsOut" title="Download the current settings as a Waves .xps preset file">Export .xps</button>
         <button class="small" id="puXpsIn" title="Load a Waves .xps preset file">Import .xps</button>
@@ -1905,17 +1926,25 @@ async function openPlugUi(k,i,x){
   </div>`;
   document.body.append(d);
   PU.cv=d.querySelector("#puCv");PU.ctx=PU.cv.getContext("2d");PU.w=w;PU.h=hh;
-  puFit();puPresetMenu();puDraw();
+  PU.preset=null;PU.presetVals=null;PU.popOpen=new Set();
+  puFit();puDraw();puPresetLabel();
   PU.cv.addEventListener("pointerdown",puDown);
   PU.cv.addEventListener("dblclick",puDbl);
   PU.cv.addEventListener("pointermove",puHover);
   PU.cv.addEventListener("wheel",puWheel,{passive:false});
   d.querySelector("#puClose").onclick=closePlugUi;
-  d.querySelector("#puReset").onclick=()=>{PU.vals=[...PU.defs];puCommit();setStatus(name+" reset to its default settings.");};
+  d.querySelector("#puReset").onclick=()=>{PU.vals=[...PU.defs];PU.preset=null;puCommit();setStatus(name+" reset to its default settings.");};
   d.querySelector("#puSave").onclick=puSaveUser;
   d.querySelector("#puXpsOut").onclick=puXpsOut;
   d.querySelector("#puXpsIn").onclick=puXpsIn;
-  d.querySelector("#puPreset").onchange=e=>{puLoadPreset(e.target.value);e.target.value="";};
+  d.querySelector("#puPresetBtn").onclick=()=>puPopToggle();
+  d.querySelector("#puPrev").onclick=()=>puStep(-1);
+  d.querySelector("#puNext").onclick=()=>puStep(1);
+  const pop=d.querySelector("#puPop");
+  pop.querySelector("input").addEventListener("input",puPopRender);
+  pop.addEventListener("keydown",puPopKey);
+  pop.addEventListener("click",puPopClick);
+  d.addEventListener("pointerdown",e=>{if(!pop.hidden&&!e.target.closest(".pupre"))puPopToggle(false);});
   d.addEventListener("click",e=>{if(e.target===d)closePlugUi();});
   document.addEventListener("keydown",puKey,true);
   addEventListener("resize",puFit);
@@ -1928,7 +1957,10 @@ function closePlugUi(){
 }
 function puKey(e){
   if(!PU||!$("#cfm").hidden||document.querySelector(".pw-dlg")||e.target.closest?.(".puedit"))return;
-  if(e.key==="Escape"){e.preventDefault();e.stopPropagation();closePlugUi();}
+  if(e.key==="Escape"){
+    e.preventDefault();e.stopPropagation();
+    if(!$("#puPop").hidden){puPopToggle(false);$("#puPresetBtn").focus();}else closePlugUi(); // the preset list first
+  }
 }
 function puFit(){
   if(!PU)return;
@@ -1943,7 +1975,7 @@ function puCommit(){
   const ps=rackParams(h.rack),p={};
   PU.vals.forEach((v,j)=>{const q=PU.P[j];if(v!==null&&v!==PU.defs[j]&&!(q&&q.ro))p[j]=v;});
   ps[PU.x]=hasP(p)?p:null;
-  puDraw();
+  puDraw();puPresetLabel();
   const btn=document.querySelector(`.rackbtn[data-k="${PU.k}"][data-i="${PU.i}"]`);
   if(btn)btn.textContent="▾ "+rackSummary(h.rack);
   const row=document.querySelector(`.slotrow.ins[data-k="${PU.k}"][data-i="${PU.i}"][data-x="${PU.x}"]`);
@@ -2030,13 +2062,14 @@ function puDrawText(pp){
 }
 /* Marker point (X_CMarker): x = left + state·W/1000 from its MouseHorizontal
    param, y = bottom − state·H/1000 from MouseVertical — only params with
-   UpdateGraphics move it; else centred. A "Graph" param = plugin-computed. */
+   UpdateGraphics move it; else centred. A "Graph" param = plugin-computed.
+   Kept inside its movement rect (a curve point can fall off the graph). */
 function puMarkerPos(ctl){
   const area=PU_GRAPHS[PU.name+":area"]?.(ctl)||ctl.r,[l,t,w,h]=area;
-  const g=PU_GRAPHS[PU.name+":markerPos"];if(g){const p=g(ctl,area);if(p)return p;}
-  const by=r=>ctl.p.find(p=>p.ug&&p.reg.includes(r));
+  const g=PU_GRAPHS[PU.name+":markerPos"],by=r=>ctl.p.find(p=>p.ug&&p.reg.includes(r));
   const ph=by("MouseHorizontal"),pv=by("MouseVertical");
-  return [ph?l+puState(puQ(ph.n),puVal(ph.n))*w/PU_GRAN:l+w/2, pv?t+h-puState(puQ(pv.n),puVal(pv.n))*h/PU_GRAN:t+h/2];
+  const [x,y]=(g&&g(ctl,area))||[ph?l+puState(puQ(ph.n),puVal(ph.n))*w/PU_GRAN:l+w/2, pv?t+h-puState(puQ(pv.n),puVal(pv.n))*h/PU_GRAN:t+h/2];
+  return [Math.min(l+w,Math.max(l,x)),Math.min(t+h,Math.max(t,y))];
 }
 function puDrawMarker(ctl){
   const [x,y]=puMarkerPos(ctl);
@@ -2143,14 +2176,118 @@ function puDbl(e){
 
 /* ---- presets: factory (bundle), user (this browser), .xps files ----
    Tokens follow the engine: '*' = not in the preset (keep), display-only
-   params are written as '*'. */
+   params are written as '*'. The browser mirrors the Waves preset menu:
+   factory presets in file order, a Preset@SubComp list limits a preset to
+   those variants, <Group> is the category path ("/" nests, a category sits
+   where its first preset is); user presets may carry a category too.
+   Search matches every word against name + category. */
 const PU_USER_KEY="lv1.pluginPresets";
 function puUserPresets(){try{return JSON.parse(localStorage.getItem(PU_USER_KEY)||"{}");}catch(_){return {};}}
-function puPresetMenu(){
-  const sel=$("#puPreset"),u=puUserPresets()[PU.name]||[];
-  sel.innerHTML=`<option value="">Load preset…</option>`+
-    `<optgroup label="Factory">${PU.pack.presets.map((p,j)=>`<option value="f${j}">${esc(p.name)}</option>`).join("")}</optgroup>`+
-    (u.length?`<optgroup label="User (this browser)">${u.map((p,j)=>`<option value="u${j}">${esc(p.name)}</option>`).join("")}</optgroup>`:"");
+function puStoreUser(all){
+  try{localStorage.setItem(PU_USER_KEY,JSON.stringify(all));return true;}
+  catch(_){setStatus("Could not save: browser storage unavailable.",true);return false;}
+}
+function puPresetList(){ // {f, u}: [{src, i, name, group, values}]
+  const f=PU.pack.presets.map((p,i)=>({src:"f",i,name:p.name,group:p.group||"",values:p.values,subs:p.subs}))
+    .filter(p=>!p.subs||p.subs.includes(PU.cc));
+  const u=(puUserPresets()[PU.name]||[]).map((p,i)=>({src:"u",i,name:p.name,group:p.group||"",values:p.values}));
+  return {f,u};
+}
+const puGroupPath=g=>String(g||"").split("/").map(s=>s.trim()).filter(Boolean);
+function puTree(list){ // folders (in first-use order) and presets
+  const root={kids:[],dirs:{}};
+  for(const p of list){
+    let n=root;
+    for(const g of puGroupPath(p.group)){
+      if(!n.dirs[g]){const d={name:g,kids:[],dirs:{}};n.dirs[g]=d;n.kids.push(d);}
+      n=n.dirs[g];
+    }
+    n.kids.push(p);
+  }
+  return root;
+}
+const puTreeItems=n=>n.kids.flatMap(k=>k.kids?puTreeItems(k):[k]);
+const puMenuOrder=()=>{const {f,u}=puPresetList();return [...puTreeItems(puTree(f)),...puTreeItems(puTree(u))];};
+const puSame=(a,b)=>!!a&&!!b&&a.src===b.src&&a.i===b.i;
+function puPresetLabel(){
+  const b=$("#puPresetBtn");if(!b||!PU)return;
+  const cur=PU.preset,mod=!!(cur&&PU.presetVals)&&PU.vals.some((v,j)=>v!==PU.presetVals[j]);
+  const h=rackHolder(PU.k,PU.i),p=h&&h.rack&&(h.rack.params||[])[PU.x];
+  b.textContent=(cur?cur.name+(mod?" *":""):hasP(p)?"Custom":"Default")+" ▾";
+  b.title=cur?`${cur.src==="f"?"Factory":"User"} preset${cur.group?" · "+puGroupPath(cur.group).join(" › "):""}${mod?" — changed since loaded":""} · click to browse / search`:"Presets — browse categories or search";
+}
+function puLoadPreset(src,i){
+  const p=puPresetList()[src].find(x=>x.i===i);if(!p)return;
+  PU.preset={src,i,name:p.name,group:p.group};PU.presetVals=null;
+  puApplyTokens(p.values);
+  PU.presetVals=[...PU.vals];
+  puPresetLabel();setStatus(`${PU.name}: preset “${p.name}” loaded.`);
+}
+function puStep(d){ // ◀ ▶ through the menu order
+  const L=puMenuOrder();if(!L.length)return;
+  const k=L.findIndex(p=>puSame(p,PU.preset));
+  const p=L[k<0?(d>0?0:L.length-1):(k+d+L.length)%L.length];
+  puLoadPreset(p.src,p.i);
+}
+function puPopToggle(open){
+  const pop=$("#puPop");if(!pop)return;
+  if(open===undefined)open=pop.hidden;
+  pop.hidden=!open;if(!open)return;
+  if(PU.preset){let key=PU.preset.src;for(const g of puGroupPath(PU.preset.group))PU.popOpen.add(key+="/"+g);}
+  const inp=pop.querySelector("input");inp.value="";puPopRender();inp.focus();
+  const on=pop.querySelector(".puit.on");if(on)on.scrollIntoView({block:"nearest"});
+}
+function puPopRender(){
+  const pop=$("#puPop"),q=pop.querySelector("input").value.trim().toLowerCase(),list=pop.querySelector(".pulist");
+  const {f,u}=puPresetList(),terms=q.split(/\s+/).filter(Boolean);
+  const item=(p,path)=>`<div class="puit${puSame(p,PU.preset)?" on":""}" data-src="${p.src}" data-i="${p.i}">`+
+    `<span>${esc(p.name)}</span>${path&&p.group?`<small>${esc(puGroupPath(p.group).join(" › "))}</small>`:""}`+
+    `${p.src==="u"?`<button class="small pudel" data-i="${p.i}" title="Delete this user preset">✕</button>`:""}</div>`;
+  let h;
+  if(terms.length){
+    const m=[...f,...u].filter(p=>{const s=(p.name+" "+p.group+" "+(p.src==="u"?"user":"factory")).toLowerCase();return terms.every(t=>s.includes(t));});
+    h=m.length?m.map(p=>item(p,true)).join(""):`<div class="puempty">No preset matches “${esc(q)}”.</div>`;
+  }else{
+    const dir=(n,key)=>n.kids.map(k=>{
+      if(!k.kids)return item(k,false);
+      const kk=key+"/"+k.name,open=PU.popOpen.has(kk);
+      return `<div class="pudir" data-key="${esc(kk)}">${open?"▾":"▸"} ${esc(k.name)} <small>${puTreeItems(k).length}</small></div>`+
+        (open?`<div class="pusub">${dir(k,kk)}</div>`:"");
+    }).join("");
+    h=`<div class="pusec">Factory <small>${f.length}</small></div>${dir(puTree(f),"f")||'<div class="puempty">none</div>'}`+
+      `<div class="pusec">User (this browser) <small>${u.length}</small></div>${dir(puTree(u),"u")||'<div class="puempty">Save preset… stores one here</div>'}`;
+  }
+  list.innerHTML=h;
+  const first=list.querySelector(".puit");if(first&&terms.length)first.classList.add("hi");
+}
+function puPopKey(e){
+  const pop=$("#puPop"),its=[...pop.querySelectorAll(".puit")];
+  let k=its.findIndex(x=>x.classList.contains("hi"));
+  if(e.key==="ArrowDown"||e.key==="ArrowUp"){
+    e.preventDefault();if(!its.length)return;
+    if(k>=0)its[k].classList.remove("hi");
+    k=e.key==="ArrowDown"?Math.min(its.length-1,k+1):Math.max(0,k<0?its.length-1:k-1);
+    its[k].classList.add("hi");its[k].scrollIntoView({block:"nearest"});
+  }else if(e.key==="Enter"){
+    e.preventDefault();const it=its[k<0?0:k];
+    if(it){puLoadPreset(it.dataset.src,+it.dataset.i);puPopToggle(false);}
+  }else if(e.key==="Escape"){e.preventDefault();e.stopPropagation();puPopToggle(false);$("#puPresetBtn").focus();}
+}
+async function puPopClick(e){
+  const del=e.target.closest(".pudel");
+  if(del){
+    e.stopPropagation();
+    const all=puUserPresets(),list=all[PU.name]||[],j=+del.dataset.i,p=list[j];if(!p)return;
+    if(!await askConfirm(`Delete the user preset “${p.name}” of ${PU.name}?`,"Delete"))return;
+    list.splice(j,1);
+    if(PU.preset&&PU.preset.src==="u"){if(PU.preset.i===j)PU.preset=null;else if(PU.preset.i>j)PU.preset.i--;}
+    if(puStoreUser(all)){puPopRender();puPresetLabel();}
+    return;
+  }
+  const dir=e.target.closest(".pudir");
+  if(dir){const k=dir.dataset.key;PU.popOpen.has(k)?PU.popOpen.delete(k):PU.popOpen.add(k);puPopRender();return;}
+  const it=e.target.closest(".puit");
+  if(it){puLoadPreset(it.dataset.src,+it.dataset.i);puPopToggle(false);}
 }
 function puApplyTokens(tokens){
   tokens.forEach((t,j)=>{
@@ -2160,33 +2297,33 @@ function puApplyTokens(tokens){
   });
   puCommit();
 }
-function puLoadPreset(v){
-  if(!v)return;
-  const src=v[0]==="f"?PU.pack.presets[+v.slice(1)]:(puUserPresets()[PU.name]||[])[+v.slice(1)];
-  if(!src)return;
-  puApplyTokens(src.values);setStatus(`${PU.name}: preset “${src.name}” loaded.`);
-}
 const puTokens=()=>PU.vals.map((v,j)=>{const q=PU.P[j];return v===null||(q&&q.ro)?"*":String(v);});
-function puAskName(title){
+function puAskName(title,withGroup){ // -> {name, group} (cancel: name "")
   return new Promise(res=>{
     const d=document.createElement("div");d.className="pw-dlg";d.style.zIndex=1100;
+    const groups=[...new Set([...PU.pack.presets,...(puUserPresets()[PU.name]||[])].map(p=>p.group).filter(Boolean))].sort();
+    const cur=PU.preset&&PU.preset.src==="u"?PU.preset:null;
     d.innerHTML=`<div class="pw-dlgbox" role="dialog" aria-modal="true"><p><b>${esc(title)}</b></p>
-      <input class="puname" value="${esc(PU.name+" "+rackLabel(PU.k,PU.i))}" style="width:100%;margin-bottom:12px">
+      <label class="pufield">Name<input class="puname" value="${esc(cur?cur.name:PU.name+" "+rackLabel(PU.k,PU.i))}"></label>
+      ${withGroup?`<label class="pufield">Category <small>(optional; “/” makes sub-categories)</small><input class="pugroup" list="puGroups" value="${esc(cur?cur.group:"")}">
+        <datalist id="puGroups">${groups.map(g=>`<option value="${esc(g)}">`).join("")}</datalist></label>`:""}
       <div class="pw-dlgbtns"><button class="small" data-r="0">Cancel</button><button class="small primary" data-r="1">Save</button></div></div>`;
-    const inp=d.querySelector("input");
-    const done=ok=>{d.remove();res(ok?inp.value.trim():"");};
+    const inp=d.querySelector(".puname"),grp=d.querySelector(".pugroup");
+    const done=ok=>{d.remove();res(ok?{name:inp.value.trim(),group:grp?puGroupPath(grp.value).join("/"):""}:{name:""});};
     d.addEventListener("click",e=>{const b=e.target.closest("[data-r]");if(b)done(b.dataset.r==="1");});
-    inp.addEventListener("keydown",e=>{if(e.key==="Enter")done(true);else if(e.key==="Escape"){e.stopPropagation();done(false);}});
+    d.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.tagName==="INPUT")done(true);else if(e.key==="Escape"){e.stopPropagation();done(false);}});
     document.body.append(d);inp.focus();inp.select();
   });
 }
 async function puSaveUser(){
-  const name=await puAskName("Save user preset");
+  const {name,group}=await puAskName("Save user preset",true);
   if(!name||!PU)return;
   const all=puUserPresets(),list=all[PU.name]=(all[PU.name]||[]).filter(p=>p.name!==name);
-  list.push({name,values:puTokens()});list.sort((a,b)=>a.name.localeCompare(b.name));
-  try{localStorage.setItem(PU_USER_KEY,JSON.stringify(all));}catch(_){setStatus("Could not save: browser storage unavailable.",true);return;}
-  puPresetMenu();setStatus(`${PU.name}: user preset “${name}” saved in this browser.`);
+  list.push({name,...(group?{group}:{}),values:puTokens()});
+  list.sort((a,b)=>(a.group||"").localeCompare(b.group||"")||a.name.localeCompare(b.name));
+  if(!puStoreUser(all))return;
+  PU.preset={src:"u",i:list.findIndex(p=>p.name===name),name,group};PU.presetVals=[...PU.vals];
+  puPresetLabel();setStatus(`${PU.name}: user preset “${name}” saved in this browser.`);
 }
 function puXpsText(name){ // PresetChunkXMLTree v3, Setup CURRENT — LV1 / SuperRack load it
   const [pn,gt,ver]=PU.head||[PU.name,"",""],toks=puTokens(),lines=[];
@@ -2199,7 +2336,7 @@ function puXpsText(name){ // PresetChunkXMLTree v3, Setup CURRENT — LV1 / Supe
     `            <PluginSpecificXMLData />\n        </PresetData>\n    </Preset>\n</PresetChunkXMLTree>\n`;
 }
 async function puXpsOut(){
-  const name=await puAskName("Export .xps preset");if(!name||!PU)return;
+  const {name}=await puAskName("Export .xps preset");if(!name||!PU)return;
   try{await dl.save({filename:name.replace(/[\\/:*?"<>|]/g,"_")+".xps",data:new Blob([puXpsText(name)],{type:"application/xml"})});}
   catch(e){setStatus("Export cancelled.",true);}
 }
@@ -2215,6 +2352,7 @@ function puXpsIn(){
     if(plug&&norm(plug)!==norm(PU.name)&&norm(plug)!==norm((PU.head||[])[0]||""))
       if(!await askConfirm(`${file.name} is a preset for “${plug}”, not ${PU.name}. Load it anyway?`,"Load"))return;
     puApplyTokens(/<Parameters Type="RealWorld">([^<]*)</.exec(pick[0])[1].trim().split(/[\s;]+/));
+    PU.preset=null;puPresetLabel();
     setStatus(`${PU.name}: “${pick[1]}” loaded from ${file.name}.`);
   };
   f.click();
