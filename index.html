@@ -14270,7 +14270,7 @@ async function emoImport(bytes,fileStemName){
     const paramsOf=(cc,text)=>{
       const d=defTok[cc],t=presetTokens(text||"");if(!d||!t||(d.length!==t.length&&!(t.includes("R")&&t.length<=d.length)))return null; // an "R" list may stop early
       const p={};
-      t.forEach((v,k)=>{const x=+v;if(v==="*"||!isFinite(x)||(d[k]!=="*"&&+d[k]===x))return;p[k]=x;});
+      t.forEach((v,k)=>{const x=puTok(v);if(v==="*"||!isFinite(x)||(d[k]!=="*"&&puTok(d[k])===x))return;p[k]=x;}); // "50*" tokens = 50
       return hasP(p)?p:null;
     };
     const rackRows={};
