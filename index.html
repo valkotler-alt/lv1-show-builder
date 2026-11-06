@@ -2302,6 +2302,20 @@ function puMarkerPos(ctl){
   const [x,y]=(g&&g(ctl,area))||[ph?l+puState(puQ(ph.n),puVal(ph.n))*w/PU_GRAN:l+w/2, pv?t+h-puState(puQ(pv.n),puVal(pv.n))*h/PU_GRAN:t+h/2];
   return [Math.min(l+w,Math.max(l,x)),Math.min(t+h,Math.max(t,y))];
 }
+/* the state of param n (marker axis k: 0 x, 1 y) that puts the marker at coordinate target -- bisection over the
+   plugin's own placement (markerPos hook or generic); null when the axis does not depend on n (fall back to px drag) */
+function puMarkerSolve(ctl,n,q,k,target){
+  const j=PU.pIdx[n],keep=PU.vals[j],pos=s=>{PU.vals[j]=puRW(q,s);return puMarkerPos(ctl)[k];};
+  try{
+    // a band marker drawn between two crossovers (multiband dynamics, PU_GRAPHS["<pack>:xcenter"]) keeps the engine's
+    // pixel-delta drag on x -- solving would move the crossover twice as fast as the pointer
+    if(k===0&&puGraph("xcenter"))return null;
+    let a=0,b=PU_GRAN;const pa=pos(a),pb=pos(b);if(!(Math.abs(pb-pa)>=1))return null;
+    const inc=pb>pa;if(inc?target<=pa:target>=pa)return a;if(inc?target>=pb:target<=pb)return b;
+    for(let i=0;i<26;i++){const m=(a+b)/2;if((pos(m)<target)===inc)a=m;else b=m;}
+    return (a+b)/2;
+  }finally{PU.vals[j]=keep;}
+}
 function puDrawMarker(ctl){
   const [x,y]=puMarkerPos(ctl);
   const on=ctl.p.find(p=>p.reg.includes("OnOff")),onV=on?puVal(on.n):1;
@@ -2309,14 +2323,14 @@ function puDrawMarker(ctl){
   const idle=ctl.img&&ctr(ctl.img.Idle);
   const img=(ctl.cimg||[]).find(i=>i.Type===(onV?"On":"Off"));
   const im=img&&ctr(img.ResID)||idle;
-  PU.markers.push({ctl,x,y,r:im&&im.naturalWidth?im.naturalWidth/2:12});
+  PU.markers.push({ctl,x,y,hw:im&&im.naturalWidth?Math.max(4,im.naturalWidth/2):12,hh:im&&im.naturalHeight?Math.max(4,im.naturalHeight/2):12});
 }
 
 /* ---- interaction (drag: 500 px = full range, TextKnob 200 px, Ctrl ÷4; up / right = more) ---- */
 function puPt(e){const b=PU.cv.getBoundingClientRect();return [(e.clientX-b.left)*PU.w/b.width,(e.clientY-b.top)*PU.h/b.height];}
 const puIn=(r,x,y)=>r&&x>=r[0]&&y>=r[1]&&x<r[0]+r[2]&&y<r[1]+r[3];
 function puHit(x,y){
-  for(let j=PU.markers.length-1;j>=0;j--){const m=PU.markers[j];if(Math.hypot(m.x-x,m.y-y)<=m.r)return {marker:m};}
+  for(let j=PU.markers.length-1;j>=0;j--){const m=PU.markers[j];if(Math.abs(m.x-x)<=m.hw&&Math.abs(m.y-y)<=m.hh)return {marker:m};} // the marker image's own rect
   for(let j=PU.shown.length-1;j>=0;j--){
     const c=PU.shown[j],kd=puKind(c);if(kd==="marker"||kd==="vu"||!puIn(c.r,x,y))continue;
     const p=c.p.find(pp=>{const q=puQ(pp.n);return q&&!q.ro&&pp.reg.some(r=>/^(Mouse|RadioButton|FixedState|PopUp)/.test(r));});
@@ -2346,7 +2360,7 @@ function puDown(e){
   const [x,y]=puPt(e),hit=puHit(x,y);if(!hit)return;
   e.preventDefault();
   if(hit.marker){
-    PU.drag={marker:hit.marker.ctl,alt:e.altKey,x0:x,y0:y,st:{}};
+    PU.drag={marker:hit.marker.ctl,alt:e.altKey,x0:x,y0:y,st:{},m0:[hit.marker.x,hit.marker.y]};
     for(const p of hit.marker.ctl.p){const q=puQ(p.n);if(q)PU.drag.st[p.n]=puState(q,puVal(p.n));}
   }else{
     const {ctl,p,all}=hit,q=puQ(p.n);
@@ -2375,10 +2389,12 @@ function puMove(e){
       const q=puQ(p.n);if(!q||puIsTog(q))continue;
       const alt=p.reg.some(r=>r.endsWith(":Alt"));if(alt!==D.alt)continue;
       for(const r of p.reg){
-        const [axis]=r.split(":");
-        if(axis==="MouseHorizontal")puSetOne(p.n,puRW(q,D.st[p.n]+(x-D.x0)*PU_GRAN/w*fine));
-        else if(axis==="MouseVertical")
-          puSetOne(p.n,puRW(q,D.st[p.n]-(y-D.y0)*PU_GRAN/h*fine));
+        const [axis]=r.split(":"),k=axis==="MouseHorizontal"?0:axis==="MouseVertical"?1:-1;if(k<0)continue;
+        // the marker stays under the pointer: solve the param for the plugin's own marker placement on this axis
+        const sv=D.m0&&puMarkerSolve(D.marker,p.n,q,k,D.m0[k]+((k?y:x)-(k?D.y0:D.x0))*fine);
+        if(sv!==null&&sv!==undefined)puSetOne(p.n,puRW(q,sv));
+        else if(k===0)puSetOne(p.n,puRW(q,D.st[p.n]+(x-D.x0)*PU_GRAN/w*fine));
+        else puSetOne(p.n,puRW(q,D.st[p.n]-(y-D.y0)*PU_GRAN/h*fine));
       }
     }
     puCommit();return;
@@ -9807,6 +9823,10 @@ PU_GRAPHS["Vocal Bender:fixed"]={"LFO0 Tab":0,"LFO1 Tab":1,"AMP Tab":2,"PITCH Ta
    kModSrc_ADSR0 0, ADSR1 1, LFO0..3 2..5, Env 6, Pitch 7, Spreader 8 -- Formant is commented out there). */
 PU_GRAPHS["Waves Harmony:fixed"]={"ADSR1 Tab":0,"ADSR2 Tab":1,"M1 Tab":2,"M2 Tab":3,"M3 Tab":4,"M4 Tab":5,
   "Amplitude Mod Tab":6,"Pitch Mod Tab":7,"Spreader Mod Tab":8};
+
+/* Multiband dynamics: each band marker sits midway between its two crossovers (x moves half as fast as the crossover
+   param it drags), so marker drags keep the pixel-delta mapping on x (puMarkerSolve). */
+for(const pk of ["C4","C6","L3 Multi","L3-LL Multi","LinMB"])PU_GRAPHS[pk+":xcenter"]=true;
 /* ==== end of plugin graph modules ==== */
 function renderMaster(){
   const r=state.master.rack;
