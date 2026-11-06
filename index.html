@@ -9327,7 +9327,7 @@ PU_GRAPHS["SSL EV2 Channel:groups"]=()=>{
 PU_GRAPHS["Saphira:groups"]=()=>{
   const sec=puVal("PARAM_EQ_DISPLAY"),hide=[];
   for(const c of PU.ctrls){
-    if((/^Warmth Band/.test(c.n)&&sec!==2)||(/^Edge Band/.test(c.n)&&sec!==1))hide.push(c.n);
+    if((/^Warmth (Band|Mark Control)/.test(c.n)&&sec!==2)||(/^Edge (Band|Mark Control)/.test(c.n)&&sec!==1))hide.push(c.n); // incl. the section's graph markers
   }
   if(sec!==0||!puVal("PARAM_ODD_ON_OFF"))hide.push("Harmonic Odd Display");
   if(sec!==0||!puVal("PARAM_EVEN_ON_OFF"))hide.push("Harmonic Even Display");
@@ -9827,6 +9827,13 @@ PU_GRAPHS["Waves Harmony:fixed"]={"ADSR1 Tab":0,"ADSR2 Tab":1,"M1 Tab":2,"M2 Tab
 /* Multiband dynamics: each band marker sits midway between its two crossovers (x moves half as fast as the crossover
    param it drags), so marker drags keep the pixel-delta mapping on x (puMarkerSolve). */
 for(const pk of ["C4","C6","L3 Multi","L3-LL Multi","LinMB"])PU_GRAPHS[pk+":xcenter"]=true;
+
+/* X-FDBK: cXFDBK_ALG::SetEnabledToActiveFilter (XFDBKAlg.cpp:1328-1341) enables PARAM_FLTn_STATE only for the first
+   PARAM_NUM_OF_ACTIVE_FILTERS notch filters; each "LineMarker<n>" is HideWhenDisabled on it -> unused filters' markers hide. */
+PU_GRAPHS["X-FDBK:groups"]=()=>{
+  const n=Math.round(+puVal("PARAM_NUM_OF_ACTIVE_FILTERS")||0);
+  return {hideCtrls:PU.ctrls.filter(c=>{const m=/^LineMarker(\d+)$/.exec(c.n);return m&&+m[1]>=n;}).map(c=>c.n)};
+};
 /* ==== end of plugin graph modules ==== */
 function renderMaster(){
   const r=state.master.rack;
