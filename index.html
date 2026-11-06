@@ -1842,8 +1842,8 @@ const _puPacks={};
 function plugUiPack(pack){ // one pack per bundle: <pack>.json + its images in <pack>.bin
   const u=EMO_ROOT+"plugui/"+encodeURIComponent(pack);
   if(!_puPacks[pack])_puPacks[pack]=Promise.all([
-      fetch(u+".json").then(r=>{if(!r.ok)throw new Error("plugin GUI fetch failed ("+r.status+")");return r.json();}),
-      fetch(u+".bin").then(r=>{if(!r.ok)throw new Error("plugin images fetch failed ("+r.status+")");return r.arrayBuffer();})])
+      fetch(u+".json",{cache:"no-cache"}).then(r=>{if(!r.ok)throw new Error("plugin GUI fetch failed ("+r.status+")");return r.json();}),
+      fetch(u+".bin",{cache:"no-cache"}).then(r=>{if(!r.ok)throw new Error("plugin images fetch failed ("+r.status+")");return r.arrayBuffer();})])
     .then(async([p,bin])=>{
       p.img={};
       await Promise.all(Object.entries(p.imgs).map(([id,[o,l,mime]])=>new Promise(res=>{
@@ -2196,10 +2196,16 @@ function puDraw(){
       case "tab":{const im=(ctl.cimg||[]).find(i=>i.Type===(ctl.tabOn?"Pushed":"Released"));if(im)puImg(im.ResID,l,t);break;}
       case "digits":puDrawDigits(ctl,q,v);break;
       case "knob":{
-        const im=(ctl.cimg||[]).find(i=>i.SequenceSteps);if(!im||!q||v===null)break;
+        const im=(ctl.cimg||[]).find(i=>i.SequenceSteps);if(!im)break;
+        if(!q||v===null){puImg(im.ResID,l,t);break;} // meter filmstrips (output params not in ParamXML): frame 0 = at rest
         puImg(im.ResID+Math.min(im.SequenceSteps-1,Math.max(0,Math.round(puNorm(q,v)*(im.SequenceSteps-1)))),l,t);break;}
       case "radio":{
         if(!q||v===null)break;
+        if(!ctl.div){ // 1st generation (CRadioButton_X: hor x vert grid): BackGround, then ForeGround clipped to the value's cell
+          const bg=puImgOf(ctl,"BackGround"),fg=puImgOf(ctl,"ForeGround");if(bg)puImg(bg,l,t);if(!fg)break;
+          const [hn,vn]=ctl.grid||[1,1],[bl,bt,bw,bh]=ctl.bda||ctl.r,k=puIdx(q,v),hs=bw/hn,vs=bh/vn;
+          const x0=bl+Math.trunc(hs*(k%hn)),y0=bt+Math.trunc(vs*Math.floor(k/hn));
+          c.save();c.beginPath();c.rect(x0,y0,Math.trunc(hs)+1,Math.trunc(vs)+1);c.clip();puImg(fg,l,t);c.restore();break;}
         const dv=(ctl.div||[])[puIdx(q,v)];if(dv&&dv[1]!==null)puImg(dv[1],l,t);break;}
       case "arc":puDrawArc(ctl);break;
       case "vu":if(puImgOf(ctl,"BackGround"))puImg(puImgOf(ctl,"BackGround"),l,t);break;
@@ -2311,6 +2317,10 @@ function puHit(x,y){
     if(!p)continue;
     const all=c.p.filter(pp=>pp.reg[0]===p.reg[0]&&puQ(pp.n)).map(pp=>pp.n);
     if(kd==="radio"){
+      if(!c.div){ // 1st-gen grid: the cell under the mouse is the state (row-major)
+        const [hn,vn]=c.grid||[1,1],[bl,bt,bw,bh]=c.bda||c.r;if(!puIn([bl,bt,bw,bh],x,y))continue;
+        if(hn*vn<2)return {ctl:c,p,all,div:puIdx(puQ(p.n),puVal(p.n))?0:1}; // a single cell toggles
+        return {ctl:c,p,all,div:Math.min(vn-1,Math.floor((y-bt)/(bh/vn)))*hn+Math.min(hn-1,Math.floor((x-bl)/(bw/hn)))};}
       const dv=(c.div||[]).find(d=>d[2]&&puIn([c.r[0]+d[2][0],c.r[1]+d[2][1],d[2][2],d[2][3]],x,y));
       if(dv)return {ctl:c,p,all,div:dv[0]};continue;
     }
@@ -8743,6 +8753,7 @@ PU_GRAPHS["Curves AQ:groups"]=()=>{
   }
   ["PARAM_LEARN_2","PARAM_ENABLE_GENRE_METER","PARAM_ENABLE_INST_METER",
     v("PARAM_SINGLE_INSTRUMENT")>0?"PARAM_GENRE_MENU":"PARAM_INSTRUMENT_MENU"].forEach(p=>dis.add(p));
+  if(!(v("PARAM_BYPASS")>=1))dis.add("PARAM_DUMMY2"); // "Bypass Rect" overlay: CurvesAlg.cpp:6238 disables PARAM_DUMMY2 unless bypassed
   const node=/^Node \d+ (Frequency|Gain|Q|Curve Type|Solo|On\/Off|Delete)$/;
   return {hideCtrls:PU.ctrls.filter(c=>node.test(c.n)||((c.fl||[]).includes("HideWhenDisabled")&&!/Marker/.test(c.cls||"")
     &&(c.p||[]).some(p=>dis.has(p.n)))).map(c=>c.n)};
@@ -9240,7 +9251,10 @@ PU_GRAPHS["Rogue Dimensions:groups"]=()=>{
   const tab=puVal("PARAM_SCREEN_TAB");
   const show=tab===1?[puVal("PARAM_DISPLAY_DUMPING_HF")===0?"Damp-Hi":"Damp-Low"]
     :tab===3?[puVal("PARAM_DISPLAY_EQ_HF")===0?"EQ Wide-Hi":"EQ Wide-Low","EQ Wide Hover"]:[];
-  return {show,hide:all.filter(g=>!show.includes(g))};
+  // the installed V17 bundle is a development build (1301x967; the source's shipped view is 835x166 with these on a
+  // "Lab Controls" tab, ReverbGUI.xml :25/:45): its ~224 art-less DefaultDraw developer boxes stay hidden
+  const lab=PU.ctrls.filter(c=>(c.fl||[]).includes("DefaultDraw")&&!c.groups).map(c=>c.n);
+  return {show,hide:all.filter(g=>!show.includes(g)),hideCtrls:lab};
 };
 
 /* Rogue Overdrive: same ColorBoxes developer-only group as Rogue SampTone (feature flag off on normal installs) — always hidden. */
@@ -13794,7 +13808,7 @@ function plugDefaultTokens(){
 }
 let _plugUiIdxP=null;
 function plugUiIndex(){
-  if(!_plugUiIdxP)_plugUiIdxP=fetch(EMO_ROOT+"plugui/index.json")
+  if(!_plugUiIdxP)_plugUiIdxP=fetch(EMO_ROOT+"plugui/index.json",{cache:"no-cache"}) /* revalidate: packs change with every rebuild */
     .then(r=>{if(!r.ok)throw new Error("plugin GUI index fetch failed ("+r.status+")");return r.json();})
     .catch(e=>{_plugUiIdxP=null;throw e;});
   return _plugUiIdxP;
