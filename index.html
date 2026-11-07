@@ -1985,7 +1985,7 @@ async function openPlugUi(k,i,x){
   const p=(r.params||[])[x]||{};
   closePlugUi();
   PU={k,i,x,name,cc,pack,P,noedit,pIdx:Object.fromEntries(P.map((q,j)=>[q.n,j])),defs,
-    vals:defs.map((d,j)=>j in p?+p[j]:d),head:(ix.head||{})[cc],ctrls:pack.controls[cc],drag:null};
+    vals:defs.map((d,j)=>j in p?+p[j]:d),ps:p.ps||null,head:(ix.head||{})[cc],ctrls:pack.controls[cc],drag:null};
   // suite chainers: the child plugins docked in fixed slots (their own packs; view only)
   PU.kids={};
   for(const sp of [...new Set(PU.ctrls.flatMap(c=>(c.slots||[]).map(s=>s.pack)).filter(Boolean))])
@@ -2016,7 +2016,7 @@ async function openPlugUi(k,i,x){
   PU.cv.addEventListener("pointermove",puHover);
   PU.cv.addEventListener("wheel",puWheel,{passive:false});
   d.querySelector("#puClose").onclick=closePlugUi;
-  d.querySelector("#puReset").onclick=()=>{PU.vals=[...PU.defs];PU.preset=null;puCommit();setStatus(name+" reset to its default settings.");};
+  d.querySelector("#puReset").onclick=()=>{PU.vals=[...PU.defs];PU.preset=null;PU.ps=null;puCommit();setStatus(name+" reset to its default settings.");};
   d.querySelector("#puSave").onclick=puSaveUser;
   d.querySelector("#puXpsOut").onclick=puXpsOut;
   d.querySelector("#puXpsIn").onclick=puXpsIn;
@@ -2057,6 +2057,7 @@ function puCommit(){
   if(!h.rack)h.rack=STOCK_RACK();
   const ps=rackParams(h.rack),p={};
   PU.vals.forEach((v,j)=>{const q=PU.P[j];if(v!==null&&v!==PU.defs[j]&&!(q&&q.ro))p[j]=v;});
+  if(PU.ps)p.ps=PU.ps;
   ps[PU.x]=hasP(p)?p:null;
   puDraw();puPresetLabel();
   const btn=document.querySelector(`.rackbtn[data-k="${PU.k}"][data-i="${PU.i}"]`);
@@ -2085,7 +2086,12 @@ function puSetOne(n,v){ // sets one param (+ its linked twin), no redraw
   PU.vals[PU.pIdx[n]]=nv;
 }
 /* names = every param the control drives (e.g. Q4 mono's ganged OUT_GAIN_L/R) */
-function puEdit(names,v){if(puViewOnly())return;for(const n of names)puSetOne(n,v);puCommit();}
+function puEdit(names,v){
+  if(puViewOnly())return;
+  const own=PU.ps&&puGraph("psOwns"); // a param the chunks set on load (e.g. GTR's amp model): editing it drops them
+  if(own&&names.some(own))PU.ps=null;
+  for(const n of names)puSetOne(n,v);puCommit();
+}
 /* A variant whose default preset carries no RealWorld values (index "noedit") is shown, not edited:
    its settings could not be written into the .emo. */
 function puViewOnly(){if(PU&&PU.noedit){setStatus(PU.name+": view only — its LV1 default preset has no editable values yet.",true);return true;}return false;}
@@ -2472,9 +2478,9 @@ function puStoreUser(all){
   catch(_){setStatus("Could not save: browser storage unavailable.",true);return false;}
 }
 function puPresetList(){ // {f, u}: [{src, i, name, group, values}]
-  const f=PU.pack.presets.map((p,i)=>({src:"f",i,name:p.name,group:p.group||"",values:p.values,subs:p.subs}))
+  const f=PU.pack.presets.map((p,i)=>({src:"f",i,name:p.name,group:p.group||"",values:p.values,subs:p.subs,ps:p.ps}))
     .filter(p=>!p.subs||p.subs.includes(PU.cc));
-  const u=(puUserPresets()[PU.name]||[]).map((p,i)=>({src:"u",i,name:p.name,group:p.group||"",values:p.values}));
+  const u=(puUserPresets()[PU.name]||[]).map((p,i)=>({src:"u",i,name:p.name,group:p.group||"",values:p.values,ps:p.ps}));
   return {f,u};
 }
 const puGroupPath=g=>String(g||"").split("/").map(s=>s.trim()).filter(Boolean);
@@ -2503,6 +2509,7 @@ function puPresetLabel(){
 function puLoadPreset(src,i){
   const p=puPresetList()[src].find(x=>x.i===i);if(!p||puViewOnly())return;
   PU.preset={src,i,name:p.name,group:p.group};PU.presetVals=null;
+  PU.ps=p.ps||null; // the preset's plugin-specific chunks travel with the slot into the .emo
   puApplyTokens(p.values);
   PU.presetVals=[...PU.vals];
   puPresetLabel();setStatus(`${PU.name}: preset “${p.name}” loaded.`);
@@ -2605,7 +2612,7 @@ async function puSaveUser(){
   const {name,group}=await puAskName("Save user preset",true);
   if(!name||!PU)return;
   const all=puUserPresets(),list=all[PU.name]=(all[PU.name]||[]).filter(p=>p.name!==name);
-  list.push({name,...(group?{group}:{}),values:puTokens()});
+  list.push({name,...(group?{group}:{}),values:puTokens(),...(PU.ps?{ps:PU.ps}:{})});
   list.sort((a,b)=>(a.group||"").localeCompare(b.group||"")||a.name.localeCompare(b.name));
   if(!puStoreUser(all))return;
   PU.preset={src:"u",i:list.findIndex(p=>p.name===name),name,group};PU.presetVals=[...PU.vals];
@@ -2619,7 +2626,7 @@ function puXpsText(name){ // PresetChunkXMLTree v3, Setup CURRENT — LV1 / Supe
     `        <PresetHeader>\n            <PluginName>${x(pn)}</PluginName>\n            <PluginSubComp>${PU.cc}</PluginSubComp>\n`+
     `            <PluginVersion>${x(ver)}</PluginVersion>\n            <ReadOnly>false</ReadOnly>\n        </PresetHeader>\n`+
     `        <PresetData Setup="CURRENT">\n            <Parameters Type="RealWorld">\n${lines.join("\n")}\n</Parameters>\n`+
-    `            <PluginSpecificXMLData />\n        </PresetData>\n    </Preset>\n</PresetChunkXMLTree>\n`;
+    `            <PluginSpecificXMLData />\n${PU.ps?"            "+PU.ps+"\n":""}        </PresetData>\n    </Preset>\n</PresetChunkXMLTree>\n`;
 }
 async function puXpsOut(){
   const {name}=await puAskName("Export .xps preset");if(!name||!PU)return;
@@ -2637,6 +2644,7 @@ function puXpsIn(){
     const norm=s=>s.toUpperCase().replace(/[^A-Z0-9]/g,"");
     if(plug&&norm(plug)!==norm(PU.name)&&norm(plug)!==norm((PU.head||[])[0]||""))
       if(!await askConfirm(`${file.name} is a preset for “${plug}”, not ${PU.name}. Load it anyway?`,"Load"))return;
+    PU.ps=[...pick[0].matchAll(/<PluginSpecific\b(?:[^>]*\/>|[\s\S]*?<\/PluginSpecific>)/g)].map(m=>m[0]).join("\n")||null;
     puApplyTokens(/<Parameters Type="RealWorld">([^<]*)</.exec(pick[0])[1].trim().split(/[\s;]+/));
     PU.preset=null;puPresetLabel();
     setStatus(`${PU.name}: “${pick[1]}” loaded from ${file.name}.`);
@@ -9805,11 +9813,24 @@ PU_SCALES["Vitamin:WidthScale"] = {
   fwd(s, q) { const Q = sclRes(q, 0.01), t = s * SCL_OG; return sclI32((t + 2.0 * t * t) * (1 / Q) + 0.5) * Q; },
   inv(v) { return SCL_GRAN * (Math.sqrt(1.0 + 8 * v) - 1.0) / 4.0; }};
 
-/* GTRAmp: the amp-model readout is the loaded amp preset's title (GuitarAmpAlg.cpp:4437 m_sAmpProperies.title =
-   the amp preset's name); table AmpID -> <Preset Name> of Waves\Data\WavesGTR\Amps\*\*.xps (V17 install, generated).
-   Other DisplayTheSame readouts (cabinet / folder names) need the plugin's cabinet+mic state: empty. */
+/* GTRAmp readouts (GENERATED by webtool/gtr_tables.py from Waves\Data\WavesGTR -- rerun after a GTR update).
+   GuitarAmpAlg.cpp UpdateDisplaySelf (:4420): PARAM_AMP_MODEL_1 shows the amp preset's name, the *_FOLDERS
+   params the cabinet folder name, PARAM_CABINET_MODEL_1/2 the microphone preset's name -- looked up inside the
+   cabinet chosen by the matching *_FOLDERS param (GetPresetUniqueID: mic ids are per cabinet). */
 const gtrAmpNames={"0": "Direct", "1": "Clean", "2": "Edgy", "3": "Drive", "4": "Crunch", "5": "Hot", "6": "Modern", "7": "Sweet", "8": "Cream", "9": "OverDrive", "11": "Punchy", "12": "Warm", "13": "Scream", "14": "Scorch", "15": "Supernatural", "16": "Monster", "17": "Crush", "18": "Inferno", "20": "PRS_Scream", "21": "PRS_Scorch", "22": "PRS_Supernatural", "23": "PRS_Monster", "24": "PRS_Crush", "25": "LegatronClean", "26": "LegatronCrunch", "27": "ThermitronClean", "28": "ThermitronCrunch", "29": "PlexitronLite", "30": "PlexitronCrunch", "36": "Shredder", "90": "Mo'Town", "91": "SolidState", "92": "SuperTube", "93": "Thunder", "94": "OverBass", "95": "Directube", "96": "Activator"};
-PU_DISP["GTRAmp:DisplayTheSame"]=(v,q)=>q&&q.n==="PARAM_AMP_MODEL_1"?gtrAmpNames[String(Math.round(v))]||"":"";
+const gtrCabNames={"0": "12inchOpenBack", "1": "15inchClosedBack", "2": "2_12InchClosedBack", "3": "2_12inchOpenBack", "4": "4_10InchOpenBack", "23": "4_12_Inferno", "5": "4_12inchBritt", "6": "4_12inchStandard", "7": "4_12inchVintage", "9": "ACME_12inch_Custom", "10": "ACME_12inch_OpenBack", "11": "ACME_2_10inch_Cabinet", "12": "ACME_2_10inch_OpenBack", "13": "ACME_4_12inch_Vintage", "14": "ACME_8inch_OpenBack", "15": "ACME_GTCaseCabinet", "19": "BASS_15Inch", "16": "BASS_15_Fliptop", "17": "BASS_610", "18": "BASS_810", "21": "BASS_E15_410", "20": "BASS_M1516", "25": "Neil Citron", "8": "NoCabinet"};
+const gtrMicNames={"0": {"0": "Dyn409_OffAxis", "1": "Dyn409_OnAxis", "2": "Dyn421_OffAxis", "3": "Dyn421_OnAxis", "4": "Dyn57_OffAxis", "5": "Dyn57_OnAxis", "6": "Ribb84_OffAxis", "7": "Ribb84_OnAxis", "8": "DynRE20_OffAxis", "9": "DynRE20_OnAxis", "10": "CondVM1_OffAxis", "11": "CondVM1_OnAxis"}, "1": {"0": "Dyn409_OffAxis", "1": "Dyn409_OnAxis", "2": "Dyn421_OffAxis", "3": "Dyn421_OnAxis", "4": "Dyn57_OffAxis", "5": "Dyn57_OnAxis", "6": "Ribb84_OffAxis", "7": "Ribb84_OnAxis", "8": "DynRE20_OffAxis", "9": "DynRE20_OnAxis", "10": "CondVM1_OffAxis", "11": "CondVM1_OnAxis"}, "2": {"0": "Dyn409_OffAxis", "1": "Dyn409_OnAxis", "2": "Dyn421_OffAxis", "3": "Dyn421_OnAxis", "4": "Dyn57_OffAxis", "5": "Dyn57_OnAxis", "6": "Ribb84_OffAxis", "7": "Ribb84_OnAxis", "8": "DynRE20_OffAxis", "9": "DynRE20_OnAxis", "10": "CondVM1_OffAxis", "11": "CondVM1_OnAxis"}, "3": {"0": "Dyn409_OffAxis", "1": "Dyn409_OnAxis", "2": "Dyn421_OffAxis", "3": "Dyn421_OnAxis", "4": "Dyn57_OffAxis", "5": "Dyn57_OnAxis", "6": "Ribb84_OffAxis", "7": "Ribb84_OnAxis", "8": "DynRE20_OffAxis", "9": "DynRE20_OnAxis", "10": "CondVM1_OffAxis", "11": "CondVM1_OnAxis"}, "4": {"0": "Dyn409_OffAxis", "1": "Dyn409_OnAxis", "2": "Dyn421_OffAxis", "3": "Dyn421_OnAxis", "4": "Dyn57_OffAxis", "5": "Dyn57_OnAxis", "6": "Ribb84_OffAxis", "7": "Ribb84_OnAxis", "8": "DynRE20_OffAxis", "9": "DynRE20_OnAxis", "10": "CondVM1_OffAxis", "11": "CondVM1_OnAxis"}, "23": {"0": "Cond414_OffAxis", "5": "Cond414_OnAxis", "7": "Cond87_OffAxis", "6": "Cond87_OnAxis", "2": "Dyn421_OffAxis", "1": "Dyn421_OnAxis", "4": "Dyn57_OffAxis", "3": "Dyn57_OnAxis"}, "5": {"0": "Dyn409_OffAxis", "1": "Dyn409_OnAxis", "2": "Dyn421_OffAxis", "3": "Dyn421_OnAxis", "4": "Dyn57_OffAxis", "5": "Dyn57_OnAxis", "6": "Ribb84_OffAxis", "7": "Ribb84_OnAxis", "8": "DynRE20_OffAxis", "9": "DynRE20_OnAxis", "10": "CondVM1_OffAxis", "11": "CondVM1_OnAxis"}, "6": {"0": "Dyn409_OffAxis", "1": "Dyn409_OnAxis", "2": "Dyn421_OffAxis", "3": "Dyn421_OnAxis", "4": "Dyn57_OffAxis", "5": "Dyn57_OnAxis", "6": "DynRE20_OffAxis", "7": "DynRE20_OnAxis", "8": "Ribb84_OffAxis", "9": "Ribb84_OnAxis", "10": "CondVM1_OffAxis", "11": "CondVM1_OnAxis"}, "7": {"0": "Dyn409_OffAxis", "1": "Dyn409_OnAxis", "2": "Dyn421_OffAxis", "3": "Dyn421_OnAxis", "4": "Dyn57_OffAxis", "5": "Dyn57_OnAxis", "6": "Ribb84_OffAxis", "7": "Ribb84_OnAxis", "8": "DynRE20_OffAxis", "9": "DynRE20_OnAxis", "10": "CondVM1_OffAxis", "11": "CondVM1_OnAxis"}, "9": {"0": "CondVM1_OnAxis", "1": "Dyn409_OnAxis", "2": "Dyn421_OnAxis", "3": "Dyn57_OffAxis", "4": "Dyn57_OnAxis", "5": "Denenberg Setup", "6": "Ribbon44"}, "10": {"0": "CondVM1_OnAxis", "1": "Dyn409_OnAxis", "2": "Dyn421_OnAxis", "3": "Dyn57_OffAxis", "4": "Dyn57_OnAxis", "5": "Denenberg Setup", "6": "Ribbon44"}, "11": {"0": "CondVM1_OnAxis", "1": "Dyn409_OnAxis", "2": "Dyn421_OnAxis", "3": "Dyn57_OffAxis", "4": "Dyn57_OnAxis", "5": "Denenberg Setup", "6": "Ribbon44"}, "12": {"0": "CondVM1_OnAxis", "1": "Dyn409_OnAxis", "2": "Dyn421_OnAxis", "3": "Dyn57_OffAxis", "4": "Dyn57_OnAxis", "5": "Denenberg Setup", "6": "Ribbon44"}, "13": {"0": "CondVM1_OnAxis", "1": "Dyn409_OnAxis", "2": "Dyn421_OnAxis", "3": "Dyn57_OffAxis", "4": "Dyn57_OnAxis", "5": "Denenberg Setup", "6": "Ribbon44"}, "14": {"0": "CondVM1_OnAxis", "1": "Dyn409_OnAxis", "2": "Dyn421_OnAxis", "3": "Dyn57_OffAxis", "4": "Dyn57_OnAxis", "5": "Denenberg Setup", "6": "Ribbon44"}, "15": {"0": "CondVM1_OnAxis", "1": "Dyn409_OnAxis", "2": "Dyn421_OnAxis", "3": "Dyn57_OffAxis", "4": "Dyn57_OnAxis", "5": "Denenberg Setup", "6": "Ribbon44"}, "19": {"4": "Coil88_pos1", "5": "Coil88_pos2", "2": "Cond87_pos1", "3": "Cond87_pos2", "10": "CondGR_pos1", "11": "CondGR_pos2", "6": "Dyn57_pos1", "7": "Dyn57_pos2", "0": "DynRE20_pos1", "1": "DynRE20_pos2", "8": "Ribb122_pos1", "9": "Ribb122_pos2"}, "16": {"4": "Coil88_pos1", "5": "Coil88_pos2", "2": "Cond87_pos1", "3": "Cond87_pos2", "10": "CondGR_pos1", "11": "CondGR_pos2", "6": "Dyn57_pos1", "7": "Dyn57_pos2", "0": "DynRE20_pos1", "1": "DynRE20_pos2", "8": "Ribb122_pos1", "9": "Ribb122_pos2"}, "17": {"4": "Coil88_pos1", "5": "Coil88_pos2", "2": "Cond87_pos1", "3": "Cond87_pos2", "10": "CondGR_pos1", "11": "CondGR_pos2", "6": "Dyn57_pos1", "7": "Dyn57_pos2", "0": "DynRE20_pos1", "1": "DynRE20_pos2", "8": "Ribb122_pos1", "9": "Ribb122_pos2"}, "18": {"4": "Coil88_pos1", "5": "Coil88_pos2", "2": "Cond87_pos1", "3": "Cond87_pos2", "10": "CondGR_pos1", "11": "CondGR_pos2", "6": "Dyn57_pos1", "7": "Dyn57_pos2", "0": "DynRE20_pos1", "1": "DynRE20_pos2", "8": "Ribb122_pos1", "9": "Ribb122_pos2"}, "21": {"4": "Coil88_pos1", "5": "Coil88_pos2", "2": "Cond87_pos1", "3": "Cond87_pos2", "10": "CondGR_pos1", "11": "CondGR_pos2", "6": "Dyn57_pos1", "7": "Dyn57_pos2", "0": "DynRE20_pos1", "1": "DynRE20_pos2", "8": "Ribb122_pos1", "9": "Ribb122_pos2"}, "20": {"4": "Coil88_pos1", "5": "Coil88_pos2", "2": "Cond87_pos1", "3": "Cond87_pos2", "10": "CondGR_pos1", "11": "CondGR_pos2", "6": "Dyn57_pos1", "7": "Dyn57_pos2", "0": "DynRE20_pos1", "1": "DynRE20_pos2", "8": "Ribb122_pos1", "9": "Ribb122_pos2"}, "25": {"2": "Celestron_2_12_Clean", "1": "Electron_2_12_Clean", "4": "Celestron_2_12_Crunch", "3": "Electron_2_12_Crunch", "6": "Celestron_4_12", "5": "Electron_4_12", "0": "Celestron_4_12_Vintage"}, "8": {"0": "No Microphone"}};
+function gtrModelName(n,v){
+  const id=String(Math.round(v)),m=/^PARAM_CABINET_MODEL_([12])(_FOLDERS)?$/.exec(n);
+  if(n==="PARAM_AMP_MODEL_1")return gtrAmpNames[id]||"";
+  if(!m)return "";
+  if(m[2])return gtrCabNames[id]||"";
+  const cab=puVal("PARAM_CABINET_MODEL_"+m[1]+"_FOLDERS");
+  return cab==null?"":((gtrMicNames[String(Math.round(cab))]||{})[id]||"");
+}
+PU_DISP["GTRAmp:DisplayTheSame"]=(v,q)=>q?gtrModelName(q.n,v):"";
+/* the preset's "Impulse Response" chunk sets these on load (kChunk_IR): a hand edit must drop the chunk */
+PU_GRAPHS["GTRAmp:psOwns"]=n=>/^PARAM_(AMP|CABINET)_MODEL_/.test(n);
 
 /* MultiMod Rack: runtime FixedStates of the modulator tabs (MultiModRackAlg.cpp:775-781 SetTabHAndleFixedState;
    MultiModRackConsts.h: kModSrc_ModWheel 0, LFO0..3 1..4, Env 5, kFixedStateEqTab 6, kFixedStateXoverTab 7). */
@@ -11441,7 +11462,7 @@ function buildSpec(){
     ...(rackHasParams(r)?{params:rackParams(r).map(p=>hasP(p)?{...p}:null)}:{})};
   const withRack=(o,r)=>{const rr=rackOut(r);if(rr)o.rack=rr;return o;};
   const spec={
-    format:"lv1-input-list",version:12,
+    format:"lv1-input-list",version:13,
     show:{...state.show},
     config:{id:c.id,inputs:c.ch,groups:c.grp,aux:c.mon,fx:FX_COUNT,matrix:MTX_COUNT,mains:c.mains},
     // v7: the I/O inventory in slot order; v9: each device's id (the pins' d).
@@ -13915,14 +13936,48 @@ function ioChunk(model,gain,phantom){
 function presetWithParams(text,params){
   if(!hasP(params))return text;
   const setup=(/<ActiveSetup>(\w+)</.exec(text)||[])[1]||"SETUP_A",head='(<PresetData Setup="'+setup+'">\\s*';
-  if(new RegExp(head+'<Parameters Type="RealWorld">)').test(text))
-    return text.replace(new RegExp(head+'<Parameters Type="RealWorld">)([^<]*)'),
+  const nums=Object.keys(params).filter(k=>k!=="ps").map(Number);
+  if(nums.length&&new RegExp(head+'<Parameters Type="RealWorld">)').test(text))
+    text=text.replace(new RegExp(head+'<Parameters Type="RealWorld">)([^<]*)'),
       (m,h,body)=>{let n=0;return h+body.replace(/\S+/g,t=>{const k=n++;return k in params?String(params[k]):t;});});
-  const last=Math.max(...Object.keys(params).map(Number)),toks=[];
-  for(let k=0;k<=last;k++)toks.push(k in params?String(params[k]):"R");
-  const lines=[];for(let i=0;i<toks.length;i+=10)lines.push(toks.slice(i,i+10).join(" "));
-  return text.replace(new RegExp(head+')<Parameters\\b[^>]*?(?:/>|>[^<]*</Parameters>)'),
-    (m,h)=>h+'<Parameters Type="RealWorld">\n'+lines.join("\n")+"\n</Parameters>");
+  else if(nums.length){
+    const last=Math.max(...nums),toks=[];
+    for(let k=0;k<=last;k++)toks.push(k in params?String(params[k]):"R");
+    const lines=[];for(let i=0;i<toks.length;i+=10)lines.push(toks.slice(i,i+10).join(" "));
+    text=text.replace(new RegExp(head+')<Parameters\\b[^>]*?(?:/>|>[^<]*</Parameters>)'),
+      (m,h)=>h+'<Parameters Type="RealWorld">\n'+lines.join("\n")+"\n</Parameters>");
+  }
+  return params.ps?presetWithChunks(text,setup,params.ps):text;
+}
+/* A preset's plugin-specific chunks (rack.params[slot].ps): the <PluginSpecific> elements a setup carries after its
+   <PluginSpecificXMLData> (sPresetData::ReadFromXML reads both) — e.g. GTR's amp / cabinet references, IRLive's
+   impulse response, TRACT's reference curves. presetChunkSpan finds them in the active setup, skipping CDATA (suite
+   chainers nest whole child presets there); presetWithChunks replaces them. Mirrors make_lv1_session (keep in sync). */
+function presetIdx(s,needle,from){ // index of needle at/after from, outside CDATA sections (-1 if none)
+  for(let i=from;;){
+    const n=s.indexOf(needle,i),c=s.indexOf("<![CDATA[",i);
+    if(n<0)return -1;
+    if(c<0||n<c)return n;
+    const e=s.indexOf("]]>",c);if(e<0)return -1;i=e+3;
+  }
+}
+function presetChunkSpan(text,setup){ // [start, end) of the chunks region of a setup, or null
+  const a=text.indexOf('<PresetData Setup="'+setup+'"');if(a<0)return null;
+  const end=presetIdx(text,"</PresetData>",a);if(end<0)return null;
+  const x=presetIdx(text,"<PluginSpecificXMLData",a);
+  if(x<0||x>end){const p=presetIdx(text,"</Parameters>",a);return p<0||p>end?null:[p+13,end];}
+  const gt=text.indexOf(">",x);
+  if(text[gt-1]==="/")return [gt+1,end];
+  const c=presetIdx(text,"</PluginSpecificXMLData>",gt);
+  return c<0||c>end?null:[c+24,end];
+}
+function presetChunks(text){ // the active setup's chunks, "" when none
+  const setup=(/<ActiveSetup>(\w+)</.exec(text||"")||[])[1]||"SETUP_A",sp=presetChunkSpan(text||"",setup);
+  return sp?text.slice(sp[0],sp[1]).trim():"";
+}
+function presetWithChunks(text,setup,ps){
+  const sp=presetChunkSpan(text,setup);
+  return sp?text.slice(0,sp[0])+"\n   "+ps+"\n  "+text.slice(sp[1]):text;
 }
 /* The active setup's RealWorld tokens of a preset text, or null. */
 function presetTokens(text){
@@ -14323,11 +14378,15 @@ async function emoImport(bytes,fileStemName){
     // racks: untouched fixed modules -> null; otherwise role-0 slot list
     // Each plug's settings come back as params: the tokens that differ from
     // the default preset (same token count only, else the defaults show).
-    let defTok={};try{defTok=await plugDefaultTokens();}catch(_){/* offline: no settings */}
-    const paramsOf=(cc,text)=>{
-      const d=defTok[cc],t=presetTokens(text||"");if(!d||!t||(d.length!==t.length&&!(t.includes("R")&&t.length<=d.length)))return null; // an "R" list may stop early
-      const p={};
-      t.forEach((v,k)=>{const x=puTok(v);if(v==="*"||!isFinite(x)||(d[k]!=="*"&&puTok(d[k])===x))return;p[k]=x;}); // "50*" tokens = 50
+    let defTok={},facTok={};
+    try{defTok=await plugDefaultTokens();facTok=(await plugUiIndex()).factory||{};}catch(_){/* offline: no settings */}
+    const paramsOf=(cc,text,role)=>{
+      const d=defTok[cc],t=presetTokens(text||""),p={};
+      // an untouched fixed module may carry any factory version of its default (the templates mix EMO versions)
+      const fac=role!==0&&t&&(facTok[cc]||[]).some(f=>f.length===t.length&&f.every((x,k)=>x===t[k]));
+      if(!fac&&d&&t&&(d.length===t.length||(t.includes("R")&&t.length<=d.length))) // an "R" list may stop early
+        t.forEach((v,k)=>{const x=puTok(v);if(v==="*"||!isFinite(x)||(d[k]!=="*"&&puTok(d[k])===x))return;p[k]=x;}); // "50*" tokens = 50
+      const ps=presetChunks(text);if(ps)p.ps=ps; // plugin-specific chunks (IR, amp models, curves) come back as-is
       return hasP(p)?p:null;
     };
     const rackRows={};
@@ -14335,7 +14394,7 @@ async function emoImport(bytes,fileStemName){
       "SELECT p.chainer_id, p.slot, p.plugin_name, p.plugin_4cc, p.plug_role, pp.preset FROM plug p "+
       "LEFT JOIN snapshot_plugin sp ON sp.plug_id = p.id AND sp.snapshot_id = -1 "+
       "LEFT JOIN plugin_preset pp ON pp.id = sp.preset_id ORDER BY p.chainer_id, p.slot"))
-      (rackRows[cid]=rackRows[cid]||[]).push([slot,cc2name[cc]||nm,role,paramsOf(cc,text)]);
+      (rackRows[cid]=rackRows[cid]||[]).push([slot,cc2name[cc]||nm,role,paramsOf(cc,text,role)]);
     const rackOf=cid=>{
       const rws=rackRows[cid]||[];
       // Every factory strip carries its fixed modules: none left = emptied rack.
