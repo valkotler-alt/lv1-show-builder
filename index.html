@@ -1838,24 +1838,86 @@ function rackLabel(kind,i){
    Recipe for another plugin: add it to build_plugui.PLUGINS and rebuild;
    only code-drawn parts need code here — custom graph classes (PU_GRAPHS),
    plugin display functions (PU_DISP), L/R twins and hidden-side rules. */
-const _puPacks={};
-function plugUiPack(pack){ // one pack per bundle: <pack>.json + its images in <pack>.bin
+/* A pack = <pack>.json (controls, params, presets, image index) + <pack>.bin (every bitmap of the bundle). A view draws
+   a few % of them (other variants, knob filmstrip frames, Nx room angles: Studio 3 = 100 KB of 47 MB), so images are
+   lazy: pack.img[id] hands out an Image at once; the ids asked for in one go are fetched by HTTP Range (neighbours
+   merged into one request), decoded together, and the window redrawn. A server without Range support (200) sends
+   the whole file once, which then serves every image. */
+const _puPacks={},PU_RANGE_GAP=48*1024,PU_RANGE_MAX=8*2**20;
+function plugUiPack(pack){
   const u=EMO_ROOT+"plugui/"+encodeURIComponent(pack);
-  if(!_puPacks[pack])_puPacks[pack]=Promise.all([
-      fetch(u+".json",{cache:"no-cache"}).then(r=>{if(!r.ok)throw new Error("plugin GUI fetch failed ("+r.status+")");return r.json();}),
-      fetch(u+".bin",{cache:"no-cache"}).then(r=>{if(!r.ok)throw new Error("plugin images fetch failed ("+r.status+")");return r.arrayBuffer();})])
-    .then(async([p,bin])=>{
-      p.img={};
-      await Promise.all(Object.entries(p.imgs).map(([id,[o,l,mime]])=>new Promise(res=>{
-        const im=new Image();im.onload=im.onerror=()=>res();
-        im.src=URL.createObjectURL(new Blob([bin.slice(o,o+l)],{type:mime}));p.img[id]=im;})));
+  if(!_puPacks[pack])_puPacks[pack]=fetch(u+".json",{cache:"no-cache"})
+    .then(r=>{if(!r.ok)throw new Error("plugin GUI fetch failed ("+r.status+")");
+      const lm=r.headers.get("Last-Modified");return r.json().then(p=>(p._lm=lm,p));})
+    .then(p=>{
+      // the image file is versioned by its pack (Last-Modified is readable cross-origin): cached ranges never outlive
+      // a redeploy, whose new pack would point at other offsets; without the header every range revalidates
+      const store={};p._bin={url:u+".bin"+(p._lm?"?v="+encodeURIComponent(p._lm):""),cache:p._lm?"default":"no-cache",store,want:new Set(),queued:false,live:0,full:null,range:undefined};
+      p.img=new Proxy(store,{get(t,id){
+        if(typeof id!=="string"||t[id]||!p.imgs[id])return t[id];
+        t[id]=new Image();p._bin.want.add(id);
+        if(!p._bin.queued){p._bin.queued=true;queueMicrotask(()=>{p._bin.queued=false;puImgFlush(p);});} // one batch per draw
+        return t[id];}});
       return p;
     }).catch(e=>{delete _puPacks[pack];throw e;});
   return _puPacks[pack];
 }
+async function puImgFlush(p){
+  const B=p._bin,ids=[...B.want].sort((a,b)=>p.imgs[a][0]-p.imgs[b][0]);B.want.clear();
+  if(!ids.length)return;
+  const groups=[];
+  for(const id of ids){
+    const [o,l]=p.imgs[id],g=groups[groups.length-1];
+    if(g&&o-g.end<=PU_RANGE_GAP&&o+l-g.start<=PU_RANGE_MAX){g.end=Math.max(g.end,o+l);g.ids.push(id);}
+    else groups.push({start:o,end:o+l,ids:[id]});
+  }
+  const load=async g=>{
+    let buf,base=0;
+    if(B.full)buf=await B.full;
+    else{
+      const r=await fetch(B.url,{headers:{Range:`bytes=${g.start}-${g.end-1}`},cache:B.cache});
+      if(!r.ok)throw new Error("plugin images fetch failed ("+r.status+")");
+      B.range=r.status===206;
+      if(B.range){buf=await r.arrayBuffer();base=g.start;}else{B.full=r.arrayBuffer();buf=await B.full;}
+    }
+    await Promise.all(g.ids.map(id=>new Promise(res=>{const [o,l,mime]=p.imgs[id],im=B.store[id];
+      im.onload=im.onerror=()=>res(); // (img.decode() can stay pending for good in a hidden page)
+      im.src=URL.createObjectURL(new Blob([buf.slice(o-base,o-base+l)],{type:mime}));})));
+  };
+  B.live++;
+  try{
+    if(B.range===undefined&&!B.full)await load(groups.shift()); // the first request tells whether ranges work
+    await Promise.all(groups.map(load));
+  }catch(e){console.warn(e);for(const id of ids)if(!B.store[id].src)delete B.store[id];} // asked again on the next draw
+  finally{B.live--;puRedrawSoon();for(const w of _puImgWaiters.splice(0))w();}
+}
+const _puImgWaiters=[];
+let _puRedraw=0;
+function puRedrawSoon(){if(!_puRedraw)_puRedraw=requestAnimationFrame(()=>{_puRedraw=0;if(PU)puDraw();});}
+/* resolves once no image of the open window is still on its way; a pending redraw is done here (a background tab runs
+   no animation frames), and it may ask for more images */
+async function puImgsReady(ms=15000){
+  const busy=()=>PU&&[PU.pack,...Object.values(PU.kids||{})].some(p=>p&&p._bin&&(p._bin.want.size||p._bin.queued||p._bin.live));
+  for(const t0=performance.now();performance.now()-t0<ms;){
+    if(busy()){await Promise.race([new Promise(r=>_puImgWaiters.push(r)),new Promise(r=>setTimeout(r,2000))]);continue;}
+    if(!_puRedraw)return;
+    cancelAnimationFrame(_puRedraw);_puRedraw=0;if(PU)puDraw();
+    await null; // the draw's batch is queued as a microtask
+  }
+}
+/* a control about to be dragged: fetch every image it can show (its whole filmstrip), unless that is very large */
+function puWarm(ctl){
+  const P=PU.pack,ids=new Set();
+  for(const v of Object.values(ctl.img||{}))ids.add(String(v));
+  for(const i of ctl.cimg||[])if(i.ResID!==undefined)for(let k=0;k<(i.SequenceSteps||1);k++)ids.add(String(i.ResID+k));
+  for(const p of ctl.p||[])for(const v of p.bmp||[])ids.add(String(v));
+  const known=[...ids].filter(id=>P.imgs[id]);
+  if(known.reduce((a,id)=>a+P.imgs[id][1],0)<=4*2**20)for(const id of known)void P.img[id];
+}
 let PU_INDEX=null; // plugui/index.json once loaded (rack rows then show "Edit")
 const puHasGui=name=>!!(PU_INDEX&&PU_INDEX.plugins[name]);
-setTimeout(()=>plugUiIndex().then(ix=>{PU_INDEX=ix;if(rackOpen)render();}).catch(()=>{})); // after the script (EMO_ROOT)
+setTimeout(()=>{plugUiIndex().then(ix=>{PU_INDEX=ix;if(rackOpen)render();}).catch(()=>{});
+  emoDataPack().catch(()=>{});}); // after the script (EMO_ROOT); the .emo data decides a window's variant, so it is ready by the first Edit
 
 /* ---- scales (WavesLib WCParam_Base / sSCALE_INFO): state 0..1000 <-> RealWorld ---- */
 const PU_GRAN=1000;
@@ -2031,6 +2093,7 @@ async function openPlugUi(k,i,x){
   d.addEventListener("click",e=>{if(e.target===d)closePlugUi();});
   document.addEventListener("keydown",puKey,true);
   addEventListener("resize",puFit);
+  await puImgsReady(); // the images this view asked for (lazy pack images) — callers get a fully drawn window
   setStatus("");
 }
 function closePlugUi(){
@@ -2422,6 +2485,7 @@ function puDown(e){
     for(const p of hit.marker.ctl.p){const q=puQ(p.n);if(q)PU.drag.st[p.n]=puState(q,puVal(p.n));}
   }else{
     const {ctl,p,all}=hit,q=puQ(p.n);
+    puWarm(ctl);
     if(e.altKey&&p.reg.includes("OptionReset")){puEdit(all,puDefault(p.n));return;}
     const kd=puKind(ctl),fs=puFixedSt(ctl,p);
     if(kd==="radio"){puEdit(all,puRW(q,hit.div));return;}
