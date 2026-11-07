@@ -2088,6 +2088,7 @@ function puSetOne(n,v){ // sets one param (+ its linked twin), no redraw
 /* names = every param the control drives (e.g. Q4 mono's ganged OUT_GAIN_L/R) */
 function puEdit(names,v){
   if(puViewOnly())return;
+  if(puGraph("edit")?.(names,v))return; // the plugin's own reaction to the param (e.g. Atlas program steps), committed by the hook
   const own=PU.ps&&puGraph("psOwns"); // a param the chunks set on load (e.g. GTR's amp model): editing it drops them
   if(own&&names.some(own))PU.ps=null;
   for(const n of names)puSetOne(n,v);puCommit();
@@ -2187,12 +2188,61 @@ function puDrawArc(ctl){
   for(let i=n-1;i>=0;i--)c.lineTo(...pt(st+i,-A.t/2));
   c.closePath();c.fillStyle=c.strokeStyle=`rgba(${r},${g},${b},${a/255})`;c.lineWidth=1;c.fill();c.stroke();
 }
+/* Marker dependents (CMarker_X, X_CMarker.cpp :500-538 / :405-470): a marker with MarkerMovesDependents moves the
+   controls of its DependentsList so each is centred on the marker centre + Offset ((short)(c + o - size/2 + .5));
+   a group whose union leaves the marker's bounds (its ControlRect) takes the edge's offsets + Shift, or — StickToBound —
+   is pushed back inside on that axis. A hidden marker hides its dependents (CMarker_X::Hide). Returns those. */
+function puMoveCtl(c,x,y){ // WCGUIControl::Move: the control and everything placed with it (value windows, areas)
+  if(!c._mv0)c._mv0={r:[...c.r],t:(c.p||[]).map(p=>p.text&&[...p.text.r]),a:["dda","tma","bgr","bda","area"].map(k=>c[k]&&[...c[k]])};
+  const R=c._mv0,dx=x-R.r[0],dy=y-R.r[1],sh=v=>v&&[v[0]+dx,v[1]+dy,v[2],v[3]];
+  c.r=[x,y,R.r[2],R.r[3]];
+  (c.p||[]).forEach((p,i)=>{if(p.text&&R.t[i])p.text.r=sh(R.t[i]);});
+  ["dda","tma","bgr","bda","area"].forEach((k,i)=>{if(R.a[i])c[k]=sh(R.a[i]);});
+}
+function puPlaceDeps(){
+  const off=new Set(),by=PU.ctrls._byName||(PU.ctrls._byName=new Map(PU.ctrls.map(c=>[c.n,c]).reverse()));
+  for(const m of PU.ctrls){
+    // CNRGraphXover (Curves) overrides the placement (CNRGraphXover.cpp :418): band controls between the crossovers —
+    // placed by the Curves port (curvesLayout) — and only the hovered band's "Moved" group on the crossover
+    if(!m.deps||!m.r||puKind(m)!=="marker"||m.cls==="CNRGraphXover")continue;
+    const deps=m.deps.map(d=>[d,by.get(d.n)]).filter(([,c])=>c&&c.r);
+    if(!puShown(m)||m.r[0]<-999){deps.forEach(([,c])=>off.add(c));continue;}
+    const [cx,cy]=puMarkerPos(m),[bl,bt,bw,bh]=m.r,place=(c,ox,oy,sx=0,sy=0)=>
+      puMoveCtl(c,Math.trunc(cx+ox-c.r[2]*.5+.5+sx),Math.trunc(cy+oy-c.r[3]*.5+.5+sy));
+    const groups=new Map();for(const e of deps)(groups.get(e[0].g)||groups.set(e[0].g,[]).get(e[0].g)).push(e);
+    for(const G of groups.values()){
+      for(const [d,c] of G)place(c,d.o[0],d.o[1]);
+      const hb=G.reduce((u,[,c])=>[Math.min(u[0],c.r[0]),Math.min(u[1],c.r[1]),Math.max(u[2],c.r[0]+c.r[2]),Math.max(u[3],c.r[1]+c.r[3])],[1e9,1e9,-1e9,-1e9]);
+      if(hb[0]>=bl&&hb[1]>=bt&&hb[2]<=bl+bw&&hb[3]<=bt+bh)continue; // RectInRect
+      for(const [d,c] of G){
+        let [ox,oy]=d.o,sx=0,sy=0,dx=0,dy=0;const [stx,sty]=d.st||[0,0],[shx,shy]=d.sh||[0,0];
+        const edge=(k,s1,s2)=>{const e=d[k]||[null,null];ox=e[0]??d.o[0];oy=e[1]??d.o[1];sx=s1;sy=s2;};
+        if(bl+bw<=hb[2]){if(stx)dx=hb[2]-(bl+bw);else edge("r",-shx,sy);}
+        else if(bl>=hb[0]){if(stx)dx=hb[0]-bl;else edge("l",shx,sy);}
+        if(bt>=hb[1]){if(sty)dy=hb[1]-bt;else edge("t",sx,shy);}
+        else if(bt+bh<=hb[3]){if(sty)dy=hb[3]-(bt+bh);else edge("b",sx,-shy);}
+        const nx=stx?c.r[0]-dx:Math.trunc(cx+ox-c.r[2]*.5+.5+sx),ny=sty?c.r[1]-dy:Math.trunc(cy+oy-c.r[3]*.5+.5+sy);
+        puMoveCtl(c,nx,ny);
+      }
+    }
+  }
+  return off;
+}
+/* A control without a ControlRect has an empty drawable rect at 0,0 (WCGUIControl), yet draws what has its own
+   absolute rect: a DigitDisplay's DigitDrawArea (X_CDigitDisplay draws at it, offset by the empty rect's 0,0) and a
+   popup's TextWin (its value text; the click lands there too) — e.g. Atlas Reverb's program names / menus. */
+function puPlaced(c){
+  if(c.r)return true;
+  const tr=/Popup/.test(c.cls||"")&&((c.p||[]).find(p=>p.text&&p.text.r)||{}).text;
+  return !!(c.r=c.digits&&c.dda||tr&&tr.r||null);
+}
 function puImg(id,x,y){const im=id!==undefined&&PU.pack.img[id];if(im&&im.naturalWidth)PU.ctx.drawImage(im,x,y);return im;}
 function puDraw(){
   const P=PU,c=P.ctx;c.clearRect(0,0,P.w,P.h);
   const bh=puGraph("base"),bk=bh?bh():0,bv=bk>0&&((P.pack.basev||{})[P.cc]||[])[bk-1]; // SetCurrentBasePictVec (0 = Pict_List)
   for(const [id,l,t] of (bv||P.pack.bases[P.cc]))puImg(id,l,t);
-  puVisibility();P.markers=[];P.shown=puStackPick(P.ctrls.filter(c=>c.r&&puShown(c))); // a control without a ControlRect is not drawn
+  puVisibility();const depOff=puPlaceDeps();P.markers=[];
+  P.shown=puStackPick(P.ctrls.filter(c=>puPlaced(c)&&puShown(c)&&!depOff.has(c))); // a control with nothing to place it by is not drawn
   for(const ctl of P.shown){
     const [l,t,w,h]=ctl.r,p0=ctl.p[0],q=p0&&puQ(p0.n),v=p0?puVal(p0.n):null;
     const kind=puKind(ctl);
@@ -2291,9 +2341,11 @@ function puDrawChild(kid,cc,x,y,w,h){
 function puDrawText(pp,tw,str){ // a param's Value TextWin (or tw + fixed text: its Label)
   const q=puQ(pp.n),v=puVal(pp.n);if(!q||(v===null&&str===undefined))return;
   const t=tw||pp.text,[l,tt,w,h]=t.r,c=PU.ctx;
+  if(t.hid)return; // a <Hidden/> TextWin: only text entry uses it (the plugin shows the value another way, e.g. glyphs)
   if(t.erase)puImg(t.erase,l,tt);
   c.font=`${t.size||14}px ${t.font||"Calibri"},Arial,sans-serif`; // engine default: Calibri 14 (Windows)
-  c.fillStyle=t.color?`rgb(${t.color.join(",")})`:"#000";
+  if(t.color&&t.color[3]===0)return; // transparent text (WCTextObject honours the alpha)
+  c.fillStyle=t.color?(t.color.length>3?`rgba(${t.color.slice(0,3).join(",")},${t.color[3]/255})`:`rgb(${t.color.join(",")})`):"#000";
   c.textAlign="center";c.textBaseline="middle";
   c.fillText(str!==undefined?str:puText(q,v),l+w/2,tt+h/2+1);
 }
@@ -2422,6 +2474,7 @@ function puMenu(ctl,p,all){
   document.querySelector(".pumenu")?.remove();
   const q=puQ(p.n),cur=puIdx(q,puVal(p.n));
   let items=ctl.menu&&!ctl.menuParam?ctl.menu:null;
+  if(!items)items=puGraph("menu")?.(p.n)||null; // a plugin-built menu (CreateMenuWithAlg): [[text, state, 0, []], ...]
   if(!items){const n=puIsTog(q)?puStates(q):0;if(!n)return;items=Array.from({length:n},(_,k)=>[puText(q,puRW(q,k)),k,0,[]]);}
   const b=PU.cv.getBoundingClientRect(),s=b.width/PU.w;
   const m=document.createElement("div");m.className="pumenu";
@@ -2584,7 +2637,7 @@ const puTok=t=>+String(t).replace(",",".").replace(/\*$/,""); // a value token; 
 function puApplyTokens(tokens){
   if(puViewOnly())return;
   tokens.forEach((t,j)=>{
-    const q=PU.P[j];if(!q||q.ro||t==="*")return;
+    const q=PU.P[j];if(!q||q.ro||t==="*"||j>=PU.defs.length)return; // past the default preset's list: the .emo cannot carry it
     const v=t==="R"?PU.defs[j]:puTok(t);
     if(v!==null&&isFinite(v))PU.vals[j]=v; // as stored (the engine does not re-quantize preset values)
   });
@@ -9855,6 +9908,82 @@ PU_GRAPHS["X-FDBK:groups"]=()=>{
   const n=Math.round(+puVal("PARAM_NUM_OF_ACTIVE_FILTERS")||0);
   return {hideCtrls:PU.ctrls.filter(c=>{const m=/^LineMarker(\d+)$/.exec(c.n);return m&&+m[1]>=n;}).map(c=>c.n)};
 };
+
+/* Atlas Reverb programs — Plugins/Renaissance/Reverb/Code/Plugin/ReverbAlg.cpp. The top window browses the plugin's
+   own program list (m_vInternalPresets = Presets/1001.xml; the pack marks each program's factory twin with "prog" =
+   the program's token count, see build_plugui INTERNAL_PRESETS):
+   - groups = m_mapPresetGroupFolderNames (CreateSetPresetGroupFolder :6459), a std::map keyed by the program's
+     <Group> -> sorted by name; PARAM_GROUP_PRESET_MENU = the group's index, shown as its name (:5586);
+   - PARAM_PRESET_MENU_IN_GROUP = the program's index inside its group in file order, shown as its name
+     (UpdateParamPresetFromGroupByIndex :6483);
+   - picking a group (menu or Prev / Next, wrapping) selects its first program; Prev / Next of the program wrap inside
+     the group (UpdateAlgSelf :4390-4453, OnSelectFromMenuWithAlg :6425);
+   - LoadReverbPreset (:6575) loads the program over every param except kInternalParams (ReverbAlg.h:181: the two
+     menus, Mix, Input Gain, the Ducker) and its "*" tokens.
+   Not ported: SetResetValueFromInternalPreset (Alt+click default of Decay / Density / Size / Mod Depth becomes the
+   program's value) — the page's defaults are the .emo default preset the slot's edits are stored against. */
+const atlasProgInternal = ["PARAM_GROUP_PRESET_MENU", "PARAM_PRESET_MENU_IN_GROUP", "PARAM_WET_DRY", "PARAM_DUCKER_ATT",
+  "PARAM_DUCKER_REL", "PARAM_DUCKER_THRESH", "PARAM_DUCKER_RANGE", "PARAM_INPUT_GAIN", "PARAM_DUCKER_ON"];
+function atlasProgs() { // {names: [group...], items: {group: [preset...]}} (cached per pack)
+  const pk = PU.pack;
+  if (!pk._atlasProgs) {
+    const items = {};
+    for (const p of pk.presets) if (p.prog) (items[p.group] = items[p.group] || []).push(p);
+    pk._atlasProgs = { names: Object.keys(items).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)), items };
+  }
+  return pk._atlasProgs;
+}
+const atlasProgGroup = () => {
+  const L = atlasProgs(), g = Math.round(puVal("PARAM_GROUP_PRESET_MENU") || 0);
+  return L.names[g] === undefined ? null : L.names[g];
+};
+function atlasProgLoad(g, k) {
+  const L = atlasProgs(), name = L.names[g], list = name !== undefined ? L.items[name] : null, p = list && list[k];
+  if (!p) return;
+  PU.vals[PU.pIdx.PARAM_GROUP_PRESET_MENU] = g;
+  PU.vals[PU.pIdx.PARAM_PRESET_MENU_IN_GROUP] = k;
+  const skip = new Set(atlasProgInternal.map(n => PU.pIdx[n]));
+  puApplyTokens(p.values.slice(0, p.prog).map((t, j) => (skip.has(j) ? "*" : t))); // commits
+}
+PU_DISP["Atlas Reverb:DisplayTheSame"] = (v, q) => {
+  if (!q) return "";
+  const L = atlasProgs(), k = Math.round(v);
+  if (q.n === "PARAM_GROUP_PRESET_MENU") return L.names[k] || "";
+  if (q.n === "PARAM_PRESET_MENU_IN_GROUP") { const g = atlasProgGroup(), p = g !== null && L.items[g][k]; return p ? p.name : ""; }
+  return "";
+};
+PU_GRAPHS["Atlas Reverb:menu"] = n => {
+  const L = atlasProgs();
+  if (n === "PARAM_GROUP_PRESET_MENU") return L.names.map((g, i) => [g, i, 0, []]);
+  if (n === "PARAM_PRESET_MENU_IN_GROUP") { const g = atlasProgGroup(); return g === null ? null : L.items[g].map((p, i) => [p.name, i, 0, []]); }
+  return null;
+};
+PU_GRAPHS["Atlas Reverb:edit"] = (names, v) => {
+  const n = names[0], L = atlasProgs();
+  if (!L.names.length) return false; // HasProgramList
+  const g = Math.round(puVal("PARAM_GROUP_PRESET_MENU") || 0), k = Math.round(puVal("PARAM_PRESET_MENU_IN_GROUP") || 0);
+  const ng = L.names.length, nk = (L.items[L.names[g]] || []).length;
+  const wrap = (x, m) => (x < 0 ? m - 1 : x >= m ? 0 : x);
+  if (n === "PARAM_GROUP_PRESET_MENU") atlasProgLoad(Math.min(ng - 1, Math.max(0, Math.round(v))), 0);
+  else if (n === "PARAM_PRESET_MENU_IN_GROUP") atlasProgLoad(g, Math.min(nk - 1, Math.max(0, Math.round(v))));
+  else if (n === "PARAM_GROUP_PRESET_NEXT" || n === "PARAM_GROUP_PRESET_PREV")
+    atlasProgLoad(wrap(g + (n.endsWith("NEXT") ? 1 : -1), ng), 0);
+  else if (n === "PARAM_PRESET_IN_GROUP_NEXT" || n === "PARAM_PRESET_IN_GROUP_PREV")
+    atlasProgLoad(g, wrap(k + (n.endsWith("NEXT") ? 1 : -1), nk));
+  else return false;
+  return true;
+};
+
+/* Vocal Bender: VocalBenderAlgT.cpp UpdateAlgSelf (:3181-3199) disables the lab params with the constant
+   bHideLabParamsOnGUI = 1 (VocalBenderConsts.h:9: "1=Hide Lab params"); their DefaultDraw controls are HideWhenDisabled. */
+const vbLabParams = new Set(["PARAM_MONITOR_0", "PARAM_CORRECTION_TC_PITCH_MS", "PARAM_CORRECTION_TC_FORMANT_MS",
+  "PARAM_EMPHASIS_EQ_PRE_STATE", "PARAM_EMPHASIS_EQ_PRE_GAIN", "PARAM_EMPHASIS_EQ_PRE_FREQ", "PARAM_MIN_VOICED_DETECT_HZ",
+  "PARAM_MAX_VOICED_DETECT_HZ", "PARAM_OLA_EXTREMA_DPLL_GAIN", "PARAM_ENV_INP_ATT_TC_MS", "PARAM_ENV_INP_REL_TC_MS",
+  "PARAM_ENV_OUT_ATT_TC_MS", "PARAM_ENV_OUT_REL_TC_MS", "PARAM_ENV_OUT_GAIN", "PARAM_SHRINK_PSOLA_WINDOW",
+  "PARAM_WATCH_VARS_FOR_EXPORT"]);
+PU_GRAPHS["Vocal Bender:groups"] = () => ({
+  hideCtrls: PU.ctrls.filter(c => (c.fl || []).includes("HideWhenDisabled") && (c.p || []).some(p => vbLabParams.has(p.n))).map(c => c.n)
+});
 /* ==== end of plugin graph modules ==== */
 function renderMaster(){
   const r=state.master.rack;
