@@ -677,6 +677,7 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
 .slotrow .pugui{margin-left:auto;}
 .slotrow .pugui+.nudge{margin-left:4px;}
 .slotrow.edited .sname::after{content:" ✎";color:var(--accent);}
+.slotrow .pustate{font-size:10px;color:var(--warn-fg);letter-spacing:.04em;}
 #puWin{position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:12px;}
 #puWin .pubox{background:#1a1a1a;border:1px solid #3a3a3a;border-radius:8px;box-shadow:0 12px 50px rgba(0,0,0,.6);display:flex;flex-direction:column;max-width:100%;}
 #puWin .puhead{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid #333;color:#ddd;font-size:13px;}
@@ -1617,6 +1618,9 @@ function applyConfig(){
     if(o.hasOwnProperty("out")){const v=o.out;delete o.out;if(o.outs===undefined||o.outs===null)setOutPick(kind,o,v===null||v===undefined?"":String(v));}
   if(!Array.isArray(state.links))state.links=[];
   while(state.links.length<LINK_COUNT)state.links.push("");state.links.length=LINK_COUNT;
+  // spec v14: each link (DCA) strip's color, null = LV1 default
+  if(!Array.isArray(state.linkColors))state.linkColors=[];
+  while(state.linkColors.length<LINK_COUNT)state.linkColors.push(null);state.linkColors.length=LINK_COUNT;
   for(const ch of state.channels)if(ch.link==="None")ch.link="";
   // Custom layers: always 8 x 16 slots (null or [kind, name]).
   if(!Array.isArray(state.layers))state.layers=[];
@@ -1760,8 +1764,27 @@ const STOCK_SLOTS=["EMO-F2","EMO-D5","EMO-Q4"];
 const RACK_SIZE=8;
 const STOCK_RACK=()=>({slots:[...STOCK_SLOTS]});
 /* rack.params (spec v12): per-slot plugin settings parallel to slots, each
-   null or {"<param index>": RealWorld value} over the plugin's default preset. */
+   null or {"<param index>": RealWorld value} over the plugin's default preset.
+   Other keys (P_META): ps = the active setup's plugin-specific chunks (v13); and from an imported .emo (v14)
+   pre = the slot's preset text exactly as LV1 stored it (settings that can't be written as edits over the
+   default: other plugin versions' layouts) — the base the edits go over; role = its LV1 plug_role when not 0
+   (an EMO module's own role, a channel strip standing in for the modules); off = disabled; byp = bypassed;
+   cc = its LV1 variant when not the one the strip format picks (e.g. a mono-to-stereo X).
+   rack.slots may hold null = an empty slot (LV1 racks keep gaps). */
 const hasP=p=>!!p&&Object.keys(p).length>0;
+const P_META=["ps","pre","role","off","byp","cc"];
+// the variant a slot is written as: its own LV1 variant (p.cc) while it fits the strip (mono: M, stereo: S; the
+// mono-to-stereo X sits on both in real shows), else stereo S > X > M, mono M > X > S. Mirrors
+// make_lv1_session.resolve_cc (keep in sync).
+const slotCc=(v,stereo,want)=>want&&(want===v.x||want===(stereo?v.s:v.m))?want:(stereo?(v.s||v.x||v.m):(v.m||v.x||v.s));
+const pNums=p=>Object.keys(p||{}).filter(k=>!P_META.includes(k));
+const pEdited=p=>!!p&&(pNums(p).length>0||!!p.ps||!!p.pre); // settings, not just the slot's LV1 role / state
+const presetSubComp=t=>(/<PluginSubComp>(\w+)</.exec(t||"")||[])[1]||"";
+function rackTrim(r){ // no trailing empty slots
+  const ps=rackParams(r);
+  while(r.slots.length&&!r.slots[r.slots.length-1]){r.slots.pop();ps.pop();}
+  return r;
+}
 const rackHasParams=r=>!!r&&(r.params||[]).some(hasP);
 function rackParams(r){ // keep params as long as slots
   r.params=(r.params||[]).slice(0,r.slots.length);
@@ -1773,11 +1796,12 @@ function rackHolder(k,i){return k==="mst"?state.master:(listFor[k]()[i]);}
 function rackSummary(r){
   if(isStock(r))return"stock";
   if(r.slots.length===STOCK_SLOTS.length&&r.slots.every((n,x)=>n===STOCK_SLOTS[x]))return"stock ✎";
-  return r.slots.length+" plugin"+(r.slots.length===1?"":"s");
+  const n=r.slots.filter(Boolean).length;
+  return n+" plugin"+(n===1?"":"s");
 }
 function rackCell(kind,i,r){
   const open=rackOpen===kind+"-"+i;
-  const title=r&&r.slots&&r.slots.length?r.slots.join(" → "):"LV1 stock rack: EMO-F2 → EMO-D5 → EMO-Q4";
+  const title=r&&r.slots&&r.slots.length?r.slots.map(n=>n||"—").join(" → "):"LV1 stock rack: EMO-F2 → EMO-D5 → EMO-Q4";
   return `<td><button class="rackbtn small ${isStock(r)?"":"custom"}" data-k="${kind}" data-i="${i}" data-f="rack" title="${esc(title)}">${open?"▾ ":""}${esc(rackSummary(r))}</button></td>`;
 }
 function rackRow(kind,i,r,colspan,stereo){
@@ -1786,22 +1810,22 @@ function rackRow(kind,i,r,colspan,stereo){
   const need=stereo?/[SX]/:/[MX]/;
   const avail=PLUGINS.filter(([,f])=>need.test(f));
   const cats=[...new Set(avail.map(p=>p[2]||"Other"))].sort();
-  const plugRow=(x)=>`<div class="slotrow ins${hasP((r.params||[])[x])?" edited":""}" draggable="true" data-k="${kind}" data-i="${i}" data-x="${x}" title="Drag to reorder">
-      <span class="sno">${x+1}</span><span class="grip">⋮⋮</span><span class="sname">${esc(r.slots[x])}</span>
+  const plugRow=(x)=>{const q=(r.params||[])[x]||{};return `<div class="slotrow ins${pEdited(q)?" edited":""}" draggable="true" data-k="${kind}" data-i="${i}" data-x="${x}" title="Drag to reorder">
+      <span class="sno">${x+1}</span><span class="grip">⋮⋮</span><span class="sname">${esc(r.slots[x])}${q.off?' <small class="pustate">off</small>':q.byp?' <small class="pustate">bypassed</small>':""}</span>
       ${puHasGui(r.slots[x])?`<button class="small pugui" data-k="${kind}" data-i="${i}" data-f="rkGui" data-n="${x}" title="Open ${esc(r.slots[x])} — see and change its settings, load / save presets">Edit</button>`:""}
-      <button class="small nudge danger" data-k="${kind}" data-i="${i}" data-f="rkDel" data-n="${x}" title="Remove plugin">✕</button></div>`;
-  const addRow=(slot)=>`<div class="slotrow add" data-k="${kind}" data-i="${i}">
+      <button class="small nudge danger" data-k="${kind}" data-i="${i}" data-f="rkDel" data-n="${x}" title="Remove plugin (its slot stays empty)">✕</button></div>`;};
+  const addRow=(slot)=>`<div class="slotrow add" data-k="${kind}" data-i="${i}" data-x="${slot}">
       <span class="sno">${slot+1}</span>
       <div class="addwrap"><select class="rkcat" data-k="${kind}" data-i="${i}" data-f="rkCat" title="Plugin category (LV1 groups)" tabindex="-1">
           <option value="">All</option>${cats.map(c=>`<option>${esc(c)}</option>`).join("")}</select>
         <input placeholder="＋ search plugin…" data-k="${kind}" data-i="${i}" data-f="rkSearch" autocomplete="off">
         <div class="plist">${avail.map(([n,f,c])=>`<button class="pitem" data-k="${kind}" data-i="${i}" data-f="rkPick" data-n="${esc(n)}" data-c="${esc(c||"Other")}" tabindex="-1"><span>${esc(n)}</span><span class="fmt">${f}</span></button>`).join("")}</div>
       </div></div>`;
-  const rows=[];
+  const rows=[],free=r.slots.findIndex(n=>!n),add=free<0?r.slots.length:free; // the picker sits in the first empty slot
   for(let s=0;s<RACK_SIZE;s++){
-    if(s<r.slots.length)rows.push(plugRow(s));
-    else if(s===r.slots.length)rows.push(addRow(s));
-    else rows.push(`<div class="slotrow empty"><span class="sno">${s+1}</span><span class="sname">—</span></div>`);
+    if(r.slots[s])rows.push(plugRow(s));
+    else if(s===add)rows.push(addRow(s));
+    else rows.push(`<div class="slotrow empty" data-k="${kind}" data-i="${i}" data-x="${s}"><span class="sno">${s+1}</span><span class="sname">—</span></div>`);
   }
   return `<tr class="rackrow"><td colspan="${colspan}"><div class="rackv">
     <div class="rackhead"><span class="rlab">${esc(rackLabel(kind,i))} · ${stereo?"stereo":"mono"} rack</span>
@@ -1809,8 +1833,8 @@ function rackRow(kind,i,r,colspan,stereo){
         <button class="small" data-k="${kind}" data-i="${i}" data-f="rkCopy" title="Copy this rack's plugin list">Copy</button>
         ${(()=>{const n=rackPasteTargets(kind,i).length;
           return `<button class="small" data-k="${kind}" data-i="${i}" data-f="rkPaste"${rackClip?"":" disabled"}
-          title="${rackClip?esc("Replace "+(n>1?`the racks of the ${n} selected strips`:"this rack")+" with: "+(rackClip.slots.join(" → ")||"(empty)")+" — copied from "+rackClip.from):"Copy a rack first"}">Paste${n>1?` → ${n} selected`:""}</button>`;})()}
-        <button class="small danger" data-k="${kind}" data-i="${i}" data-f="rkClear"${r.slots.length?"":" disabled"} title="Remove every plugin from this rack">Remove all</button>
+          title="${rackClip?esc("Replace "+(n>1?`the racks of the ${n} selected strips`:"this rack")+" with: "+(rackClip.slots.map(n=>n||"—").join(" → ")||"(empty)")+" — copied from "+rackClip.from):"Copy a rack first"}">Paste${n>1?` → ${n} selected`:""}</button>`;})()}
+        <button class="small danger" data-k="${kind}" data-i="${i}" data-f="rkClear"${r.slots.some(Boolean)?"":" disabled"} title="Remove every plugin from this rack">Remove all</button>
         <button class="small" data-k="${kind}" data-i="${i}" data-f="rkReset">Reset to stock</button>
       </span></div>
     <div class="slots">${rows.join("")}</div>
@@ -2038,8 +2062,7 @@ async function openPlugUi(k,i,x){
   try{ix=await plugUiIndex();[pack,emo]=await Promise.all([plugUiPack(ix.plugins[name]),emoDataPack()]);}
   catch(e){setStatus("Could not load the "+name+" GUI: "+e.message,true);return;}
   const st=holderStereo(k,h),v=emo.ccs[name]||{};
-  // the variant the .emo export writes (resolveCc): stereo S > X > M, mono M > X > S
-  const cc=(st?(v.s||v.x||v.m):(v.m||v.x||v.s))||pack.ccs[0];
+  const cc=slotCc(v,st,((r.params||[])[x]||{}).cc)||pack.ccs[0]; // the variant the .emo export writes
   const P=pack.params[cc],noedit=!ix.defaults[cc];
   // view-only variants (default preset without RealWorld values) show the ParamXML initial values
   // ParamXML value of a param: ResetValue, else InitialValue (engine conversion) -- also what an "R" token means
@@ -2049,9 +2072,12 @@ async function openPlugUi(k,i,x){
       return iv[0]==="state"?puRW(q,iv[1]):iv[0]==="double"?puRW(q,iv[1]*PU_GRAN):iv[1];})
     :ix.defaults[cc].map((t,j)=>t==="*"?null:t==="R"?(P[j]?iniv(P[j]):null):puTok(t));
   const p=(r.params||[])[x]||{};
+  // v14: an imported slot's own preset (same variant) is the base its values start from and edits go over
+  const preT=p.pre&&presetSubComp(p.pre)===cc?presetTokens(p.pre):null;
+  const base=preT?defs.map((d,j)=>{const t=preT[j];return t===undefined?d:t==="*"?null:t==="R"?(P[j]?iniv(P[j]):null):puTok(t);}):defs;
   closePlugUi();
-  PU={k,i,x,name,cc,pack,P,noedit,pIdx:Object.fromEntries(P.map((q,j)=>[q.n,j])),defs,
-    vals:defs.map((d,j)=>j in p?+p[j]:d),ps:p.ps||null,head:(ix.head||{})[cc],ctrls:pack.controls[cc],drag:null};
+  PU={k,i,x,name,cc,pack,P,noedit,pIdx:Object.fromEntries(P.map((q,j)=>[q.n,j])),defs,base,pre:preT?p.pre:null,
+    vals:base.map((d,j)=>j in p?+p[j]:d),ps:p.ps||null,head:(ix.head||{})[cc],ctrls:pack.controls[cc],drag:null};
   // suite chainers: the child plugins docked in fixed slots (their own packs; view only)
   PU.kids={};
   for(const sp of [...new Set(PU.ctrls.flatMap(c=>(c.slots||[]).map(s=>s.pack)).filter(Boolean))])
@@ -2082,7 +2108,7 @@ async function openPlugUi(k,i,x){
   PU.cv.addEventListener("pointermove",puHover);
   PU.cv.addEventListener("wheel",puWheel,{passive:false});
   d.querySelector("#puClose").onclick=closePlugUi;
-  d.querySelector("#puReset").onclick=()=>{PU.vals=[...PU.defs];PU.preset=null;PU.ps=null;puCommit();setStatus(name+" reset to its default settings.");};
+  d.querySelector("#puReset").onclick=()=>{PU.vals=[...PU.defs];PU.preset=null;PU.ps=null;PU.pre=null;puCommit();setStatus(name+" reset to its default settings.");};
   d.querySelector("#puSave").onclick=puSaveUser;
   d.querySelector("#puXpsOut").onclick=puXpsOut;
   d.querySelector("#puXpsIn").onclick=puXpsIn;
@@ -2122,15 +2148,18 @@ function puFit(){
 function puCommit(){
   const h=rackHolder(PU.k,PU.i);if(!h)return closePlugUi();
   if(!h.rack)h.rack=STOCK_RACK();
-  const ps=rackParams(h.rack),p={};
-  PU.vals.forEach((v,j)=>{const q=PU.P[j];if(v!==null&&v!==PU.defs[j]&&!(q&&q.ro))p[j]=v;});
+  const ps=rackParams(h.rack),p={},old=ps[PU.x]||{};
+  const base=PU.pre?PU.base:PU.defs; // edits are written over the slot's own preset when it has one
+  PU.vals.forEach((v,j)=>{const q=PU.P[j];if(v!==null&&v!==base[j]&&!(q&&q.ro))p[j]=v;});
   if(PU.ps)p.ps=PU.ps;
+  if(PU.pre)p.pre=PU.pre;
+  for(const k of ["role","off","byp","cc"])if(old[k])p[k]=old[k]; // the slot's LV1 state is not a setting of the window
   ps[PU.x]=hasP(p)?p:null;
   puDraw();puPresetLabel();
   const btn=document.querySelector(`.rackbtn[data-k="${PU.k}"][data-i="${PU.i}"]`);
   if(btn)btn.textContent="▾ "+rackSummary(h.rack);
   const row=document.querySelector(`.slotrow.ins[data-k="${PU.k}"][data-i="${PU.i}"][data-x="${PU.x}"]`);
-  if(row)row.classList.toggle("edited",!!ps[PU.x]);
+  if(row)row.classList.toggle("edited",pEdited(ps[PU.x]));
 }
 /* Stereo link (F2 LINK, Q4 L+R): an edit moves the other side's twin by the
    same state amount (an existing offset is kept). */
@@ -2624,13 +2653,16 @@ function puPresetLabel(){
   const b=$("#puPresetBtn");if(!b||!PU)return;
   const cur=PU.preset,mod=!!(cur&&PU.presetVals)&&PU.vals.some((v,j)=>v!==PU.presetVals[j]);
   const h=rackHolder(PU.k,PU.i),p=h&&h.rack&&(h.rack.params||[])[PU.x];
-  b.textContent=(cur?cur.name+(mod?" *":""):hasP(p)?"Custom":"Default")+" ▾";
+  // an imported slot's own preset: the name LV1 stored with it ("*" once edited here)
+  const preName=PU.pre&&!cur?((/<Preset Name="([^"]*)"/.exec(PU.pre)||[])[1]||"Session settings")+(PU.vals.some((v,j)=>v!==PU.base[j])?" *":""):"";
+  b.textContent=(cur?cur.name+(mod?" *":""):preName||(p&&(pNums(p).length||p.ps)?"Custom":"Default"))+" ▾";
   b.title=cur?`${cur.src==="f"?"Factory":"User"} preset${cur.group?" · "+puGroupPath(cur.group).join(" › "):""}${mod?" — changed since loaded":""} · click to browse / search`:"Presets — browse categories or search";
 }
 function puLoadPreset(src,i){
   const p=puPresetList()[src].find(x=>x.i===i);if(!p||puViewOnly())return;
   PU.preset={src,i,name:p.name,group:p.group};PU.presetVals=null;
   PU.ps=p.ps||null; // the preset's plugin-specific chunks travel with the slot into the .emo
+  PU.pre=null; // a loaded preset replaces an imported slot's own preset
   puApplyTokens(p.values);
   PU.presetVals=[...PU.vals];
   puPresetLabel();setStatus(`${PU.name}: preset “${p.name}” loaded.`);
@@ -10321,6 +10353,7 @@ function renderWarnings(){
     if(!isNamed){unnamedRacks.push(label);continue;}
     const need=stereo?/[SX]/:/[MX]/;
     for(const n of r.slots){
+      if(!n)continue;
       const f=PLUGIN_FMT.get(n);
       if(!f)unknown.add(n);
       else if(!need.test(f))mismatch.add(`${n} on ${label} (${stereo?"stereo":"mono"})`);
@@ -11135,7 +11168,7 @@ document.addEventListener("click",e=>{
     if(f==="rkCopy"){
       const src=h.rack||STOCK_RACK();
       rackClip={slots:[...src.slots],params:rackParams(src).map(p=>hasP(p)?{...p}:null),from:rackLabel(k,i)};
-      render();setStatus(`Rack of ${rackClip.from} copied (${rackClip.slots.length} plugin${rackClip.slots.length===1?"":"s"}) — open a rack and press Paste (on a selected strip: pastes to every selected strip).`);
+      render();setStatus(`Rack of ${rackClip.from} copied (${rackClip.slots.filter(Boolean).length} plugin${rackClip.slots.filter(Boolean).length===1?"":"s"}) — open a rack and press Paste (on a selected strip: pastes to every selected strip).`);
       return;
     }
     if(f==="rkPaste"){
@@ -11144,9 +11177,9 @@ document.addEventListener("click",e=>{
       for(const j of tg){
         const o=rackHolder(k,j);if(!o)continue;
         const st=holderStereo(k,o);
-        const keep=rackClip.slots.map(n=>rackFits(n,st)||(skipped.add(`${n} (${st?"stereo":"mono"})`),false));
-        o.rack={slots:rackClip.slots.filter((_,x)=>keep[x]),
-          params:rackClip.params.filter((_,x)=>keep[x]).map(p=>p&&{...p})};
+        const keep=rackClip.slots.map(n=>!n||rackFits(n,st)||(skipped.add(`${n} (${st?"stereo":"mono"})`),false));
+        o.rack=rackTrim({slots:rackClip.slots.map((n,x)=>keep[x]?n:null),
+          params:rackClip.params.map((p,x)=>keep[x]&&p?{...p}:null)});
       }
       render();
       setStatus(`Rack of ${rackClip.from} pasted to ${tg.length===1?rackLabel(k,tg[0]):tg.length+" strips"}`
@@ -11155,7 +11188,7 @@ document.addEventListener("click",e=>{
     }
     if(!h.rack)h.rack=STOCK_RACK();
     const n=+t.dataset.n;
-    rackParams(h.rack).splice(n,1);h.rack.slots.splice(n,1);
+    rackParams(h.rack)[n]=null;h.rack.slots[n]=null;rackTrim(h.rack); // the slot stays empty (LV1 keeps gaps)
     render();return;
   }
   if(!listFor[k])return;
@@ -11381,8 +11414,10 @@ function ioOpsCell(kind,i){
 function rackAdd(k,i,name){
   const h=rackHolder(k,+i);if(!h)return;
   if(!h.rack)h.rack=STOCK_RACK();
+  const ps=rackParams(h.rack),free=h.rack.slots.findIndex(n=>!n);
+  if(free>=0){h.rack.slots[free]=name;ps[free]=null;render();return;}
   if(h.rack.slots.length>=RACK_SIZE){setStatus("Rack is full (8 slots).",true);return;}
-  rackParams(h.rack).push(null);h.rack.slots.push(name);render();
+  ps.push(null);h.rack.slots.push(name);render();
 }
 document.addEventListener("mousedown",e=>{
   const t=e.target.closest('button[data-f="rkPick"]');if(!t)return;
@@ -11417,22 +11452,25 @@ document.addEventListener("dragend",e=>{
   dragSrc=null;
 });
 document.addEventListener("dragover",e=>{
-  const t=e.target.closest(".slotrow.ins,.slotrow.add");
+  const t=e.target.closest(".slotrow.ins,.slotrow.add,.slotrow.empty[data-x]");
   if(!t||!dragSrc||t.dataset.k!==dragSrc.k||+t.dataset.i!==dragSrc.i)return;
   e.preventDefault();e.dataTransfer.dropEffect="move";
   document.querySelectorAll(".slotrow.dragover").forEach(el=>el.classList.remove("dragover"));
   t.classList.add("dragover");
 });
 document.addEventListener("drop",e=>{
-  const t=e.target.closest(".slotrow.ins,.slotrow.add");
+  const t=e.target.closest(".slotrow.ins,.slotrow.add,.slotrow.empty[data-x]");
   if(!t||!dragSrc||t.dataset.k!==dragSrc.k||+t.dataset.i!==dragSrc.i)return;
   e.preventDefault();
   const h=rackHolder(dragSrc.k,dragSrc.i);if(!h||!h.rack){dragSrc=null;return;}
-  const arr=h.rack.slots,ps=rackParams(h.rack);
-  const [m]=arr.splice(dragSrc.x,1),[mp]=ps.splice(dragSrc.x,1);
-  const to=t.classList.contains("add")?arr.length:+t.dataset.x;
-  arr.splice(to,0,m);ps.splice(to,0,mp);
-  dragSrc=null;render();
+  const arr=h.rack.slots,ps=rackParams(h.rack),to=+t.dataset.x;
+  if(t.classList.contains("ins")){ // onto a plugin: insert there, the others shift
+    const [m]=arr.splice(dragSrc.x,1),[mp]=ps.splice(dragSrc.x,1);
+    arr.splice(to,0,m);ps.splice(to,0,mp);
+  }else if(to!==dragSrc.x){ // onto an empty slot: move there, its old slot stays empty
+    arr[to]=arr[dragSrc.x];ps[to]=ps[dragSrc.x];arr[dragSrc.x]=null;ps[dragSrc.x]=null;
+  }
+  rackTrim(h.rack);dragSrc=null;render();
 });
 
 $("#showName").addEventListener("input",e=>state.show.name=e.target.value);
@@ -11537,6 +11575,7 @@ function buildSpec(){
     ...(state.d2d.length?{d2d:state.d2d.map(x=>({i:{d:x.i.d,c:x.i.c},o:{d:x.o.d,c:x.o.c}}))}:{}),
   };
   if((state.links||[]).some(n=>n.trim()))spec.links=state.links.map(n=>n.trim());
+  if((state.linkColors||[]).some(c=>c!=null))spec.linkColors=state.linkColors.map(c=>c??null);
   const lays=state.layers.map(l=>({name:l.name.trim(),
     strips:l.strips.map(s=>s?(s[0]==="main"?{type:"main"}:{type:s[0],name:s[1]}):null)}));
   if(lays.some(l=>l.name||l.strips.some(Boolean)))spec.layers=lays;
@@ -11549,6 +11588,16 @@ function buildSpec(){
       if(state.stage.custom[id])usedCustom[id]=state.stage.custom[id];}});
     spec.stage={items:sitems.map(it=>({...it})),custom:usedCustom,widthM:+stg().widthM||12};
   }
+  // v14: a slot's own preset text (pre) is stored once per show in presetTexts, the slot holds "#<index>" --
+  // imported shows repeat the same few texts on hundreds of slots. loadSpec / spec_from_json resolve them.
+  const texts=[],at={};
+  for(const o of [...spec.channels,...spec.groups,...spec.fx,spec.master])
+    for(const p of (o&&o.rack&&o.rack.params)||[])
+      if(p&&typeof p.pre==="string"&&!p.pre.startsWith("#")){
+        if(!(p.pre in at)){at[p.pre]=texts.length;texts.push(p.pre);}
+        p.pre="#"+at[p.pre];
+      }
+  if(texts.length)spec.presetTexts=texts;
   return spec;
 }
 function lm(x){ // link / mute keys of one strip, only when set
@@ -11568,7 +11617,9 @@ function loadSpec(spec){
   const colIn=o=>{const v=o.color;return (typeof v==="number"&&v>=0&&v<=31)?Math.round(v):null;};
   const rackIn=r=>{ // v4 {slots}; v3 {filter,dyn,eq,inserts} converted to slots
     if(!r)return null;
-    if(r.slots)return {slots:[...r.slots],...(Array.isArray(r.params)?{params:r.params.map(p=>p&&typeof p==="object"?{...p}:null)}:{})};
+    const pre=t=>typeof t==="string"&&t.startsWith("#")?String((spec.presetTexts||[])[+t.slice(1)]||""):t; // v14 "#<index>"
+    if(r.slots)return {slots:[...r.slots],...(Array.isArray(r.params)?{params:r.params.map(p=>p&&typeof p==="object"
+      ?{...p,...(p.pre?{pre:pre(p.pre)}:{})}:null)}:{})};
     const ins=[...(r.inserts||[])];
     const slots=[];
     if(r.filter!==false)slots.push("EMO-F2");
@@ -11606,6 +11657,7 @@ function loadSpec(spec){
       dest:a.dest||"",pos:a.position||"",notes:a.notes||"",color:colIn(a),link:linkIn(a),mute:muteIn(a),...pk(a,true),...xsIn(a)})),
     matrixes:(spec.matrixes||[]).map(m=>({...defMtx(),name:m.name||"",stereo:!!m.stereo,color:colIn(m),link:linkIn(m),mute:muteIn(m),...pk(m,true),...xsIn(m)})),
     links:Array.from({length:LINK_COUNT},(_,i)=>String((spec.links||[])[i]||"")),
+    linkColors:Array.from({length:LINK_COUNT},(_,i)=>{const c=(spec.linkColors||[])[i];return Number.isInteger(c)?c:null;}),
     layers:(spec.layers||[]).slice(0,LAYER_COUNT).map(l=>({name:String((l&&l.name)||""),
       strips:((l&&l.strips)||[]).slice(0,LAYER_SLOTS).map(s=>s&&LAYER_KINDS.includes(s.type)?[s.type,s.type==="main"?"":String(s.name||"")]:null)})),
     master:{rack:rackIn(spec.master?.rack),outs:null,...pk(spec.master||{},true),...xsIn(spec.master||{})},
@@ -13969,8 +14021,9 @@ function ioChunk(model,gain,phantom){
    make_lv1_session._preset_with_params (keep in sync). */
 function presetWithParams(text,params){
   if(!hasP(params))return text;
-  const setup=(/<ActiveSetup>(\w+)</.exec(text)||[])[1]||"SETUP_A",head='(<PresetData Setup="'+setup+'">\\s*';
-  const nums=Object.keys(params).filter(k=>k!=="ps").map(Number);
+  // LV1 writes <PresetData Setup="SETUP_A" SetupName="..."> too: any further attributes
+  const setup=(/<ActiveSetup>(\w+)</.exec(text)||[])[1]||"SETUP_A",head='(<PresetData Setup="'+setup+'"[^>]*>\\s*';
+  const nums=pNums(params).map(Number);
   if(nums.length&&new RegExp(head+'<Parameters Type="RealWorld">)').test(text))
     text=text.replace(new RegExp(head+'<Parameters Type="RealWorld">)([^<]*)'),
       (m,h,body)=>{let n=0;return h+body.replace(/\S+/g,t=>{const k=n++;return k in params?String(params[k]):t;});});
@@ -14016,7 +14069,7 @@ function presetWithChunks(text,setup,ps){
 /* The active setup's RealWorld tokens of a preset text, or null. */
 function presetTokens(text){
   const setup=(/<ActiveSetup>(\w+)</.exec(text)||[])[1]||"SETUP_A";
-  const m=new RegExp('<PresetData Setup="'+setup+'">\\s*<Parameters Type="RealWorld">([^<]*)').exec(text||"");
+  const m=new RegExp('<PresetData Setup="'+setup+'"[^>]*>\\s*<Parameters Type="RealWorld">([^<]*)').exec(text||"");
   return m?m[1].trim().split(/\s+/):null;
 }
 function emoPresetFindOrInsert(db,text){
@@ -14136,15 +14189,16 @@ async function emoExport(spec){
     fx.forEach((f,i)=>{if(f.color!=null)colorRows.push([FX0+i,f.color]);});
     auxes.forEach((a,i)=>{if(a.color!=null)colorRows.push([FX0+8+i,a.color]);});
     mtxs.forEach((m,i)=>{if(m.color!=null)colorRows.push([MTX0+i,m.color]);});
+    (spec.linkColors||[]).slice(0,16).forEach((c,s)=>{if(c!=null)colorRows.push([LNK0+s,c]);}); // v14 link (DCA) colors
     for(const [oid,col] of colorRows)
       erun(db,"INSERT INTO snapshot_chainer_params (chainer_id, snapshot_id, param_id, param_value) VALUES (?, -1, 592, ?)",[oid,1.0*col]);
 
     // 4b. racks (v4 slot lists; EMO modules are ordinary role-0 entries)
     const plugsToAdd=[];
-    const resolveCc=(name,stereo)=>{
+    const resolveCc=(name,stereo,want)=>{
       const e=pack.ccs[name];
       if(!e)throw new Error("plugin not in the catalog pack: "+name);
-      const cc=stereo?(e.s||e.x||e.m):(e.m||e.x||e.s);
+      const cc=slotCc(e,stereo,want);
       if(!cc)throw new Error(name+" has no usable variant");
       return cc;
     };
@@ -14155,7 +14209,7 @@ async function emoExport(spec){
     if(spec.master&&spec.master.rack)racked.push([LR,spec.master.rack,true]);
     {
       const missing=new Set();
-      for(const [,rack] of racked)for(const nm of (rack.slots||[]))if(!pack.ccs[nm])missing.add(nm);
+      for(const [,rack] of racked)for(const nm of (rack.slots||[]))if(nm&&!pack.ccs[nm])missing.add(nm);
       if(missing.size)throw new Error("insert plugin(s) not in the catalog pack: "+
         [...missing].join(", ")+" — remove them from the racks, or rebuild the pack after installing them");
     }
@@ -14166,7 +14220,8 @@ async function emoExport(spec){
       erun(db,"DELETE FROM snapshot_plugin WHERE plug_id IN "+
         "(SELECT id FROM plug WHERE chainer_id = ? AND plug_role IN (1, 2, 4))",[cid]);
       erun(db,"DELETE FROM plug WHERE chainer_id = ? AND plug_role IN (1, 2, 4)",[cid]);
-      slots.forEach((nm,idx)=>plugsToAdd.push([cid,nm,resolveCc(nm,st),idx,(rack.params||[])[idx]||null]));
+      slots.forEach((nm,idx)=>{const q=(rack.params||[])[idx]||null; // null slot = empty
+        if(nm)plugsToAdd.push([cid,nm,resolveCc(nm,st,q&&q.cc),idx,q]);});
     }
     if(plugsToAdd.length){
       const texts={};
@@ -14174,10 +14229,12 @@ async function emoExport(spec){
         texts[cc]=emoResolvePresetText(cc,pack,tplTexts);
       let nextId=eq(db,"SELECT MAX((SELECT MAX(id) FROM plug), (SELECT MAX(id) FROM snapshot_plugin))")[0][0]+1;
       for(const [cid,nm,cc,slot,params] of plugsToAdd){
-        erun(db,"INSERT INTO plug VALUES (?, ?, ?, ?, ?, '', 0, 0, 0, -1, 'Waves', 0, 0)",
-          [nextId,cid,slot,nm,cc]);
-        erun(db,"INSERT INTO snapshot_plugin VALUES (?, ?, ?, -1, -1, 0, 0, 1, -9999, -9999, 125, 0)",
-          [nextId,nextId,emoPresetFindOrInsert(db,presetWithParams(texts[cc],params))]);
+        const q=params||{},pre=typeof q.pre==="string"&&q.pre.startsWith("#")?(spec.presetTexts||[])[+q.pre.slice(1)]:q.pre;
+        const base=pre&&presetSubComp(pre)===cc?pre:texts[cc]; // v14: the slot's own preset (same variant)
+        erun(db,"INSERT INTO plug VALUES (?, ?, ?, ?, ?, '', ?, 0, 0, -1, 'Waves', ?, 0)",
+          [nextId,cid,slot,nm,cc,q.off?1:0,q.role||0]);
+        erun(db,"INSERT INTO snapshot_plugin VALUES (?, ?, ?, -1, -1, ?, 0, 1, -9999, -9999, 125, 0)",
+          [nextId,nextId,emoPresetFindOrInsert(db,presetWithParams(base,params)),q.byp?1:0]);
         nextId++;
       }
     }
@@ -14363,23 +14420,27 @@ async function emoImport(bytes,fileStemName){
   const SQL=await emoSql();
   // 4cc -> canonical catalog name: old shows store SHORT plug names
   // ("CrvAQLv"); the rack must carry names the exporter can resolve back.
-  let cc2name={};
+  let cc2name={},packCcs={};
   try{
-    const pack=await emoDataPack();
+    const pack=await emoDataPack();packCcs=pack.ccs;
     for(const [nm,v] of Object.entries(pack.ccs))
       for(const cc of Object.values(v))cc2name[cc]=nm;
   }catch(_){/* offline: keep the stored names */}
   const db=new SQL.Database(bytes);
   try{
-    const first=Object.fromEntries(eq(db,"SELECT obj_type, MIN(id) FROM object GROUP BY obj_type"));
     const alloc=Object.fromEntries(eq(db,
       "SELECT o.obj_type, COUNT(*) FROM object o JOIN chainer c ON c.obj_id = o.id "+
       "WHERE c.num_inputs != -1 GROUP BY o.obj_type"));
-    const LR=first[3],GRP0=first[1]??-1,FX0=first[2],MTX0=first[6],LNK0=first[12];
     // LV1 V17 (schema 5.2): the Mon strips left the aux bank (type 2, index 8..) for their own type 25,
     // index 0.., same object ids (XPLATFORM SessionConverters/5_1__to__5_2/Converter_5_2.cpp:308-380).
     // tk() maps a V17 pair back to the V16 aux-bank pair used below.
     const MON_T=25,tk=(t,i)=>t===MON_T?[2,8+i]:[t,i];
+    // Strips by (type, index): their object ids are NOT contiguous in a session whose mixer configuration
+    // was enlarged in LV1 (64 -> 80 inputs appends the new strips' ids after all others).
+    const objAt={},objKey={};
+    for(const [id,t,ix] of eq(db,"SELECT id, obj_type, obj_index FROM object")){const [tt,ii]=tk(t,ix);objAt[tt+":"+ii]=id;objKey[id]=[tt,ii];}
+    const oid=(t,i)=>objAt[t+":"+i],isT=(id,t)=>!!objKey[id]&&objKey[id][0]===t;
+    const LR=oid(3,0);
     const nCh=alloc[0],nGrp=alloc[1]||0,nMtx=alloc[6]||0,nAux=alloc[MON_T]!==undefined?alloc[MON_T]:(alloc[2]||8)-8;
     let cfg=CONFIGS.find(c=>c.ch===nCh&&c.grp===nGrp&&c.mon===nAux);
     // A layout the builder has no template for (V17's factory session: 80 inputs / 16 groups / 24 Mon):
@@ -14406,27 +14467,27 @@ async function emoImport(bytes,fileStemName){
       const defOf=t=>(eq(db,"SELECT param_value FROM chainer_params_default_values WHERE obj_type = ? AND param_id = 592",[t])[0]||[])[0];
       const monDef=defOf(MON_T),auxDef=defOf(2);
       if(monDef!==undefined&&auxDef!==undefined&&monDef!==auxDef)
-        for(let i=0;i<nAux;i++){const cid=FX0+8+i;
+        for(let i=0;i<nAux;i++){const cid=oid(2,8+i);
           if(colorOf[cid]==null)colorOf[cid]=Math.round(monDef);else if(colorOf[cid]===Math.round(auxDef))delete colorOf[cid];}
     }
     // Every assignment row: the first group (else LR) / link / mute group is the strip's own
     // field; the rest becomes its xs (multi-assign, PATCH › INTERNAL) further below.
     const dests={},links={},mtxFeeds={},mutes={},allTo={},allLinks={},allMutes={};
-    const MUTE0=first[13],push=(m,k,v)=>(m[k]=m[k]||[]).push(v);
+    const push=(m,k,v)=>(m[k]=m[k]||[]).push(v);
     for(const [src,dst,at] of eq(db,
       "SELECT src_id, dst_id, dst_asgn_type FROM snapshot_assignment WHERE snapshot_id = -1 AND dst_asgn_type IN (0, 2) ORDER BY id")){
-      if(at===2&&MUTE0!==undefined&&dst>=MUTE0&&dst<MUTE0+8){push(allMutes,src,dst-MUTE0+1);continue;}
+      if(at===2&&isT(dst,13)){push(allMutes,src,objKey[dst][1]+1);continue;}
       if(at===2)push(allLinks,src,dst);
-      else if(dst>=MTX0&&dst<MTX0+nMtx)push(mtxFeeds,src,dst);
+      else if(isT(dst,6))push(mtxFeeds,src,dst);
       else push(allTo,src,dst);
     }
-    for(const [src,L] of Object.entries(allTo)){const g=L.find(d=>d>=GRP0&&d<GRP0+nGrp&&GRP0>=0);
+    for(const [src,L] of Object.entries(allTo)){const g=L.find(d=>isT(d,1));
       const d=g!==undefined?g:L.includes(LR)?LR:undefined;if(d!==undefined)dests[src]=d;}
     for(const [src,L] of Object.entries(allLinks))links[src]=L[0];
     for(const [src,L] of Object.entries(allMutes))mutes[src]=L[0];
     const linkTable=Array.from({length:16},(_,s)=>{
-      const nm=(nameOf[LNK0+s]||"").trim();return /^Link \d+$/.test(nm)?"":nm;});
-    const linkLab=obj=>{const s=obj-LNK0;return (linkTable[s]||"")||`Link ${s+1}`;};
+      const nm=(nameOf[oid(12,s)]||"").trim();return /^Link \d+$/.test(nm)?"":nm;});
+    const linkLab=obj=>{const s=objKey[obj]?objKey[obj][1]:0;return (linkTable[s]||"")||`Link ${s+1}`;};
     const lmOf=cid=>({...(links[cid]!==undefined?{link:linkLab(links[cid])}:{}),
       ...(mutes[cid]?{mute:mutes[cid]}:{})});
     // racks: untouched fixed modules -> null; otherwise role-0 slot list
@@ -14434,39 +14495,54 @@ async function emoImport(bytes,fileStemName){
     // the default preset (same token count only, else the defaults show).
     let defTok={},facTok={};
     try{defTok=await plugDefaultTokens();facTok=(await plugUiIndex()).factory||{};}catch(_){/* offline: no settings */}
-    // Role 0 = an ordinary insert; V17 marks the first graphic EQ of a strip with role 128 (GEQ,
-    // Converter_5_2.cpp:288) but it is still a plain rack slot. 1/2/4 = untouched fixed modules.
-    const insRole=role=>role===0||role===128;
-    const paramsOf=(cc,text,role)=>{
+    // The EMO modules and the role each has in an untouched (factory) rack: F2 4, D5 1, Q4 2, at slots 0-2.
+    const EMO_FIX={CFLM:4,CFLS:4,CDYM:1,CDYS:1,MQ4M:2,MQ4S:2};
+    const paramsOf=(cc,text,role,off,byp)=>{
       const d=defTok[cc],t=presetTokens(text||""),p={};
       // an untouched fixed module may carry any factory version of its default (the templates mix EMO versions)
-      const fac=!insRole(role)&&t&&(facTok[cc]||[]).some(f=>f.length===t.length&&f.every((x,k)=>x===t[k]));
-      if(!fac&&d&&t&&(d.length===t.length||(t.includes("R")&&t.length<=d.length))) // an "R" list may stop early
-        t.forEach((v,k)=>{const x=puTok(v);if(v==="*"||!isFinite(x)||(d[k]!=="*"&&puTok(d[k])===x))return;p[k]=x;}); // "50*" tokens = 50
-      const ps=presetChunks(text);if(ps)p.ps=ps; // plugin-specific chunks (IR, amp models, curves) come back as-is
+      const fac=EMO_FIX[cc]===role&&t&&(facTok[cc]||[]).some(f=>f.length===t.length&&f.every((x,k)=>x===t[k]));
+      if(!fac&&text){
+        if(d&&t&&(d.length===t.length||(t.includes("R")&&t.length<=d.length))){ // an "R" list may stop early
+          t.forEach((v,k)=>{const x=puTok(v);if(v==="*"||!isFinite(x)||(d[k]!=="*"&&puTok(d[k])===x))return;p[k]=x;}); // "50*" tokens = 50
+          const ps=presetChunks(text);if(ps)p.ps=ps; // plugin-specific chunks (IR, amp models, curves) come back as-is
+        }else p.pre=text; // another layout than the default's (other plugin version), or none: kept exactly as stored
+      }
+      if(role&&role!==128)p.role=role; // 128 (V17 GEQ) is set again by V17's converter on load
+      if(off)p.off=1;
+      if(byp)p.byp=1;
       return hasP(p)?p:null;
     };
     const rackRows={};
-    for(const [cid,slot,nm,cc,role,text] of eq(db,
-      "SELECT p.chainer_id, p.slot, p.plugin_name, p.plugin_4cc, p.plug_role, pp.preset FROM plug p "+
+    for(const [cid,slot,nm,cc,role,text,off,byp] of eq(db,
+      "SELECT p.chainer_id, p.slot, p.plugin_name, p.plugin_4cc, p.plug_role, pp.preset, p.disabled, sp.bypass FROM plug p "+
       "LEFT JOIN snapshot_plugin sp ON sp.plug_id = p.id AND sp.snapshot_id = -1 "+
       "LEFT JOIN plugin_preset pp ON pp.id = sp.preset_id ORDER BY p.chainer_id, p.slot"))
-      (rackRows[cid]=rackRows[cid]||[]).push([slot,cc2name[cc]||nm,role,paramsOf(cc,text,role)]);
+    {
+      const name=cc2name[cc]||nm;let p=paramsOf(cc,text,role,off,byp);
+      // a variant other than the one the export picks for this strip format (e.g. a mono-to-stereo X)
+      if(packCcs[name]&&cc!==slotCc(packCcs[name],!!stereoOf[cid]))p={...(p||{}),cc};
+      (rackRows[cid]=rackRows[cid]||[]).push([slot,name,role,p,cc]);
+    }
+    // settings beyond an EMO module's own factory role
+    const touched=([,,,p,cc])=>!!p&&Object.keys(p).some(k=>k!=="role"||p.role!==EMO_FIX[cc]);
     const rackOf=cid=>{
-      const rws=rackRows[cid]||[];
+      const rws=(rackRows[cid]||[]).slice().sort((a,b)=>a[0]-b[0]);
       // Every factory strip carries its fixed modules: none left = emptied rack.
       if(!rws.length)return {slots:[]};
-      let r0=rws.filter(r=>insRole(r[2]));
-      if(!r0.length){ // factory modules only = untouched, unless their settings changed
-        if(!rws.some(r=>r[3]))return null;
-        r0=rws;
+      // untouched = exactly the stock F2 / D5 / Q4 in their own slots and roles, factory settings
+      if(rws.length===3&&rws.every((r,x)=>r[0]===x&&r[1]===STOCK_SLOTS[x]&&EMO_FIX[r[4]]===r[2]&&!touched(r)))return null;
+      // Otherwise every plugin at its own slot (empty slots stay null), with its role / state / settings.
+      const slots=[],params=[];
+      for(const [slot,nm,,p] of rws){
+        if(slot<0||slot>=RACK_SIZE)continue;
+        while(slots.length<=slot){slots.push(null);params.push(null);}
+        slots[slot]=nm;params[slot]=p;
       }
-      r0=r0.sort((a,b)=>a[0]-b[0]);
-      return {slots:r0.map(r=>r[1]),...(r0.some(r=>r[3])?{params:r0.map(r=>r[3])}:{})};
+      return {slots,...(params.some(Boolean)?{params}:{})};
     };
     // A plugin in the rack is content; an emptied rack alone does not make an
     // unused default-named strip worth importing.
-    const hasPlugs=cid=>!!(rackOf(cid)&&rackOf(cid).slots.length);
+    const hasPlugs=cid=>!!(rackOf(cid)&&rackOf(cid).slots.some(Boolean));
     const isDef=(nm,re)=>re.test(nm);
     const label=(cid,re,def)=>{const nm=(nameOf[cid]||"").trim();return nm&&!isDef(nm,re)?nm:def;};
 
@@ -14478,18 +14554,26 @@ async function emoImport(bytes,fileStemName){
     const referenced=new Set(Object.values(dests));
     for(const f of Object.values(mtxFeeds))f.forEach(d=>referenced.add(d));
     const groups=[],matrixes=[],mtxBank=[]; // mtxBank: each imported matrix's bank index (for its output patch)
+    // Strips are built packed top-down, so an unused strip BELOW a used one comes in too (with LV1's default name):
+    // every strip keeps its LV1 position (cf. the channels' placeholders).
+    const lastUsed=(n,usedAt)=>{for(let i=n-1;i>=0;i--)if(usedAt(i))return i;return -1;};
+    const gUsed=i=>{const cid=oid(1,i),nm=(nameOf[cid]||"").trim();
+      return referenced.has(cid)||!isDef(nm,grpRe)||hasPlugs(cid)||colorOf[cid]!=null;};
+    const gLast=lastUsed(gN,gUsed);
     for(let i=0;i<gN;i++){
-      const cid=GRP0+i,nm=(nameOf[cid]||"").trim();
-      const used=referenced.has(cid)||!isDef(nm,grpRe)||hasPlugs(cid)||colorOf[cid]!=null;
+      const cid=oid(1,i),nm=(nameOf[cid]||"").trim();
+      const used=i<=gLast;
       grpLabel[cid]=nm&&!isDef(nm,grpRe)?nm:"Group "+(i+1);
       if(used)refOf[`1:${i}`]=["grp",grpLabel[cid]];
       if(used)groups.push(objOf[`1:${i}`]={_cid:cid,name:grpLabel[cid],stereo:stereoOf[cid]!==false,
         postFx:!!postFxOf[cid],matrix:[],rack:rackOf(cid),
         ...(colorOf[cid]!=null?{color:colorOf[cid]}:{}),...lmOf(cid)});
     }
+    const mLast=lastUsed(nMtx,i=>{const cid=oid(6,i),nm=(nameOf[cid]||"").trim();
+      return referenced.has(cid)||!isDef(nm,mtxRe)||colorOf[cid]!=null;});
     for(let i=0;i<nMtx;i++){
-      const cid=MTX0+i,nm=(nameOf[cid]||"").trim();
-      const used=referenced.has(cid)||!isDef(nm,mtxRe)||colorOf[cid]!=null;
+      const cid=oid(6,i),nm=(nameOf[cid]||"").trim();
+      const used=i<=mLast;
       mtxLabel[cid]=nm&&!isDef(nm,mtxRe)?nm:"MTX "+(i+1);
       if(used)refOf[`6:${i}`]=["mtx",mtxLabel[cid]];
       if(used)mtxBank.push(i);
@@ -14517,7 +14601,7 @@ async function emoImport(bytes,fileStemName){
     const firstByPatch={},chByIdx={};
     const channels=[];let port=1;
     for(let i=0;i<nCh;i++){
-      const cid=1+i,nm=(nameOf[cid]||"").trim();
+      const cid=oid(0,i),nm=(nameOf[cid]||"").trim();
       // Default-named strips are imported only when they carry content
       // (a touched rack or a color); they keep their default label.
       // Other default strips come in as placeholders (empty, patch only), so the strips
@@ -14542,9 +14626,9 @@ async function emoImport(bytes,fileStemName){
     while(channels.length&&channels[channels.length-1].placeholder){channels.pop();delete objOf[`0:${channels.length}`];}
     const fxRe=/^Fx \d+$/,monRe=/^Mon \d+$/;
     const fxs=[],auxes=[],auxBank=[]; // auxBank: each imported aux's aux-bank index (for its output patch)
-    for(let i=0;i<8;i++){
-      const cid=FX0+i,nm=(nameOf[cid]||"").trim();
-      if((!nm||isDef(nm,fxRe))&&!hasPlugs(cid))continue;
+    const fLast=lastUsed(8,i=>{const cid=oid(2,i),nm=(nameOf[cid]||"").trim();return !((!nm||isDef(nm,fxRe))&&!hasPlugs(cid));});
+    for(let i=0;i<=fLast;i++){
+      const cid=oid(2,i),nm=(nameOf[cid]||"").trim();
       const d=dests[cid];
       refOf[`2:${i}`]=["fx",nm&&!isDef(nm,fxRe)?nm:"Fx "+(i+1)];
       fxs.push(objOf[`2:${i}`]={name:nm&&!isDef(nm,fxRe)?nm:"Fx "+(i+1),stereo:stereoOf[cid]!==false,
@@ -14552,11 +14636,11 @@ async function emoImport(bytes,fileStemName){
         ...(colorOf[cid]!=null?{color:colorOf[cid]}:{}),...lmOf(cid),
         ...(rackOf(cid)?{rack:rackOf(cid)}:{})});
     }
-    for(let i=0;i<aN;i++){
-      const cid=FX0+8+i,nm=(nameOf[cid]||"").trim();
-      // Default-named Mon strips always skip: LV1 writes a default color row
-      // on them, so color alone is no sign the operator touched the strip.
-      if(!nm||isDef(nm,monRe))continue;
+    // Default-named Mon strips count as unused: LV1 writes a default color row
+    // on them, so color alone is no sign the operator touched the strip.
+    const aLast=lastUsed(aN,i=>{const nm=(nameOf[oid(2,8+i)]||"").trim();return !!nm&&!isDef(nm,monRe);});
+    for(let i=0;i<=aLast;i++){
+      const cid=oid(2,8+i),nm=(nameOf[cid]||"").trim()||"Mon "+(i+1);
       refOf[`2:${8+i}`]=["aux",nm];auxBank.push(8+i);
       auxes.push(objOf[`2:${8+i}`]={name:nm,stereo:!!stereoOf[cid],
         dest:"",position:"",notes:"",
@@ -14571,7 +14655,7 @@ async function emoImport(bytes,fileStemName){
       for(const [si,tt0,ti0] of eq(db,trkSql,[lid])){
         if(si<0||si>=LAYER_SLOTS)continue;
         const [tt,ti]=tk(tt0,ti0);
-        const ref=tt===3?{type:"main"}:tt===12?{type:"link",name:linkLab(LNK0+ti)}
+        const ref=tt===3?{type:"main"}:tt===12?{type:"link",name:linkLab(oid(12,ti))}
           :refOf[`${tt}:${ti}`]?{type:refOf[`${tt}:${ti}`][0],name:refOf[`${tt}:${ti}`][1]}:null;
         strips[si]=ref; // cue / talkback / unimported strips stay empty
       }
@@ -14619,33 +14703,34 @@ async function emoImport(bytes,fileStemName){
     }
     // Multi-assign: what a strip has beyond its own fields (first group-or-LR, the matrix list of
     // channels / groups, first link, first mute group) -> xs = {to, mtx, link, mute}
-    const toLab=d=>d===LR?"LR":d===first[4]?"C":d===first[5]?"M":grpLabel[d]||null;
+    const toLab=d=>d===LR?"LR":d===oid(4,0)?"C":d===oid(5,0)?"M":grpLabel[d]||null;
     const xsFor=(cid,ownMtx,ownTo)=>{ // ownTo: the strip has a group-or-LR field of its own (channel, group, FX)
       const own=ownTo?dests[cid]:undefined,to=(allTo[cid]||[]).filter(d=>d!==own).map(toLab).filter(Boolean);
       const x={to,mtx:ownMtx?[]:(mtxFeeds[cid]||[]).map(m=>mtxLabel[m]).filter(Boolean),
         link:(allLinks[cid]||[]).slice(1).map(linkLab),mute:(allMutes[cid]||[]).slice(1)};
       return x.to.length||x.mtx.length||x.link.length||x.mute.length?x:null;};
     for(const [key,o] of Object.entries(objOf)){
-      const [t,i]=key.split(":").map(Number),cid=t===0?1+i:t===1?GRP0+i:t===2?FX0+i:t===6?MTX0+i:null;
+      const [t,i]=key.split(":").map(Number),cid=[0,1,2,6].includes(t)?oid(t,i):null;
       if(cid===null)continue;const x=xsFor(cid,t===0||t===1,t===0||t===1||(t===2&&i<8));if(x)o.xs=x;
     }
-    for(const [o,cid] of [[master,LR],[busx.center,first[4]],[busx.mono,first[5]],[busx.cue,first[7]]]){
+    for(const [o,cid] of [[master,LR],[busx.center,oid(4,0)],[busx.mono,oid(5,0)],[busx.cue,oid(7,0)]]){
       if(cid===undefined)continue;
       const x={to:(allTo[cid]||[]).map(toLab).filter(Boolean),mtx:(mtxFeeds[cid]||[]).map(m=>mtxLabel[m]).filter(Boolean),
         link:(allLinks[cid]||[]).map(linkLab),mute:allMutes[cid]||[]};
       if(x.to.length||x.mtx.length||x.link.length||x.mute.length)o.xs=x;
     }
     // what a fallback configuration leaves out: named groups / Mon strips past its banks
-    const lost=[...Array(nGrp-gN)].map((_,k)=>GRP0+gN+k).filter(c=>!isDef((nameOf[c]||"").trim()||"Group 1",grpRe))
-      .concat([...Array(nAux-aN)].map((_,k)=>FX0+8+aN+k).filter(c=>!isDef((nameOf[c]||"").trim()||"Mon 1",monRe)))
+    const lost=[...Array(nGrp-gN)].map((_,k)=>oid(1,gN+k)).filter(c=>!isDef((nameOf[c]||"").trim()||"Group 1",grpRe))
+      .concat([...Array(nAux-aN)].map((_,k)=>oid(2,8+aN+k)).filter(c=>!isDef((nameOf[c]||"").trim()||"Mon 1",monRe)))
       .map(c=>nameOf[c].trim());
     const note=cfgOdd?`This session's mixer configuration (${nCh} inputs / ${nGrp} groups / ${8+nAux} aux = 8 FX + ${nAux} Mon) is not one of the builder's; `+
       `imported as ${cfg.label} · ${cfg.sub}`+(lost.length?`. Not imported: ${lost.join(", ")}`:"")+".":"";
     return {
       ...(note?{_note:note}:{}),
-      format:"lv1-input-list",version:9,
+      format:"lv1-input-list",version:14,
       io,busx,...(d2d.length?{d2d}:{}),
       ...(linkTable.some(Boolean)?{links:linkTable}:{}),
+      ...(()=>{const c=Array.from({length:16},(_,s)=>colorOf[oid(12,s)]??null);return c.some(x=>x!=null)?{linkColors:c}:{};})(),
       config:{id:cfg.id,inputs:cfg.ch,groups:cfg.grp,aux:cfg.mon,fx:FX_COUNT,matrix:MTX_COUNT,mains:cfg.mains},
       show:{name:fileStemName||"Imported show",date:"",venue:""},
       channels,groups,fx:fxs,auxes,matrixes,
