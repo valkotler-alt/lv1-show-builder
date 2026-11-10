@@ -2134,16 +2134,12 @@ async function openPlugUi(k,i,x){
   const cc=slotCc(v,st,((r.params||[])[x]||{}).cc)||pack.ccs[0]; // the variant the .emo export writes
   const P=pack.params[cc],noedit=!ix.defaults[cc];
   // view-only variants (default preset without RealWorld values) show the ParamXML initial values
-  // ParamXML value of a param: ResetValue, else InitialValue (engine conversion) -- also what an "R" token means
-  const iniv=q=>{const iv=q.reset&&typeof q.reset[1]==="number"?q.reset:q.init;if(!iv||iv[1]===null||typeof iv[1]!=="number")return null;
-      return iv[0]==="state"?puRW(q,iv[1]):iv[0]==="double"?puRW(q,iv[1]*PU_GRAN):iv[1];};
-  const defs=noedit?P.map(q=>{const iv=q.init;if(!iv||iv[1]===null||typeof iv[1]!=="number")return null;
-      return iv[0]==="state"?puRW(q,iv[1]):iv[0]==="double"?puRW(q,iv[1]*PU_GRAN):iv[1];})
-    :ix.defaults[cc].map((t,j)=>t==="*"?null:t==="R"?(P[j]?iniv(P[j]):null):puTok(t));
+  const defs=noedit?P.map(puInitVal):ix.defaults[cc].map((t,j)=>puTokVal(t,P[j]));
   const p=(r.params||[])[x]||{};
   // v14: an imported slot's own preset (same variant) is the base its values start from and edits go over
+  // ("*" there = not stored: the plugin keeps the value it has -- our default)
   const preT=p.pre&&presetSubComp(p.pre)===cc?presetTokens(p.pre):null;
-  const base=preT?defs.map((d,j)=>{const t=preT[j];return t===undefined?d:t==="*"?null:t==="R"?(P[j]?iniv(P[j]):null):puTok(t);}):defs;
+  const base=preT?defs.map((d,j)=>{const t=preT[j];return t===undefined||t==="*"?d:puTokVal(t,P[j]);}):defs;
   closePlugUi();
   PU={k,i,x,name,cc,pack,P,noedit,pIdx:Object.fromEntries(P.map((q,j)=>[q.n,j])),defs,base,pre:preT?p.pre:null,
     vals:base.map((d,j)=>j in p?+p[j]:d),ps:p.ps||null,head:(ix.head||{})[cc],ctrls:pack.controls[cc],drag:null};
@@ -2555,7 +2551,7 @@ function puKidInit(eds){
       const kid=(sub&&Object.values(H.kids||{}).find(k=>k.controls[sub]))||(sl.pack&&H.kids&&H.kids[sl.pack]);
       const cc=kid&&kid.controls[sub]?sub:sl.cc;
       if(kid&&kid.controls[cc]&&kid.params[cc]){
-        const P=kid.params[cc],defs=((kid.defaults||{})[cc]||[]).map(t=>t==="*"||t==="R"?null:puTok(t)),tk=presetTokens(ktext)||[];
+        const P=kid.params[cc],defs=((kid.defaults||{})[cc]||[]).map((t,j)=>puTokVal(t,P[j])),tk=presetTokens(ktext)||[];
         const base=P.map((q,j)=>{const t=tk[j];return t===undefined||t==="*"||t==="R"?(defs[j]??null):puTok(t);}),ed=eds[s]||{};
         const [vw,vh]=kid.view[cc]||[sl.w,sl.h];
         H.kc.push({...H,isKid:true,host:H,slot:s,ox:x,oy:y,sw:sl.w||vw,sh:sl.h||vh,pack:kid,cc,P,
@@ -2634,10 +2630,13 @@ const puIn=(r,x,y)=>r&&x>=r[0]&&y>=r[1]&&x<r[0]+r[2]&&y<r[1]+r[3];
    without one keeps the plain rect (e.g. the Curves BYPASS curtain covers the whole graph but is clickable only on
    its button). */
 function puInCtl(c,x,y){
+  // a SliderMouseTrackKnob slider's drawable rect IS its thumb (X_CSlider.cpp:162): it takes clicks only on the thumb
+  // where the value puts it, its AlphaSelection (the cap's shape) moving with it -- Scheps Omni's In / Out faders
+  const R=c.thumb&&puKind(c)==="slider"&&(c.fl||[]).includes("SliderMouseTrackKnob")?c.thumb:c.r;
   const m=c.am!=null&&PU.pack.masks&&PU.pack.masks[c.am];
-  if(!m)return puIn(c.r,x,y);
-  if(puIn(c.r,x,y)){
-    const [w,h,rows]=m,lx=Math.floor(x-c.r[0]);let ly=Math.floor(y-c.r[1]);
+  if(!m)return puIn(R,x,y);
+  if(puIn(R,x,y)){
+    const [w,h,rows]=m,lx=Math.floor(x-R[0]);let ly=Math.floor(y-R[1]);
     if(lx<w&&ly<h)for(const [n,runs] of rows){
       if(ly<n){for(let k=0;k<runs.length;k+=2)if(lx>=runs[k]&&lx<runs[k+1])return true;break;}
       ly-=n;
@@ -2700,6 +2699,14 @@ function puBmpId(b){
 // (Ctrl also means "fine" in this page)
 const puModOk=r=>{const m=/:(\w+)/.exec(r);if(!m)return true;const M=(PU.host||PU).mods||{};
   return m[1]==="Primary"?!!M.ctrl:m[1]==="Alt"?!!M.alt:m[1]==="Shift"?!!M.shift:true;};
+/* A param's ParamXML value (engine conversion): puInitVal = InitialValue (what a fresh plugin starts with -- also
+   what a "*" token means: not stored, the plugin keeps it); puResetVal = ResetValue, else InitialValue (an "R" token).
+   Retro Fi / Lofi Space ship a default preset of only "*": read as null, none of their controls were drawn. */
+const puIvOf=(q,iv)=>!q||!iv||iv[1]===null||typeof iv[1]!=="number"?null
+  :iv[0]==="state"?puRW(q,iv[1]):iv[0]==="double"?puRW(q,iv[1]*PU_GRAN):iv[1];
+const puInitVal=q=>puIvOf(q,q&&q.init);
+const puResetVal=q=>puIvOf(q,q&&(q.reset&&typeof q.reset[1]==="number"?q.reset:q.init));
+const puTokVal=(t,q)=>t==="*"?puInitVal(q):t==="R"?puResetVal(q):puTok(t);
 const puMomentary=p=>p.reg.includes("MouseDown")&&p.reg.includes("MouseUp");
 function puHover(e){
   if(!PU||PU.drag)return;
@@ -3014,7 +3021,8 @@ function puXpsIn(){
   const f=document.createElement("input");f.type="file";f.accept=".xps,.xml";
   f.onchange=async()=>{
     const file=f.files[0];if(!file||!PU)return;
-    const t=await file.text();
+    // a suite's child presets (CDATA) are not this plugin's own values / chunks
+    const t=(await file.text()).replace(/<!\[CDATA\[[\s\S]*?\]\]>/g,"");
     const pick=[...t.matchAll(/<Preset\b[^>]*Name="([^"]*)"[\s\S]*?<\/Preset>/g)].find(m=>/<Parameters Type="RealWorld">/.test(m[0]));
     if(!pick){setStatus(file.name+": no RealWorld preset inside.",true);return;}
     const plug=(/<PluginName>([^<]*)</.exec(pick[0])||[])[1]||"";
@@ -14251,18 +14259,21 @@ function ioChunk(model,gain,phantom){
    make_lv1_session._preset_with_params (keep in sync). */
 function presetWithParams(text,params){
   if(!hasP(params))return text;
-  // LV1 writes <PresetData Setup="SETUP_A" SetupName="..."> too: any further attributes
-  const setup=(/<ActiveSetup>(\w+)</.exec(text)||[])[1]||"SETUP_A",head='(<PresetData Setup="'+setup+'"[^>]*>\\s*';
+  // the active setup's own Parameters (LV1 writes <PresetData Setup="SETUP_A" SetupName="..."> too; never a child's)
+  const S=presetOwnSetup(text),setup=S?S.setup:"SETUP_A";
   const nums=pNums(params).map(Number);
-  if(nums.length&&new RegExp(head+'<Parameters Type="RealWorld">)').test(text))
-    text=text.replace(new RegExp(head+'<Parameters Type="RealWorld">)([^<]*)'),
-      (m,h,body)=>{let n=0;return h+body.replace(/\S+/g,t=>{const k=n++;return k in params?String(params[k]):t;});});
-  else if(nums.length){
-    const last=Math.max(...nums),toks=[];
-    for(let k=0;k<=last;k++)toks.push(k in params?String(params[k]):"R");
-    const lines=[];for(let i=0;i<toks.length;i+=10)lines.push(toks.slice(i,i+10).join(" "));
-    text=text.replace(new RegExp(head+')<Parameters\\b[^>]*?(?:/>|>[^<]*</Parameters>)'),
-      (m,h)=>h+'<Parameters Type="RealWorld">\n'+lines.join("\n")+"\n</Parameters>");
+  if(nums.length&&S){
+    const head=text.slice(0,S.b),rest=text.slice(S.b);
+    if(/^<Parameters Type="RealWorld">/.test(rest))
+      text=head+rest.replace(/^(<Parameters Type="RealWorld">)([^<]*)/,
+        (m,h,body)=>{let n=0;return h+body.replace(/\S+/g,t=>{const k=n++;return k in params?String(params[k]):t;});});
+    else{
+      const last=Math.max(...nums),toks=[];
+      for(let k=0;k<=last;k++)toks.push(k in params?String(params[k]):"R");
+      const lines=[];for(let i=0;i<toks.length;i+=10)lines.push(toks.slice(i,i+10).join(" "));
+      text=head+rest.replace(/^<Parameters\b[^>]*?(?:\/>|>[^<]*<\/Parameters>)/,
+        ()=>'<Parameters Type="RealWorld">\n'+lines.join("\n")+"\n</Parameters>");
+    }
   }
   if(params.ps)text=presetWithChunks(text,setup,params.ps);
   return params.kids?presetWithKids(text,params.kids):text;
@@ -14272,8 +14283,7 @@ function presetWithParams(text,params){
    ]]>. presetKidSpan = [start, end) of slot N's child preset text; presetWithKids writes a slot's edits over it
    (presetWithParams on the child). Mirrors make_lv1_session._preset_with_kids (keep in sync). */
 function presetSetupSpan(text){
-  const setup=(/<ActiveSetup>(\w+)</.exec(text||"")||[])[1]||"SETUP_A",a=(text||"").indexOf('<PresetData Setup="'+setup+'"');
-  if(a<0)return null;const b=presetIdx(text,"</PresetData>",a);return b<0?null:[a,b];
+  const S=presetOwnSetup(text);if(!S)return null;const b=presetIdx(text,"</PresetData>",S.a);return b<0?null:[S.a,b];
 }
 function presetKidSpan(text,slot){
   const sp=presetSetupSpan(text);if(!sp)return null;
@@ -14302,7 +14312,7 @@ function presetIdx(s,needle,from){ // index of needle at/after from, outside CDA
   }
 }
 function presetChunkSpan(text,setup){ // [start, end) of the chunks region of a setup, or null
-  const a=text.indexOf('<PresetData Setup="'+setup+'"');if(a<0)return null;
+  const a=presetIdx(text,'<PresetData Setup="'+setup+'"',0);if(a<0)return null;
   const end=presetIdx(text,"</PresetData>",a);if(end<0)return null;
   const x=presetIdx(text,"<PluginSpecificXMLData",a);
   if(x<0||x>end){const p=presetIdx(text,"</Parameters>",a);return p<0||p>end?null:[p+13,end];}
@@ -14320,9 +14330,18 @@ function presetWithChunks(text,setup,ps){
   return sp?text.slice(0,sp[0])+"\n   "+ps+"\n  "+text.slice(sp[1]):text;
 }
 /* The active setup's RealWorld tokens of a preset text, or null. */
+/* The active setup's OWN <PresetData ...> (never one of a suite child's: they sit in CDATA inside its
+   PluginSpecificXMLData, and a parent whose values are <Parameters Type="Reset"/> -- Scheps Omni 2's default -- has
+   no RealWorld list of its own for a plain regex to stop at). {setup, a: tag start, b: just after the tag + blanks}. */
+function presetOwnSetup(text){
+  text=text||"";const setup=(/<ActiveSetup>(\w+)</.exec(text)||[])[1]||"SETUP_A";
+  const a=presetIdx(text,'<PresetData Setup="'+setup+'"',0);if(a<0)return null;
+  const re=/<PresetData\b[^>]*>\s*/y;re.lastIndex=a;const m=re.exec(text);
+  return m?{setup,a,b:a+m[0].length}:null;
+}
 function presetTokens(text){
-  const setup=(/<ActiveSetup>(\w+)</.exec(text)||[])[1]||"SETUP_A";
-  const m=new RegExp('<PresetData Setup="'+setup+'"[^>]*>\\s*<Parameters Type="RealWorld">([^<]*)').exec(text||"");
+  const S=presetOwnSetup(text);if(!S)return null;
+  const re=/<Parameters Type="RealWorld">([^<]*)/y;re.lastIndex=S.b;const m=re.exec(text);
   return m?m[1].trim().split(/\s+/):null;
 }
 function emoPresetFindOrInsert(db,text){
