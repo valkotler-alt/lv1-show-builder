@@ -1769,10 +1769,13 @@ const STOCK_RACK=()=>({slots:[...STOCK_SLOTS]});
    pre = the slot's preset text exactly as LV1 stored it (settings that can't be written as edits over the
    default: other plugin versions' layouts) — the base the edits go over; role = its LV1 plug_role when not 0
    (an EMO module's own role, a channel strip standing in for the modules); off = disabled; byp = bypassed;
-   cc = its LV1 variant when not the one the strip format picks (e.g. a mono-to-stereo X).
+   cc = its LV1 variant when not the one the strip format picks (e.g. a mono-to-stereo X);
+   sc = its side-chain: {type, name} of the source strip (like a layer slot; an unnamed input: {type:"ch", index})
+   + LV1's plug_sidechain fields a / c / st / si / ci / ctl (AsgnType, ControlType, Section type / index,
+   ChannelIndex, controlID) as stored.
    rack.slots may hold null = an empty slot (LV1 racks keep gaps). */
 const hasP=p=>!!p&&Object.keys(p).length>0;
-const P_META=["ps","pre","role","off","byp","cc"];
+const P_META=["ps","pre","role","off","byp","cc","sc"];
 // the variant a slot is written as: its own LV1 variant (p.cc) while it fits the strip (mono: M, stereo: S; the
 // mono-to-stereo X sits on both in real shows), else stereo S > X > M, mono M > X > S. Mirrors
 // make_lv1_session.resolve_cc (keep in sync).
@@ -1811,7 +1814,7 @@ function rackRow(kind,i,r,colspan,stereo){
   const avail=PLUGINS.filter(([,f])=>need.test(f));
   const cats=[...new Set(avail.map(p=>p[2]||"Other"))].sort();
   const plugRow=(x)=>{const q=(r.params||[])[x]||{};return `<div class="slotrow ins${pEdited(q)?" edited":""}" draggable="true" data-k="${kind}" data-i="${i}" data-x="${x}" title="Drag to reorder">
-      <span class="sno">${x+1}</span><span class="grip">⋮⋮</span><span class="sname">${esc(r.slots[x])}${q.off?' <small class="pustate">off</small>':q.byp?' <small class="pustate">bypassed</small>':""}</span>
+      <span class="sno">${x+1}</span><span class="grip">⋮⋮</span><span class="sname">${esc(r.slots[x])}${q.off?' <small class="pustate">off</small>':q.byp?' <small class="pustate">bypassed</small>':""}${q.sc?` <small class="pustate" title="Side-chain source">SC ← ${esc(q.sc.type==="main"?"MASTER":q.sc.name||"Channel "+((q.sc.index??0)+1))}</small>`:""}</span>
       ${puHasGui(r.slots[x])?`<button class="small pugui" data-k="${kind}" data-i="${i}" data-f="rkGui" data-n="${x}" title="Open ${esc(r.slots[x])} — see and change its settings, load / save presets">Edit</button>`:""}
       <button class="small nudge danger" data-k="${kind}" data-i="${i}" data-f="rkDel" data-n="${x}" title="Remove plugin (its slot stays empty)">✕</button></div>`;};
   const addRow=(slot)=>`<div class="slotrow add" data-k="${kind}" data-i="${i}" data-x="${slot}">
@@ -2153,7 +2156,7 @@ function puCommit(){
   PU.vals.forEach((v,j)=>{const q=PU.P[j];if(v!==null&&v!==base[j]&&!(q&&q.ro))p[j]=v;});
   if(PU.ps)p.ps=PU.ps;
   if(PU.pre)p.pre=PU.pre;
-  for(const k of ["role","off","byp","cc"])if(old[k])p[k]=old[k]; // the slot's LV1 state is not a setting of the window
+  for(const k of ["role","off","byp","cc","sc"])if(old[k])p[k]=old[k]; // the slot's LV1 state is not a setting of the window
   ps[PU.x]=hasP(p)?p:null;
   puDraw();puPresetLabel();
   const btn=document.querySelector(`.rackbtn[data-k="${PU.k}"][data-i="${PU.i}"]`);
@@ -12076,6 +12079,8 @@ function renameRefs(kind,oldName,newName){
   if(!o||!v||o===v)return;
   const lk=kind==="lnk"?"link":kind; // custom-layer slots
   for(const l of state.layers)l.strips=l.strips.map(s=>s&&s[0]===lk&&s[1]===o?[lk,v]:s);
+  for(const x of [...state.channels,...state.groups,...state.fx,state.master]) // plugin side-chain sources
+    for(const p of (x&&x.rack&&x.rack.params)||[])if(p&&p.sc&&p.sc.type===kind&&p.sc.name===o)p.sc={...p.sc,name:v};
   { // extra internal assignments (strip.xs, PATCH › INTERNAL)
     const f={grp:"to",mtx:"mtx",lnk:"link"}[kind];
     if(f)for(const x of [...state.channels,...state.groups,...state.fx,...state.auxes,...state.matrixes,state.master,...Object.values(state.busx||{})])
@@ -14202,6 +14207,12 @@ async function emoExport(spec){
       if(!cc)throw new Error(name+" has no usable variant");
       return cc;
     };
+    // side-chain source -> [obj_type, obj_index] in this export's layout (first name wins, like the layers)
+    const scBy=(list,t,off)=>Object.fromEntries(list.map((x,i)=>[x.name,[t,off+i]]).reverse());
+    const scIdx={ch:scBy(chans,0,0),grp:scBy(groups,1,0),fx:scBy(fx,2,0),aux:scBy(auxes,2,8),mtx:scBy(mtxs,6,0)};
+    const scSrc=s=>!s?null:s.type==="main"?[3,0]:s.type==="ch"&&Number.isInteger(s.index)?[0,s.index]
+      :Object.hasOwn(scIdx[s.type]||{},s.name)?scIdx[s.type][s.name]:null;
+    const scV17=eq(db,"PRAGMA table_info(plug_sidechain)").some(r=>r[1]==="sidechain_src_chainer_id");
     const racked=[];
     chans.forEach((c,i)=>{if(c.rack)racked.push([1+i,c.rack,c.stereo]);});
     groups.forEach((g,i)=>{if(g.rack)racked.push([GRP0+i,g.rack,g.stereo!==false]);});
@@ -14231,8 +14242,15 @@ async function emoExport(spec){
       for(const [cid,nm,cc,slot,params] of plugsToAdd){
         const q=params||{},pre=typeof q.pre==="string"&&q.pre.startsWith("#")?(spec.presetTexts||[])[+q.pre.slice(1)]:q.pre;
         const base=pre&&presetSubComp(pre)===cc?pre:texts[cc]; // v14: the slot's own preset (same variant)
-        erun(db,"INSERT INTO plug VALUES (?, ?, ?, ?, ?, '', ?, 0, 0, -1, 'Waves', ?, 0)",
-          [nextId,cid,slot,nm,cc,q.off?1:0,q.role||0]);
+        const sc=scSrc(q.sc); // a source that no longer exists drops the side-chain
+        erun(db,"INSERT INTO plug VALUES (?, ?, ?, ?, ?, '', ?, 0, ?, -1, 'Waves', ?, 0)",
+          [nextId,cid,slot,nm,cc,q.off?1:0,sc?1:0,q.role||0]);
+        if(sc){const s=q.sc,f=[s.a??1,s.c??2,s.st??7,s.si??-1,s.ci??-1,s.ctl??0];
+          if(scV17)erun(db,"INSERT INTO plug_sidechain (plug_id, AsgnType, ControlType, sidechain_src_chainer_id, SectionType, "+
+            "SectionIndex, ChannelIndex, controlID) SELECT ?, ?, ?, id, ?, ?, ?, ? FROM object WHERE obj_type = ? AND obj_index = ?",
+            [nextId,f[0],f[1],f[2],f[3],f[4],f[5],...sc]);
+          else erun(db,"INSERT INTO plug_sidechain (plug_id, AsgnType, ControlType, TrackType, TrackHandle, SectionType, "+
+            "SectionIndex, ChannelIndex, controlID) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",[nextId,f[0],f[1],...sc,f[2],f[3],f[4],f[5]]);}
         erun(db,"INSERT INTO snapshot_plugin VALUES (?, ?, ?, -1, -1, ?, 0, 1, -9999, -9999, 125, 0)",
           [nextId,nextId,emoPresetFindOrInsert(db,presetWithParams(base,params)),q.byp?1:0]);
         nextId++;
@@ -14512,15 +14530,26 @@ async function emoImport(bytes,fileStemName){
       if(byp)p.byp=1;
       return hasP(p)?p:null;
     };
+    // plugin side-chains: keyed plug -> source strip (V16 TrackType / TrackHandle; V17 the source's object id,
+    // Converter_5_2.cpp:1592) + LV1's own fields, as stored
+    const scOf={};
+    {
+      const v17=eq(db,"PRAGMA table_info(plug_sidechain)").some(r=>r[1]==="sidechain_src_chainer_id");
+      for(const [pid,a,c,s1,s2,st,si,ci,ctl] of eq(db,"SELECT plug_id, AsgnType, ControlType, "+
+          (v17?"sidechain_src_chainer_id, 0":"TrackType, TrackHandle")+", SectionType, SectionIndex, ChannelIndex, controlID FROM plug_sidechain")){
+        const src=v17?objKey[s1]:tk(s1,s2);if(src)scOf[pid]={src,a,c,st,si,ci,ctl};
+      }
+    }
     const rackRows={};
-    for(const [cid,slot,nm,cc,role,text,off,byp] of eq(db,
-      "SELECT p.chainer_id, p.slot, p.plugin_name, p.plugin_4cc, p.plug_role, pp.preset, p.disabled, sp.bypass FROM plug p "+
+    for(const [cid,slot,nm,cc,role,text,off,byp,pid] of eq(db,
+      "SELECT p.chainer_id, p.slot, p.plugin_name, p.plugin_4cc, p.plug_role, pp.preset, p.disabled, sp.bypass, p.id FROM plug p "+
       "LEFT JOIN snapshot_plugin sp ON sp.plug_id = p.id AND sp.snapshot_id = -1 "+
       "LEFT JOIN plugin_preset pp ON pp.id = sp.preset_id ORDER BY p.chainer_id, p.slot"))
     {
       const name=cc2name[cc]||nm;let p=paramsOf(cc,text,role,off,byp);
       // a variant other than the one the export picks for this strip format (e.g. a mono-to-stereo X)
       if(packCcs[name]&&cc!==slotCc(packCcs[name],!!stereoOf[cid]))p={...(p||{}),cc};
+      if(scOf[pid])p={...(p||{}),sc:{...scOf[pid]}}; // its source becomes a builder reference below
       (rackRows[cid]=rackRows[cid]||[]).push([slot,name,role,p,cc]);
     }
     // settings beyond an EMO module's own factory role
@@ -14725,6 +14754,15 @@ async function emoImport(bytes,fileStemName){
       .map(c=>nameOf[c].trim());
     const note=cfgOdd?`This session's mixer configuration (${nCh} inputs / ${nGrp} groups / ${8+nAux} aux = 8 FX + ${nAux} Mon) is not one of the builder's; `+
       `imported as ${cfg.label} · ${cfg.sub}`+(lost.length?`. Not imported: ${lost.join(", ")}`:"")+".":"";
+    // side-chain sources as builder references (kind + name, like the layers: renames follow); an unnamed input
+    // by its channel index; a source that is not imported (e.g. an unused Mon strip) drops the side-chain
+    for(const r of [...channels,...groups,...fxs].map(o=>o.rack).concat([mRack]))for(const p of (r&&r.params)||[]){
+      if(!p||!p.sc||!p.sc.src)continue;
+      const {src:[t,i],...rest}=p.sc,ref=t===3&&i===0?["main"]:refOf[`${t}:${i}`];
+      if(ref)p.sc={type:ref[0],...(ref[1]!==undefined?{name:ref[1]}:{}),...rest};
+      else if(t===0)p.sc={type:"ch",index:i,...rest};
+      else delete p.sc;
+    }
     return {
       ...(note?{_note:note}:{}),
       format:"lv1-input-list",version:14,
