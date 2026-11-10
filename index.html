@@ -1521,7 +1521,7 @@ const cfg=()=>CONFIGS.find(c=>c.id===state.configId)||CONFIGS[3];
    set LV1's own plugin menus show; native/DAW-only plugins (synths etc.)
    are excluded. Formats: M=mono, S=stereo, X=mono-to-stereo. The converter
    resolves each name to the right 4cc variant + factory preset. */
-const PLUGINS=[["Abbey Road Chambers","MSX","Delay"],["Abbey Road EMI TG12345 Ch","MS","Dynamics"],["Abbey Road J37 Tape","MS","Delay"],["Abbey Road Plates","MSX","Reverb"],["Abbey Road REDD.17","MS","Harmonic"],["Abbey Road REDD.37.51","MS","Harmonic"],["Abbey Road Reel ADT","MSX","Modulation"],["Abbey Road Reel ADT Live","MSX","Modulation"],["Abbey Road Reel ADT2V","SX","Modulation"],["Abbey Road Reel ADT2V Live","SX","Modulation"],["Abbey Road RS124","MS","Dynamics"],["Abbey Road RS56 Passive EQ","MS","EQ"],["Abbey Road Saturator","MS","Harmonic"],["Abbey Road Studio 3","S","Sound Field"],["Abbey Road TG Mastering","MS","Harmonic"],["Abbey Road TG Mastering Live","MS","Harmonic"],["Abbey Road TG Meter Bridge","MS","Dynamics"],["Abbey Road The King's Microphones","MS","EQ"],["Abbey Road Vinyl","MS","Harmonic"],["Abbey Road Vinyl Light","MS","Harmonic"],["Aphex Vintage Exciter","MS","Harmonic"],["API-2500","MS","Dynamics"],["API-550A","MS","EQ"],["API-550B","MS","EQ"],["API-560","MS","EQ"],["APNNFeedback","MS","Noise Reduction"],["Atlas Reverb","SX","Reverb"],["AudioTrack","MS","Dynamics"],["Bass Rider","MS","Dynamics"],["Bass Rider Live","MS","Dynamics"],["BB Tubes","MS","Harmonic"],["Berzerk Distortion","MS","Harmonic"],["Brauer Motion","SX","Sound Field"],["Butch Vig Vocals","MS","Effect"],["C1 comp","MS","Dynamics"],["C1 comp-gate","MS","Dynamics"],["C1 comp-sc","MS","Dynamics"],["C1 gate","MS","Dynamics"],["C4","MS","Dynamics"],["C6","MS","Dynamics"],["C6-SideChain","MS","Dynamics"],["Center","S","Sound Field"],["CLA Bass","SX","Effect"],["CLA Drums","SX","Effect"],["CLA EchoSphere","SX","Delay"],["CLA Effects","SX","Effect"],["CLA Epic","SX","Delay"],["CLA Guitars","SX","Effect"],["CLA MixDown","MS","Dynamics"],["CLA MixHub","MS","Harmonic"],["CLA MixHub Lite","MS","Harmonic"],["CLA Nx","S","Sound Field"],["CLA Unplugged","SX","Effect"],["CLA Vocals","SX","Effect"],["CLA-2A","MS","Dynamics"],["CLA-3A","MS","Dynamics"],["CLA-76","MS","Dynamics"],["Clarix LB","MS","Noise Reduction"],["Curves AQ Live","MS","Dynamics"],["Curves Equator Live","MS","Dynamics"],["Curves Resolve Live","MS","Dynamics"],["dbx-160","MS","Dynamics"],["DeEsser","MS","Dynamics"],["Doppler","SX","Other"],["Dorrough","MS","Sound Field"],["Doubler2","MSX","Pitch Shift"],["Doubler4","MSX","Pitch Shift"],["DPR-402","MS","Dynamics"],["DrumReplacer","S","Effect"],["DTS Neural UpMix","S","Sound Field"],["EKramer BA","MS","Effect"],["EKramer DR","MS","Effect"],["EKramer FX","SX","Effect"],["EKramer GT","SX","Effect"],["EKramer VC","SX","Effect"],["EMO D-5","MS","Dynamics"],["EMO-D5","MS","Dynamics"],["EMO-F2","MS","EQ"],["EMO-Generator","MS","Other"],["EMO-IEM","S","Sound Field"],["EMO-Q4","MS","EQ"],["Enigma","SX","Modulation"],["EXT Insert","MS","Other"],["F6","MS","Dynamics"],["F6-RTA","MS","Dynamics"],["Feedback Hunter","MS","Other"],["GEQ Classic","MS","EQ"],["GEQ Modern","MS","EQ"],["GTR Amp","MSX","GTR"],["GTR Amp 2Cab","M","GTR"],["GTR Stomp 2","MSX","GTR"],["GTR Stomp 4","MSX","GTR"],["GTR Stomp 6","MSX","GTR"],["GTR Tool Rack","SX","GTR"],["GTR Tuner","M","GTR"],["GW MixCentric","MS","Dynamics"],["GW PianoCentric","MSX","Effect"],["GW ToneCentric","MS","Harmonic"],["GW VoiceCentric","MSX","Delay"],["H-Comp","MS","Dynamics"],["H-Delay","MSX","Delay"],["H-EQ","MS","EQ"],["H-EQ-Light","MS","EQ"],["H-Reverb","MSX","Reverb"],["H-Reverb long","MSX","Reverb"],["IDX LIVE Intelligent Dynamics","MS","Dynamics"],["IMPusher","MS","Dynamics"],["InPhase","MS","EQ"],["InPhase Live","MS","EQ"],["InPhase LT","MS","EQ"],["InPhase LT Live","MS","EQ"],["InTrigger Live","MSX","Effect"],["IR-L","MX","Reverb"],["IR-L efficient","S","Reverb"],["IR-L full","S","Reverb"],["IR1","MX","Reverb"],["IR1 efficient","S","Reverb"],["IR1 full","S","Reverb"],["IRLive","MSX","Reverb"],["JJP-Bass","MSX","Effect"],["JJP-Cymb-Perc","SX","Effect"],["JJP-Drums","MSX","Effect"],["JJP-Guitars","SX","Effect"],["JJP-Strings-Keys","SX","Effect"],["JJP-Vocals","SX","Effect"],["Kaleidoscopes","MSX","Modulation"],["Kramer HLS","MS","EQ"],["Kramer PIE","MS","Dynamics"],["Kramer Tape","MS","Delay"],["L1 limiter","MS","Dynamics"],["L2","MS","Dynamics"],["L2-SC","MS","Dynamics"],["L3 MultiMaximizer","MS","Dynamics"],["L3 UltraMaximizer","MS","Dynamics"],["L3-LL Multi","MS","Dynamics"],["L3-LL Ultra","MS","Dynamics"],["L4 Live","M","Dynamics"],["L4 Ultramaximizer","M","Dynamics"],["LFE360","M","EQ"],["LinEQ Broadband","MS","EQ"],["LinMB","MS","Dynamics"],["LoAir","MS","Harmonic"],["Lofi Space","MSX","Effect"],["Magma BB Tubes","MS","Harmonic"],["Magma Channel Strip","MS","Harmonic"],["Magma Lil Tube","MS","Harmonic"],["Magma Springs","MSX","Reverb"],["Magma StressBox","MS","Dynamics"],["MannyM Delay","SX","Delay"],["MannyM Distortion","MS","Harmonic"],["MannyM EQ","MS","EQ"],["MannyM Reverb","MSX","Reverb"],["MannyM Tone Shaper","MS","Dynamics"],["MannyM TripleD","MS","Dynamics"],["Maserati ACG","SX","Effect"],["Maserati B72","MSX","Effect"],["Maserati DRM","MS","Effect"],["Maserati GRP","MS","Effect"],["Maserati GTi","SX","Effect"],["Maserati HMX","SX","Effect"],["Maserati VX1","SX","Effect"],["MaxxBass","MS","Other"],["MaxxVolume","MS","Dynamics"],["MDMX Fuzz","MS","Harmonic"],["MDMX OverDrive","MS","Harmonic"],["MDMX Screamer","MS","Harmonic"],["MetaFlanger","MSX","Modulation"],["MixAssist","S","Instrument"],["MondoMod","MSX","Modulation"],["Morphoder","MSX","Modulation"],["MultiMod Rack","MSX","Modulation"],["MV2","MS","Dynamics"],["NLS Buss","MS","Harmonic"],["NLS Channel","MS","Harmonic"],["NS1","MS","Noise Reduction"],["NX","MS","Sound Field"],["Nx Germano Studios","S","Sound Field"],["Nx Ocean Way Nashville","S","Sound Field"],["OneKnob Brighter","MS","EQ"],["OneKnob Driver","MS","Harmonic"],["OneKnob Filter","MS","EQ"],["OneKnob Louder","MS","Dynamics"],["OneKnob Phatter","MS","EQ"],["OneKnob Pressure","MS","Dynamics"],["OneKnob Wetter","MSX","Reverb"],["OneKnobBrighter","MS","EQ"],["OneKnobLouder","MS","Dynamics"],["OVox","SX","Modulation"],["PAZ- Analyzer","S","Sound Field"],["PAZ- Frequency","MS","Sound Field"],["PAZ- Meters","MS","Sound Field"],["PAZ- Position","S","Sound Field"],["PlaylistRider","MS","Dynamics"],["Primary Source Expander","MS","Dynamics"],["PRS Archon","MX","Harmonic"],["PRS Dallas","MX","Harmonic"],["PRS V9","MX","Harmonic"],["PS22 Split","MS","Sound Field"],["PS22 Spread","MS","Sound Field"],["PS22 Spread(10)","MS","Sound Field"],["PS22 XSplit","MS","Sound Field"],["PSE","MS","Dynamics"],["PuigChild 660","M","Dynamics"],["PuigChild 670","S","Dynamics"],["PuigTec EQP1A","MS","EQ"],["PuigTec MEQ5","MS","EQ"],["Q-Clone","MS","EQ"],["Q1","MS","EQ"],["Q10","MS","EQ"],["Q2","MS","EQ"],["Q3","MS","EQ"],["Q4","MS","EQ"],["Q6","MS","EQ"],["Q8","MS","EQ"],["RBass","MS","Other"],["RChannel","MSX","Dynamics"],["RCompressor","MS","Dynamics"],["Renaissance Axx","MS","Dynamics"],["REQ 2","MS","EQ"],["REQ 4","MS","EQ"],["REQ 6","MS","EQ"],["Retro Fi","MSX","Effect"],["Rogue Brutewall","MS","Harmonic"],["Rogue Dimensions","MS","Reverb"],["Rogue Overdrive","MS","Harmonic"],["Rogue Pre Focus","MS","Harmonic"],["Rogue SampTone","MS","Harmonic"],["RVerb","SX","Reverb"],["RVox","MS","Dynamics"],["S1 Imager","S","Sound Field"],["S1 MS Matrix","S","Sound Field"],["S1 Shuffler","S","Sound Field"],["Saphira","MS","Modulation"],["Scheps 73","MS","EQ"],["Scheps Omni Channel 2","MS","Harmonic"],["Scheps Parallel Particles","MS","Harmonic"],["Sibilance","MS","Dynamics"],["Sibilance-Live","MS","Dynamics"],["Silk Vocal Live","MS","Dynamics"],["Smack Attack","MS","Dynamics"],["Space Rider","SX","Reverb"],["SSL EV2 Channel","MS","Dynamics"],["SSLChannel","MS","Dynamics"],["SSLComp","MS","Dynamics"],["SSLEQ","MS","EQ"],["SSLGChannel","MS","Dynamics"],["StreamerRack","MS","Instrument"],["StudioVerse Audio Effects","MSX","Instrument"],["Sub Align","MS","Sound Field"],["Submarine","MS","Harmonic"],["SuperTap 2-Taps","MSX","Delay"],["SuperTap 6-Taps","MSX","Delay"],["Sync Vx","M","Other"],["Sync Vx Non ARA","M","Other"],["T1","MS","Dynamics"],["Torque","MS","Pitch Shift"],["Torque-Live","MS","Pitch Shift"],["TRACT","MS","EQ"],["TRACT LinPhase","MS","EQ"],["TRACT Measure","M","Other"],["TRACT SPL Meter","M","Dynamics"],["TransX","MS","Dynamics"],["TransX Multi","MS","Dynamics"],["TransX Wide","MS","Dynamics"],["TrueVerb","MSX","Reverb"],["VComp","MS","Dynamics"],["VEQ3","MS","EQ"],["VEQ4","MS","EQ"],["Vitamin","MS","Harmonic"],["Vocal Bender","MS","Pitch Shift"],["Vocal Rider","MS","Dynamics"],["Vocal Rider Live","MS","Dynamics"],["Voltage Amps Bass","MSX","Harmonic"],["Voltage Amps Guitar","MSX","Harmonic"],["VU Meter","MS","Sound Field"],["W43","MS","Noise Reduction"],["Waves Harmony","SX","Pitch Shift"],["WLM Meter","MS","Dynamics"],["WLM Plus","MS","Dynamics"],["WNS","MS","Noise Reduction"],["X-Click","MS","Noise Reduction"],["X-Crackle","MS","Noise Reduction"],["X-FDBK","MS","Other"],["X-Hum","MS","Noise Reduction"],["X-Noise","MS","Noise Reduction"]];
+const PLUGINS=[["Abbey Road Chambers","MSX","Delay"],["Abbey Road EMI TG12345 Ch","MS","Dynamics"],["Abbey Road J37 Tape","MS","Delay"],["Abbey Road Plates","MSX","Reverb"],["Abbey Road REDD.17","MS","Harmonic"],["Abbey Road REDD.37.51","MS","Harmonic"],["Abbey Road Reel ADT","MSX","Modulation"],["Abbey Road Reel ADT Live","MSX","Modulation"],["Abbey Road Reel ADT2V","SX","Modulation"],["Abbey Road Reel ADT2V Live","SX","Modulation"],["Abbey Road RS124","MS","Dynamics"],["Abbey Road RS56 Passive EQ","MS","EQ"],["Abbey Road Saturator","MS","Harmonic"],["Abbey Road Studio 3","S","Sound Field"],["Abbey Road TG Mastering","MS","Harmonic"],["Abbey Road TG Mastering Live","MS","Harmonic"],["Abbey Road TG Meter Bridge","MS","Dynamics"],["Abbey Road The King's Microphones","MS","EQ"],["Abbey Road Vinyl","MS","Harmonic"],["Abbey Road Vinyl Light","MS","Harmonic"],["Aphex Vintage Exciter","MS","Harmonic"],["API-2500","MS","Dynamics"],["API-550A","MS","EQ"],["API-550B","MS","EQ"],["API-560","MS","EQ"],["APNNFeedback","MS","Noise Reduction"],["Atlas Reverb","SX","Reverb"],["AudioTrack","MS","Dynamics"],["Bass Rider","MS","Dynamics"],["Bass Rider Live","MS","Dynamics"],["BB Tubes","MS","Harmonic"],["Berzerk Distortion","MS","Harmonic"],["Brauer Motion","SX","Sound Field"],["Butch Vig Vocals","MS","Effect"],["C1 comp","MS","Dynamics"],["C1 comp-gate","MS","Dynamics"],["C1 comp-sc","MS","Dynamics"],["C1 gate","MS","Dynamics"],["C4","MS","Dynamics"],["C6","MS","Dynamics"],["C6-SideChain","MS","Dynamics"],["Center","S","Sound Field"],["CLA Bass","SX","Effect"],["CLA Drums","SX","Effect"],["CLA EchoSphere","SX","Delay"],["CLA Effects","SX","Effect"],["CLA Epic","SX","Delay"],["CLA Guitars","SX","Effect"],["CLA MixDown","MS","Dynamics"],["CLA MixHub","MS","Harmonic"],["CLA MixHub Lite","MS","Harmonic"],["CLA Nx","S","Sound Field"],["CLA Unplugged","SX","Effect"],["CLA Vocals","SX","Effect"],["CLA-2A","MS","Dynamics"],["CLA-3A","MS","Dynamics"],["CLA-76","MS","Dynamics"],["Clarix LB","MS","Noise Reduction"],["Curves AQ Live","MS","Dynamics"],["Curves Equator Live","MS","Dynamics"],["Curves Resolve Live","MS","Dynamics"],["dbx-160","MS","Dynamics"],["DeEsser","MS","Dynamics"],["Doppler","SX","Other"],["Dorrough","MS","Sound Field"],["Doubler2","MSX","Pitch Shift"],["Doubler4","MSX","Pitch Shift"],["DPR-402","MS","Dynamics"],["DrumReplacer","S","Effect"],["DTS Neural UpMix","S","Sound Field"],["EKramer BA","MS","Effect"],["EKramer DR","MS","Effect"],["EKramer FX","SX","Effect"],["EKramer GT","SX","Effect"],["EKramer VC","SX","Effect"],["EMO D-5","MS","Dynamics"],["EMO-D5","MS","Dynamics"],["EMO-F2","MS","EQ"],["EMO-Generator","MS","Other"],["EMO-IEM","S","Sound Field"],["EMO-Q4","MS","EQ"],["Enigma","SX","Modulation"],["EXT Insert","MS","Other"],["F6","MS","Dynamics"],["F6-RTA","MS","Dynamics"],["Feedback Hunter","MS","Other"],["GEQ Classic","MS","EQ"],["GEQ Modern","MS","EQ"],["GTR Amp","MSX","GTR"],["GTR Amp 2Cab","M","GTR"],["GTR Stomp 2","MSX","GTR"],["GTR Stomp 4","MSX","GTR"],["GTR Stomp 6","MSX","GTR"],["GTR Tool Rack","SX","GTR"],["GTR Tuner","M","GTR"],["GW MixCentric","MS","Dynamics"],["GW PianoCentric","MSX","Effect"],["GW ToneCentric","MS","Harmonic"],["GW VoiceCentric","MSX","Delay"],["H-Comp","MS","Dynamics"],["H-Delay","MSX","Delay"],["H-EQ","MS","EQ"],["H-EQ-Light","MS","EQ"],["H-Reverb","MSX","Reverb"],["H-Reverb long","MSX","Reverb"],["IDX LIVE Intelligent Dynamics","MS","Dynamics"],["IMPusher","MS","Dynamics"],["InPhase","MS","EQ"],["InPhase Live","MS","EQ"],["InPhase LT","MS","EQ"],["InPhase LT Live","MS","EQ"],["InTrigger Live","MSX","Effect"],["IR-L","MX","Reverb"],["IR-L efficient","S","Reverb"],["IR-L full","S","Reverb"],["IR1","MX","Reverb"],["IR1 efficient","S","Reverb"],["IR1 full","S","Reverb"],["IRLive","MSX","Reverb"],["JJP-Bass","MSX","Effect"],["JJP-Cymb-Perc","SX","Effect"],["JJP-Drums","MSX","Effect"],["JJP-Guitars","SX","Effect"],["JJP-Strings-Keys","SX","Effect"],["JJP-Vocals","SX","Effect"],["Kaleidoscopes","MSX","Modulation"],["Kramer HLS","MS","EQ"],["Kramer PIE","MS","Dynamics"],["Kramer Tape","MS","Delay"],["L1 limiter","MS","Dynamics"],["L2","MS","Dynamics"],["L2-SC","MS","Dynamics"],["L3 MultiMaximizer","MS","Dynamics"],["L3 UltraMaximizer","MS","Dynamics"],["L3-LL Multi","MS","Dynamics"],["L3-LL Ultra","MS","Dynamics"],["L4 Live","M","Dynamics"],["L4 Ultramaximizer","M","Dynamics"],["LFE360","M","EQ"],["LinEQ Broadband","MS","EQ"],["LinMB","MS","Dynamics"],["LoAir","MS","Harmonic"],["Lofi Space","MSX","Effect"],["Magma BB Tubes","MS","Harmonic"],["Magma Channel Strip","MS","Harmonic"],["Magma Lil Tube","MS","Harmonic"],["Magma Springs","MSX","Reverb"],["Magma StressBox","MS","Dynamics"],["MannyM Delay","SX","Delay"],["MannyM Distortion","MS","Harmonic"],["MannyM EQ","MS","EQ"],["MannyM Reverb","MSX","Reverb"],["MannyM Tone Shaper","MS","Dynamics"],["MannyM TripleD","MS","Dynamics"],["Maserati ACG","SX","Effect"],["Maserati B72","MSX","Effect"],["Maserati DRM","MS","Effect"],["Maserati GRP","MS","Effect"],["Maserati GTi","SX","Effect"],["Maserati HMX","SX","Effect"],["Maserati VX1","SX","Effect"],["MaxxBass","MS","Other"],["MaxxVolume","MS","Dynamics"],["MDMX Fuzz","MS","Harmonic"],["MDMX OverDrive","MS","Harmonic"],["MDMX Screamer","MS","Harmonic"],["MetaFlanger","MSX","Modulation"],["MixAssist","S","Instrument"],["MondoMod","MSX","Modulation"],["Morphoder","MSX","Modulation"],["MultiMod Rack","MSX","Modulation"],["MV2","MS","Dynamics"],["NLS Buss","MS","Harmonic"],["NLS Channel","MS","Harmonic"],["NS1","MS","Noise Reduction"],["NX","MS","Sound Field"],["Nx Germano Studios","S","Sound Field"],["Nx Ocean Way Nashville","S","Sound Field"],["OneKnob Brighter","MS","EQ"],["OneKnob Driver","MS","Harmonic"],["OneKnob Filter","MS","EQ"],["OneKnob Louder","MS","Dynamics"],["OneKnob Phatter","MS","EQ"],["OneKnob Pressure","MS","Dynamics"],["OneKnob Wetter","MSX","Reverb"],["OneKnobBrighter","MS","EQ"],["OneKnobLouder","MS","Dynamics"],["OVox","SX","Modulation"],["PAZ- Analyzer","S","Sound Field"],["PAZ- Frequency","MS","Sound Field"],["PAZ- Meters","MS","Sound Field"],["PAZ- Position","S","Sound Field"],["PlaylistRider","MS","Dynamics"],["Primary Source Expander","MS","Dynamics"],["PRS Archon","MX","Harmonic"],["PRS Dallas","MX","Harmonic"],["PRS V9","MX","Harmonic"],["PS22 Split","MS","Sound Field"],["PS22 Spread","MS","Sound Field"],["PS22 Spread(10)","MS","Sound Field"],["PS22 XSplit","MS","Sound Field"],["PSE","MS","Dynamics"],["PuigChild 660","M","Dynamics"],["PuigChild 670","S","Dynamics"],["PuigTec EQP1A","MS","EQ"],["PuigTec MEQ5","MS","EQ"],["Q-Clone","MS","EQ"],["Q1","MS","EQ"],["Q10","MS","EQ"],["Q2","MS","EQ"],["Q3","MS","EQ"],["Q4","MS","EQ"],["Q6","MS","EQ"],["Q8","MS","EQ"],["RBass","MS","Other"],["RChannel","MSX","Dynamics"],["RCompressor","MS","Dynamics"],["Renaissance Axx","MS","Dynamics"],["REQ 2","MS","EQ"],["REQ 4","MS","EQ"],["REQ 6","MS","EQ"],["Retro Fi","MSX","Effect"],["RVerb","SX","Reverb"],["RVox","MS","Dynamics"],["S1 Imager","S","Sound Field"],["S1 MS Matrix","S","Sound Field"],["S1 Shuffler","S","Sound Field"],["Saphira","MS","Modulation"],["Scheps 73","MS","EQ"],["Scheps Omni Channel 2","MS","Harmonic"],["Scheps Parallel Particles","MS","Harmonic"],["Sibilance","MS","Dynamics"],["Sibilance-Live","MS","Dynamics"],["Silk Vocal Live","MS","Dynamics"],["Smack Attack","MS","Dynamics"],["Space Rider","SX","Reverb"],["SSL EV2 Channel","MS","Dynamics"],["SSLChannel","MS","Dynamics"],["SSLComp","MS","Dynamics"],["SSLEQ","MS","EQ"],["SSLGChannel","MS","Dynamics"],["StreamerRack","MS","Instrument"],["StudioVerse Audio Effects","MSX","Instrument"],["Sub Align","MS","Sound Field"],["Submarine","MS","Harmonic"],["SuperTap 2-Taps","MSX","Delay"],["SuperTap 6-Taps","MSX","Delay"],["Sync Vx","M","Other"],["Sync Vx Non ARA","M","Other"],["T1","MS","Dynamics"],["Torque","MS","Pitch Shift"],["Torque-Live","MS","Pitch Shift"],["TRACT","MS","EQ"],["TRACT LinPhase","MS","EQ"],["TRACT Measure","M","Other"],["TRACT SPL Meter","M","Dynamics"],["TransX","MS","Dynamics"],["TransX Multi","MS","Dynamics"],["TransX Wide","MS","Dynamics"],["TrueVerb","MSX","Reverb"],["VComp","MS","Dynamics"],["VEQ3","MS","EQ"],["VEQ4","MS","EQ"],["Vitamin","MS","Harmonic"],["Vocal Bender","MS","Pitch Shift"],["Vocal Rider","MS","Dynamics"],["Vocal Rider Live","MS","Dynamics"],["Voltage Amps Bass","MSX","Harmonic"],["Voltage Amps Guitar","MSX","Harmonic"],["VU Meter","MS","Sound Field"],["W43","MS","Noise Reduction"],["Waves Harmony","SX","Pitch Shift"],["WLM Meter","MS","Dynamics"],["WLM Plus","MS","Dynamics"],["WNS","MS","Noise Reduction"],["X-Click","MS","Noise Reduction"],["X-Crackle","MS","Noise Reduction"],["X-FDBK","MS","Other"],["X-Hum","MS","Noise Reduction"],["X-Noise","MS","Noise Reduction"]];
 const PLUGIN_FMT=new Map(PLUGINS);
 
 /* LV1's 32-color strip palette (SurfaceDriver_App/Resources/Palettes/LV1.xml);
@@ -6494,113 +6494,6 @@ PU_GRAPHS["RVerb:markerPos"]=(ctl,[l,t,w,h])=>{
    limiter state: live audio only, nothing static to draw. Explicit no-op for RAXM / RAXS. */
 PU_GRAPHS["RenAxx:Limiter Count (output top button)"]={draw(){}};
 
-/* Rogue Dimensions (DMNM / DMNS) = the Atlas Reverb engine, Plugins/Renaissance/Reverb/Code/Plugin/ReverbAlg.cpp
-   (m_NumCombs = 1, m_NumIntChns = 6, ctor :57; NUM_DISPS_PER_COMB = 4). V17 ParamXML graph params:
-   - "EQ Filter[ Wide]": PARAM_COMBS_SHELF_FILTER_GRAPH (narrow only; 255,210,190, 1 px) then PARAM_SHELF_FILTER_GRAPH
-     (190,210,255, 1 px): SetShelfFilterGraph :2883 = |LF·HF shelf|² of SetInputShelfFilter :2029 / SetCombsShelfFilter
-     :2100 (ShelvCfG :3362 + ShelvGg :3321, DoubleOrd1), y = (short)(500 + (800/2.4)·log10|H|²) (EQGainScale, ±12 dB).
-   - "Reverb Damping[ Wide]": PARAM_REVERB_DAMPING_GRAPH (SetRevDampingGraph :2838): the last comb channel's damping
-     biquads (SetCombFilter :1263: HF / LF ResShelv at (1/RT60ratio−1)·TotRevAtn, kDSPSDampInternalClipped guard,
-     LPF O2Butterworth), y = (short)(500 / (dB/TotRevAtn[5] + 1)); TotRevAtn from SetCombDelays :735 + SetReverbAtn
-     :1053 (prime delays, FindNearestPrime :3204 as shipped). DrawClippedTexture: white 1 px line.
-   - "Time Response[ Wide]": PARAM_PRE_DELAY tail polygon (SetTailGraph :2795; 0..200 ms PARAM_ERGRAPH axis,
-     build-up = TotDelay[0]/30), DrawClippedTexture white 2 px.
-   Approximated: the ClippedTexture fills (bitmaps 10101 / 10100) are drawn as a faint white wash.
-   Skipped: the early-reflection taps (PARAM_ERGRAPH, custom DrawER: WCReflections random tap generator, :6617-7100)
-   and the *_GRAPH_TEXT captions. 100 points on 16..21000 Hz log (Init_ZPlane :3084). */
-const RD_N=100,RD_FL=16,RD_FH=21000;
-const RD_X=Array.from({length:RD_N},(_,i)=>i*PU_GRAN/(RD_N-1));
-const RD_W=RD_X.map(s=>puW(RD_FL*Math.pow(RD_FH/RD_FL,Math.trunc(s)/PU_GRAN))); // ScaleFunc((int32_t)dFrq)
-const rdFs=f=>PU_GRAN*Math.log(f/RD_FL)/Math.log(RD_FH/RD_FL);
-const RD_PR=(()=>{const p=[];for(let n=2;p.length<4100;n++){let ok=true;for(const q of p){if(q*q>n)break;if(n%q===0){ok=false;break;}}if(ok)p.push(n);}return p;})(); // MAX_NUM_PRIMES
-function rdPrime(N){ // FindNearestPrime(float) :3204 — first i with (p[i]−N)(p[i+1]−N) ≤ 0 → p[i]; none → last prime
-  for(let i=0;i<RD_PR.length-1;i++)if((RD_PR[i]-N)*(RD_PR[i+1]-N)<=0)return RD_PR[i];
-  return RD_PR[RD_PR.length-1];
-}
-const rdV=(n,d)=>{const x=puVal(n);return x===null?d:x;};
-function rdComb(){ // comb 0: SetCombDelays :735 (+ eFeedBackwardConst split) and SetReverbAtn :1053
-  const f=Math.fround,dr=rdV("PARAM_DISPERSION_RATIO",0.323),sq=rdV("PARAM_DELAY_SQUEEZE",7);
-  const rdm=dr+(dr>0.2?-1:1)*rdV("PARAM_DECORRELATION",0)*0.02,MB=Math.floor(Math.trunc(rdV("PARAM_REF_DELAY",45)*PU_SR*0.001)*rdV("PARAM_REVERB_SIZE",1.6));
-  const Sq=Math.floor(sq),man=1+2*(sq-1)/10,ty=Math.trunc(rdV("PARAM_DELAY_SET",2)),INC=[1,1.20782937117763,1.29209010195923,1.44759950944365,1.63082080620053,1.82788232431711];
-  let R=[0,1,2,3].map(d=>Math.pow(0.5,d/4));if(ty===2)R=INC.slice(0,4);
-  const nr=R.reduce((a,b)=>a+b,0);R=R.map(r=>r*rdm/nr);
-  const FF0=[],D0=[];
-  for(let ch=0;ch<6;ch++){
-    const md=f(ty===0?MB*f(1+f(ch/f(6+(10-Sq)))):ty===1?MB*Math.pow(man,ch/6):ty===2?rdPrime(f(MB))*INC[ch]:MB*(1+ch/6));
-    let ff=md;D0.push(R.map(r=>{const p=rdPrime(f(md*r));ff=f(ff-p);return p;}));FF0.push(rdPrime(ff));
-  }
-  const nw=ch=>Math.trunc(ch/3)+(2*ch)%6,FF=[0,1,2,3,4,5].map(c=>FF0[nw(c)]),D=[0,1,2,3,4,5].map(c=>D0[nw(c)]);
-  const tot=FF.map((x,c)=>x+D[c].reduce((a,b)=>a+b,0)),mn=Math.min(...FF),sr=rdV("PARAM_SPLIT_RATIO",0),FB=[];
-  FF.forEach((x,c)=>{if(sr!==0){const n=Math.trunc(x-mn*sr+1);FB[c]=x-n;FF[c]=n;}else{FB[c]=1;FF[c]=x-1;}});
-  const rt=rdV("PARAM_REVERB_TIME",2),dbs=rt?-60/(rt*PU_SR):-60,lNum=Math.trunc(rdV("PARAM_NUM_CHAN",6));
-  const ch=5,dbm=dbs/rdV("PARAM_COMBS_RT60_RATIO_"+ch,rdV("PARAM_COMBS_RT60_RATIO",1));
-  const ffA=ch<lNum?f(dbm*FF[ch]):-100,fbA=ch<lNum?f(dbm*FB[ch]):-100,dA=D[ch].map(x=>f(dbm*x));
-  return {tot0:tot[0],T5:ffA+fbA+dA.reduce((a,b)=>a+b,0),ffA,fbA,dA};
-}
-function rdDamp(){ // SetCombFilter :1263 — biquads of the last comb channel
-  const C=rdComb(),rt=rdV("PARAM_REVERB_TIME",2),v=n=>puVal(n);
-  const hr=Math.max(0.05/rt,v("PARAM_HF_RT60_RATIO")),lr=Math.max(0.05/rt,v("PARAM_LF_RT60_RATIO"));
-  let hx=(1/hr-1)*C.T5,lx=(1/lr-1)*C.T5;
-  if(Math.trunc(rdV("PARAM_DSPS_ATTN_EXT",2))===2){ // kDSPSDampInternalClipped guard
-    const dd=rdV("PARAM_DELAY_DENSITY",0.35);let g=C.ffA+C.fbA;
-    C.dA.forEach((db,d)=>{const a=dd*rdV("PARAM_DSPS_FACTOR_"+d,rdV("PARAM_DSPS_FACTOR",1)),G=puDb2G(db);g+=Math.max(20*Math.log10((a+G)/(1+a*G)),db);});
-    hx=Math.min(hx,-0.9*g);lx=Math.min(lx,-0.9*g);
-  }
-  const s=Math.SQRT1_2;
-  return {T5:C.T5,bq:[puResShelv(false,v("PARAM_HF_CUT_FREQ"),hx,rdV("PARAM_HF_CUT_Q",1)*s),
-    puResShelv(true,v("PARAM_LF_CUT_FREQ"),lx,rdV("PARAM_LF_CUT_Q",1)*s),puO2Butterworth(false,rdV("PARAM_LPF_FREQ",15000))]};
-}
-function rdShelfBQ(pre){ // SetInputShelfFilter :2029 / SetCombsShelfFilter :2100
-  const sh=(low,cf,cfDB,lhDB)=>{ // ShelvCfG :3362 (gains in dB)
-    const lh=puDb2G(lhDB);let c2=puDb2G(cfDB)**2,p2=lh*lh,dA=0;
-    if(lh!==1){const cs=Math.cos(puW(cf));let ra=(2*c2-(1+p2))/(1-p2);if(low)ra=-ra;
-      const ca=cs-ra,cb=2-2*ra*cs,cc=Math.sqrt(cb*cb-4*ca*(cs-ra));dA=(-cb+cc)/(2*ca);if(Math.abs(dA)>1)dA=(-cb-cc)/(2*ca);}
-    const sg=low?-1:1;return {g:0.5*((1+lh)+sg*dA*(1-lh)),a:0.5*(dA*(1+lh)+sg*(1-lh)),c:dA};
-  };
-  const lg=puVal(`PARAM_${pre}LF_SHELF_GAIN`),hg=puVal(`PARAM_${pre}HF_SHELF_GAIN`);
-  const L=sh(true,puVal(`PARAM_${pre}LF_SHELF_FREQ`),Math.max(-6,0.5*lg),lg>-24?lg:-96);
-  const H=sh(false,puVal(`PARAM_${pre}HF_SHELF_FREQ`),Math.max(-6,0.5*hg),hg>-24?hg:-192);
-  return {g:L.g*H.g,a:L.g*H.a+L.a*H.g,b:L.a*H.a,c:L.c+H.c,d:L.c*H.c}; // DoubleOrd1
-}
-const rdEQ=m=>Math.trunc(PU_GRAN/2+0.8*PU_GRAN/2.4*Math.log10(m)); // EQGainScale (ReverbAlg.h:837)
-function rdLine([l,t,w,h],xs,ys,col,lw,wash){
-  const c=PU.ctx,X=s=>l+s*w/PU_GRAN,Y=s=>t+h-s*h/PU_GRAN;
-  if(wash){c.beginPath();xs.forEach((x,i)=>i?c.lineTo(X(x),Y(ys[i])):c.moveTo(X(x),Y(ys[i])));
-    c.lineTo(X(xs[xs.length-1]),t+h);c.lineTo(X(xs[0]),t+h);c.closePath();c.fillStyle="rgba(255,255,255,0.12)";c.fill();}
-  c.beginPath();xs.forEach((x,i)=>i?c.lineTo(X(x),Y(ys[i])):c.moveTo(X(x),Y(ys[i])));
-  c.strokeStyle=col;c.lineWidth=lw;c.lineJoin="round";c.stroke();
-}
-const RD_XI=RD_X.map(s=>Math.trunc(s+0.5));
-function rdEQDraw(combs){return {draw(area){
-  if(combs){const B=rdShelfBQ("COMBS_");rdLine(area,RD_XI,RD_W.map(w=>rdEQ(puSqMag(B,w))),"rgb(255,210,190)",1);}
-  const B=rdShelfBQ("");rdLine(area,RD_XI,RD_W.map(w=>rdEQ(puSqMag(B,w))),"rgb(190,210,255)",1);
-}};}
-function rdDampDraw(area){
-  const {T5,bq}=rdDamp();
-  rdLine(area,RD_XI,RD_W.map(w=>Math.trunc(0.5*PU_GRAN/(10*Math.log10(bq.reduce((m,B)=>m*puSqMag(B,w),1))/T5+1))),"#fff",1,true);
-}
-function rdTailDraw(area){ // SetTailGraph :2795 (point 0 = (0,−100))
-  const pre=Math.max(0,puVal("PARAM_PRE_DELAY")),ms=x=>x*PU_GRAN/200,mix=puDb2G(puVal("PARAM_REVERB_MIX"))*0.8;
-  const rt=rdV("PARAM_REVERB_TIME",2)*1000,r60=Math.min(pre+rt,5000),x1=Math.trunc(ms(pre)),y2=Math.trunc(mix*PU_GRAN);
-  const att=Math.min(1,puDb2G(-60/(rt*PU_SR*0.001)*(r60-pre)*PU_SR*0.001));
-  rdLine(area,[0,x1,x1+Math.trunc(rdComb().tot0/30),Math.trunc(ms(r60)),PU_GRAN],[-100,0,y2,Math.trunc(y2*att),0],"#fff",2,true);
-}
-PU_GRAPHS["Rogue Dimensions:EQ Filter"]=rdEQDraw(true);
-PU_GRAPHS["Rogue Dimensions:EQ Filter Wide"]=rdEQDraw(false);
-PU_GRAPHS["Rogue Dimensions:Reverb Damping"]=PU_GRAPHS["Rogue Dimensions:Reverb Damping Wide"]={draw:rdDampDraw};
-PU_GRAPHS["Rogue Dimensions:Time Response"]=PU_GRAPHS["Rogue Dimensions:Time Response Wide"]={draw:rdTailDraw};
-/* Markers registered 'Graph': damping (SetRevDampingMarker :2860) x = damping-axis state of the cut freq,
-   y = 250·(1 + RT60 ratio); EQ (SetShelfFilterMarker :2904) x = axis state of the shelf freq, y = EQGainScale
-   of the input-shelf |H|² at that freq. */
-PU_GRAPHS["Rogue Dimensions:markerPos"]=(ctl,[l,t,w,h])=>{
-  const P=n=>ctl.p.some(p=>p.n===n),pt=(sx,sy)=>[l+Math.trunc(sx)*w/PU_GRAN,t+h-Math.trunc(sy)*h/PU_GRAN];
-  for(const b of ["LF","HF"]){
-    if(P(`PARAM_${b}_RT60_RATIO`))return pt(rdFs(puVal(`PARAM_${b}_CUT_FREQ`)),PU_GRAN/4*(1+puVal(`PARAM_${b}_RT60_RATIO`)));
-    if(P(`PARAM_${b}_SHELF_GAIN`)){const fq=puVal(`PARAM_${b}_SHELF_FREQ`);return pt(rdFs(fq),rdEQ(puSqMag(rdShelfBQ(""),puW(fq))));}
-  }
-  return null;
-};
-
 /* S1 Imager / Shuffler (Plugins/Gold/S1/Code/Plugin: S1Alg.cpp, S1DrawFunctions.cpp). "GRAPH" (NIDS) /
    "GRAPH-No-Shuf" (NSHS) draw PARAM_GRAPH = DrawShuffleGraph: 5 points (SetGraph :574) from the S1ComputeMatrix
    (:281) L/R matrix a0..a3 (gain/width/rotation/asymmetry; dNorm cancels against dgNorm = 0.5/dNorm), length in
@@ -8368,24 +8261,6 @@ PU_DISP["Retro Fi:DisplayPrecent"] = v => (+v).toFixed(1) + " %";
 // DisplayReverbLength (:2119): Float2 + " Sec"
 PU_DISP["Retro Fi:DisplayReverbLength"] = v => (+v).toFixed(2) + " Sec";
 
-// Rogue Dimensions (DMNM/DMNS) — Renaissance Reverb alg: Plugins/Renaissance/Reverb/Code/Plugin/ReverbAlg.cpp; INFINITE_HOLD_TIME = 3.5 (ReverbConsts.h:32)
-PU_DISP["Rogue Dimensions:DisplayMatrixType"] = v => Math.floor(v) == v
-  ? (["Identity", "Pairwise", "MaxMix", "Full Circle", "Half Circle", "NearMaxMix", "StereoMax"][Math.trunc(v)] ?? (+v).toFixed(2))
-  : v < 3.99 ? (+v).toFixed(2) : "Space"; // :7073
-PU_DISP["Rogue Dimensions:DisplayReverbTime"] = v => v < 10 ? (+v).toFixed(2) : (+v).toFixed(1); // :7049
-PU_DISP["Rogue Dimensions:DisplayWetDry"] = v => Math.trunc(v) === 100 ? (+v).toFixed(0) + " " : (+v).toFixed(1); // :7523
-PU_DISP["Rogue Dimensions:DisplayLevel"] = v => v <= -40 ? "Off" : (+v).toFixed(1) + " dB"; // :7428
-PU_DISP["Rogue Dimensions:DisplaySize"] = v => Math.min(100, 1 + 99 * (v - 0.5) * 0.90909).toFixed(1); // :7359
-PU_DISP["Rogue Dimensions:DisplayDecorrelation"] = v => "Var: " + (+v).toFixed(0); // :7264
-PU_DISP["Rogue Dimensions:DisplayMillisec"] = v => (+v).toFixed(1) + "ms"; // :7275
-PU_DISP["Rogue Dimensions:DisplayMillisecInt"] = v => (+v).toFixed(0) + "ms"; // :7286
-PU_DISP["Rogue Dimensions:DisplayZeroOff"] = v => Math.trunc(v) === -1 ? "Auto" : (+v).toFixed(0); // :7341
-PU_DISP["Rogue Dimensions:DisplayHold"] = v => v == 3.5 ? "Linear" : (+v).toFixed(2); // :7416
-PU_DISP["Rogue Dimensions:DisplayDynamicsType"] = v => ["gate", "comp"][Math.trunc(v)] ?? (+v).toFixed(0); // :7185
-PU_DISP["Rogue Dimensions:DisplayPlusMinus"] = v => (v >= 0 ? "+" : "") + (+v).toFixed(2); // :7370
-PU_DISP["Rogue Dimensions:DisplayReverbInOut"] = v => ["Out", "In"][Math.trunc(v)] ?? (+v).toFixed(2); // :7297
-PU_DISP["Rogue Dimensions:DisplayDelaySend"] = v => v > 0.01 ? (+v).toFixed(2) : "--"; // :7061
-
 // SSL E-Channel (SCHM/SCHS) — Plugins/SSL/SSLChannel/Code/Plugin/SSLChannelAlg.cpp
 PU_DISP["SSL E-Channel:DisplayRatio"] = (v, q) => puState(q, v) == 1000 ? "+Inf" : (+v).toFixed(1); // :2429
 PU_DISP["SSL E-Channel:DisplayHP"] = (v, q) => puState(q, v) > 0 ? String(Math.trunc(v)) : "Out"; // :2481 (int32_t cast)
@@ -9386,44 +9261,6 @@ PU_GRAPHS["REQ:groups"]=()=>{
 PU_GRAPHS["Retro Fi:groups"]=()=>({hideCtrls:[
   puVal("PARAM_BPMHOSTMS")===2?"Echo Time BPM":"Echo Time MS",
   puVal("PARAM_DEVICE")===3?"Tone":"Tone Disabled"]});
-
-/* Rogue Brutewall: RogueBrutewallAlg.cpp
-   - "Bell Freq" / "Bell Gain" share one rect on purpose — a dual-concentric knob (11200 = the outer frequency ring
-     with a hole, 11400 = the inner gain cap; separate value texts). PARAM_EQ_TONE_FREQ_0 / _GAIN_DB_0 are never
-     disabled — left alone.
-   - :898-916 hides group "LabControls" (Wet Mix, FF_* calibration, NNDelay*) unless the developer feature flag
-     ColorBoxesNAMAdvancedControls is set in FeatureFlags.yaml — never on a normal install, so always hidden here. */
-PU_GRAPHS["Rogue Brutewall:groups"]=()=>({hide:["LabControls"]});
-
-/* Rogue Dimensions (Renaissance/Reverb cReverb_ALG): UpdateDampingEqControls (ReverbAlg.cpp:4244-4290), the same rule
-   as RVerb.vis.js — only the selected marker's knob group of the displayed tab is shown: PARAM_SCREEN_TAB 1 (Damping)
-   → "Damp-Hi" when PARAM_DISPLAY_DUMPING_HF == 0 else "Damp-Low"; 3 (EQ) → "EQ Wide-Hi" / "EQ Wide-Low" by
-   PARAM_DISPLAY_EQ_HF (+ "EQ Wide Hover" on tab 3, where it exists); every other tab hides them all; the Legacy skin
-   (PARAM_SKIN_TYPE 2) shows all. "Decorrelation Popup" over "Decorrelation" is the popup's hit area — left alone. */
-PU_GRAPHS["Rogue Dimensions:groups"]=()=>{
-  const all=["Damp-Hi","Damp-Low","EQ Wide-Hi","EQ Wide-Low","EQ Wide Hover"];
-  if(puVal("PARAM_SKIN_TYPE")===2)return {show:all};
-  const tab=puVal("PARAM_SCREEN_TAB");
-  const show=tab===1?[puVal("PARAM_DISPLAY_DUMPING_HF")===0?"Damp-Hi":"Damp-Low"]
-    :tab===3?[puVal("PARAM_DISPLAY_EQ_HF")===0?"EQ Wide-Hi":"EQ Wide-Low","EQ Wide Hover"]:[];
-  // the installed V17 bundle is a development build (1301x967; the source's shipped view is 835x166 with these on a
-  // "Lab Controls" tab, ReverbGUI.xml :25/:45): its ~224 art-less DefaultDraw developer boxes stay hidden
-  const lab=PU.ctrls.filter(c=>(c.fl||[]).includes("DefaultDraw")&&!c.groups).map(c=>c.n);
-  return {show,hide:all.filter(g=>!show.includes(g)),hideCtrls:lab};
-};
-
-/* Rogue Overdrive: same ColorBoxes developer-only group as Rogue SampTone (feature flag off on normal installs) — always hidden. */
-PU_GRAPHS["Rogue Overdrive:groups"]=()=>({hide:["LabControls"]});
-
-/* Rogue Pre Focus: same ColorBoxes developer-only group as Rogue SampTone (feature flag off on normal installs) — always hidden. */
-PU_GRAPHS["Rogue Pre Focus:groups"]=()=>({hide:["LabControls"]});
-
-/* Rogue SampTone (ColorBoxes/SampCraft): SampCraftAlg.cpp:825-836 hides group "LabControls" (GainCalib, D_Factor,
-   NN Delay *, Work Point, FF_* …) unless the developer feature flag ColorBoxesNAMAdvancedControls is set in
-   FeatureFlags.yaml — never on a normal install, so always hidden here.
-   "In VU L" / "Inp VU R" (SCNS) share one rect on purpose: two LED-row meters (11100 / 11120) drawn at different rows of
-   the same strip — left alone. */
-PU_GRAPHS["Rogue SampTone:groups"]=()=>({hide:["LabControls"]});
 
 /* SSL E-Channel: nothing to hide. "CompAttn" / "ExpAttn" share one rect on purpose — two transparent LED-column meters
    (11410 = compressor GR, 11310 = expander/gate GR) of the same GR strip. Neither is ever disabled or hidden by
