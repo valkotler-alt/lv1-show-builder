@@ -14249,7 +14249,8 @@ async function emoExport(spec){
     const nCh=alloc[0],nGrp=alloc[1]||0,nMtx=alloc[6]||0,nAux=alloc[2]-8;
 
     const chans=(spec.channels||[]).map((c,i)=>({...c,ports:(c.ports||[]).map(p=>p-1),
-      stereo:(c.ports||[]).length===2,
+      // the spec's own flag: a stereo strip may have one leg (or none) patched; older specs: two ports = stereo
+      stereo:c.stereo!==undefined?!!c.stereo:(c.ports||[]).length===2,
       ...(c.name?{}:{name:"Channel "+(i+1)})})); // v11 placeholder: a default strip in place (patch only)
     const groups=spec.groups||[],fx=spec.fx||[],auxes=spec.auxes||[],mtxs=spec.matrixes||[];
     if(chans.length>nCh)throw new Error("template has "+nCh+" input strips");
@@ -14534,9 +14535,18 @@ async function emoImport(bytes,fileStemName){
       "SELECT o.obj_type, COUNT(*) FROM object o JOIN chainer c ON c.obj_id = o.id "+
       "WHERE c.num_inputs != -1 GROUP BY o.obj_type"));
     const LR=first[3],GRP0=first[1]??-1,FX0=first[2],MTX0=first[6],LNK0=first[12];
-    const nCh=alloc[0],nGrp=alloc[1]||0,nMtx=alloc[6]||0,nAux=(alloc[2]||8)-8;
-    const cfg=CONFIGS.find(c=>c.ch===nCh&&c.grp===nGrp&&c.mon===nAux);
+    // LV1 V17 (schema 5.2): the Mon strips left the aux bank (type 2, index 8..) for their own type 25,
+    // index 0.., same object ids (XPLATFORM SessionConverters/5_1__to__5_2/Converter_5_2.cpp:308-380).
+    // tk() maps a V17 pair back to the V16 aux-bank pair used below.
+    const MON_T=25,tk=(t,i)=>t===MON_T?[2,8+i]:[t,i];
+    const nCh=alloc[0],nGrp=alloc[1]||0,nMtx=alloc[6]||0,nAux=alloc[MON_T]!==undefined?alloc[MON_T]:(alloc[2]||8)-8;
+    let cfg=CONFIGS.find(c=>c.ch===nCh&&c.grp===nGrp&&c.mon===nAux);
+    // A layout the builder has no template for (V17's factory session: 80 inputs / 16 groups / 24 Mon):
+    // the closest one with the same inputs (groups first, then auxes); strips past it are reported.
+    const cfgOdd=!cfg;
+    if(!cfg)cfg=CONFIGS.filter(c=>c.ch===nCh).sort((a,b)=>Math.abs(a.grp-nGrp)-Math.abs(b.grp-nGrp)||Math.abs(a.mon-nAux)-Math.abs(b.mon-nAux))[0];
     if(!cfg)throw new Error("unknown mixer configuration: "+nCh+" inputs / "+nGrp+" groups / "+nAux+" auxes");
+    const gN=Math.min(nGrp,cfg.grp),aN=Math.min(nAux,cfg.mon);
 
     const nameOf={};
     for(const [cid,nm] of eq(db,"SELECT chainer_id, name FROM snapshot_chainer WHERE snapshot_id = -1"))
@@ -14547,6 +14557,16 @@ async function emoImport(bytes,fileStemName){
     for(const [cid,pid,v] of eq(db,
       "SELECT chainer_id, param_id, param_value FROM snapshot_chainer_params WHERE snapshot_id = -1 AND param_id IN (592, 106)")){
       if(pid===592)colorOf[cid]=Math.round(v);else if(v)postFxOf[cid]=true;
+    }
+    // V17 gave Mon strips their own default color (3) and stored the old aux default (2) on every
+    // strip that had none, so they look the same (Converter_5_2.cpp:481-540). The builder writes V16
+    // sessions, where "no color" = the aux default: invert that here.
+    if(alloc[MON_T]!==undefined){
+      const defOf=t=>(eq(db,"SELECT param_value FROM chainer_params_default_values WHERE obj_type = ? AND param_id = 592",[t])[0]||[])[0];
+      const monDef=defOf(MON_T),auxDef=defOf(2);
+      if(monDef!==undefined&&auxDef!==undefined&&monDef!==auxDef)
+        for(let i=0;i<nAux;i++){const cid=FX0+8+i;
+          if(colorOf[cid]==null)colorOf[cid]=Math.round(monDef);else if(colorOf[cid]===Math.round(auxDef))delete colorOf[cid];}
     }
     // Every assignment row: the first group (else LR) / link / mute group is the strip's own
     // field; the rest becomes its xs (multi-assign, PATCH › INTERNAL) further below.
@@ -14573,10 +14593,13 @@ async function emoImport(bytes,fileStemName){
     // the default preset (same token count only, else the defaults show).
     let defTok={},facTok={};
     try{defTok=await plugDefaultTokens();facTok=(await plugUiIndex()).factory||{};}catch(_){/* offline: no settings */}
+    // Role 0 = an ordinary insert; V17 marks the first graphic EQ of a strip with role 128 (GEQ,
+    // Converter_5_2.cpp:288) but it is still a plain rack slot. 1/2/4 = untouched fixed modules.
+    const insRole=role=>role===0||role===128;
     const paramsOf=(cc,text,role)=>{
       const d=defTok[cc],t=presetTokens(text||""),p={};
       // an untouched fixed module may carry any factory version of its default (the templates mix EMO versions)
-      const fac=role!==0&&t&&(facTok[cc]||[]).some(f=>f.length===t.length&&f.every((x,k)=>x===t[k]));
+      const fac=!insRole(role)&&t&&(facTok[cc]||[]).some(f=>f.length===t.length&&f.every((x,k)=>x===t[k]));
       if(!fac&&d&&t&&(d.length===t.length||(t.includes("R")&&t.length<=d.length))) // an "R" list may stop early
         t.forEach((v,k)=>{const x=puTok(v);if(v==="*"||!isFinite(x)||(d[k]!=="*"&&puTok(d[k])===x))return;p[k]=x;}); // "50*" tokens = 50
       const ps=presetChunks(text);if(ps)p.ps=ps; // plugin-specific chunks (IR, amp models, curves) come back as-is
@@ -14592,7 +14615,7 @@ async function emoImport(bytes,fileStemName){
       const rws=rackRows[cid]||[];
       // Every factory strip carries its fixed modules: none left = emptied rack.
       if(!rws.length)return {slots:[]};
-      let r0=rws.filter(r=>r[2]===0);
+      let r0=rws.filter(r=>insRole(r[2]));
       if(!r0.length){ // factory modules only = untouched, unless their settings changed
         if(!rws.some(r=>r[3]))return null;
         r0=rws;
@@ -14614,7 +14637,7 @@ async function emoImport(bytes,fileStemName){
     const referenced=new Set(Object.values(dests));
     for(const f of Object.values(mtxFeeds))f.forEach(d=>referenced.add(d));
     const groups=[],matrixes=[],mtxBank=[]; // mtxBank: each imported matrix's bank index (for its output patch)
-    for(let i=0;i<nGrp;i++){
+    for(let i=0;i<gN;i++){
       const cid=GRP0+i,nm=(nameOf[cid]||"").trim();
       const used=referenced.has(cid)||!isDef(nm,grpRe)||hasPlugs(cid)||colorOf[cid]!=null;
       grpLabel[cid]=nm&&!isDef(nm,grpRe)?nm:"Group "+(i+1);
@@ -14647,7 +14670,7 @@ async function emoImport(bytes,fileStemName){
     const patchOf={};
     for(const [ct,ci,st,si,ch,dch,leg] of eq(db,
       "SELECT src_cluster_type, src_cluster_type_index, src_section_type, src_section_index, src_channel_index, "+
-      "dst_cluster_type_index, dst_channel_index FROM routes WHERE dst_cluster_type = 0 AND dst_section_index = 0")) // Input A
+      "dst_cluster_type_index, dst_channel_index FROM routes WHERE dst_cluster_type = 0 AND dst_section_index = 0 ORDER BY id")) // Input A; V17 indexes routes, so row order is explicit
       (patchOf[dch]=patchOf[dch]||[]).push(leg+":"+[ct,ci,st,si,ch].join("."));
     const patchKey=i=>patchOf[i]?patchOf[i].sort().join("|"):"";
     const firstByPatch={},chByIdx={};
@@ -14688,7 +14711,7 @@ async function emoImport(bytes,fileStemName){
         ...(colorOf[cid]!=null?{color:colorOf[cid]}:{}),...lmOf(cid),
         ...(rackOf(cid)?{rack:rackOf(cid)}:{})});
     }
-    for(let i=0;i<nAux;i++){
+    for(let i=0;i<aN;i++){
       const cid=FX0+8+i,nm=(nameOf[cid]||"").trim();
       // Default-named Mon strips always skip: LV1 writes a default color row
       // on them, so color alone is no sign the operator touched the strip.
@@ -14704,8 +14727,9 @@ async function emoImport(bytes,fileStemName){
       :"SELECT strip_index, track_type, track_index FROM ovv_layer_track WHERE layer_id = ?";
     const layers=eq(db,"SELECT id, name FROM ovv_layer WHERE surface_type = 2 ORDER BY id").slice(0,LAYER_COUNT).map(([lid,nm])=>{
       const strips=Array(LAYER_SLOTS).fill(null);
-      for(const [si,tt,ti] of eq(db,trkSql,[lid])){
+      for(const [si,tt0,ti0] of eq(db,trkSql,[lid])){
         if(si<0||si>=LAYER_SLOTS)continue;
+        const [tt,ti]=tk(tt0,ti0);
         const ref=tt===3?{type:"main"}:tt===12?{type:"link",name:linkLab(LNK0+ti)}
           :refOf[`${tt}:${ti}`]?{type:refOf[`${tt}:${ti}`][0],name:refOf[`${tt}:${ti}`][1]}:null;
         strips[si]=ref; // cue / talkback / unimported strips stay empty
@@ -14733,16 +14757,16 @@ async function emoImport(bytes,fileStemName){
     const pinAt=(slot,c,out)=>{const v=devAt[slot];return v&&v.m[out?"outChs":"inChs"].some(x=>x.c===c)?{d:v.id,c}:null;};
     for(const c of channels){const w=c.stereo?2:1;c.inA=Array(w).fill(0);c.inB=Array(w).fill(null);}
     for(const [si,sc,ci,bank,leg] of eq(db,"SELECT src_cluster_type_index, src_channel_index, dst_cluster_type_index, dst_section_index, dst_channel_index "+
-        "FROM routes WHERE src_cluster_type = 10 AND dst_cluster_type = 0")){
+        "FROM routes WHERE src_cluster_type = 10 AND dst_cluster_type = 0 ORDER BY id")){
       const c=objOf["0:"+ci],p=pinAt(si,sc,false),L=c&&(bank===1?c.inB:bank===0?c.inA:null);
       if(L&&p&&leg>=0&&leg<L.length)L[leg]=p;
     }
     const master={outs:[]},busx={cue:{outs:[]},center:{outs:[]},mono:{outs:[]}};
-    const srcObj=(ct,ci)=>ct===3?(ci===0?master:null):ct===4?busx.center:ct===5?busx.mono:ct===7?busx.cue:objOf[ct+":"+ci];
+    const srcObj=(ct0,ci0)=>{const [ct,ci]=tk(ct0,ci0);return ct===3?(ci===0?master:null):ct===4?busx.center:ct===5?busx.mono:ct===7?busx.cue:objOf[ct+":"+ci];};
     for(const o of [...auxes,...matrixes])o.outs=[];
     const d2d=[];
     for(const [ct,ci,sl,ds,dc] of eq(db,"SELECT src_cluster_type, src_cluster_type_index, src_channel_index, dst_cluster_type_index, dst_channel_index "+
-        "FROM routes WHERE dst_cluster_type = 11 AND dst_section_type = 0")){
+        "FROM routes WHERE dst_cluster_type = 11 AND dst_section_type = 0 ORDER BY id")){
       const p=pinAt(ds,dc,true);if(!p)continue;
       if(ct===10){const i=pinAt(ci,sl,false);if(i)d2d.push({i,o:p});continue;}
       const o=srcObj(ct,ci);if(!o||sl<0||sl>1)continue;
@@ -14770,7 +14794,14 @@ async function emoImport(bytes,fileStemName){
         link:(allLinks[cid]||[]).map(linkLab),mute:allMutes[cid]||[]};
       if(x.to.length||x.mtx.length||x.link.length||x.mute.length)o.xs=x;
     }
+    // what a fallback configuration leaves out: named groups / Mon strips past its banks
+    const lost=[...Array(nGrp-gN)].map((_,k)=>GRP0+gN+k).filter(c=>!isDef((nameOf[c]||"").trim()||"Group 1",grpRe))
+      .concat([...Array(nAux-aN)].map((_,k)=>FX0+8+aN+k).filter(c=>!isDef((nameOf[c]||"").trim()||"Mon 1",monRe)))
+      .map(c=>nameOf[c].trim());
+    const note=cfgOdd?`This session's mixer configuration (${nCh} inputs / ${nGrp} groups / ${8+nAux} aux = 8 FX + ${nAux} Mon) is not one of the builder's; `+
+      `imported as ${cfg.label} · ${cfg.sub}`+(lost.length?`. Not imported: ${lost.join(", ")}`:"")+".":"";
     return {
+      ...(note?{_note:note}:{}),
       format:"lv1-input-list",version:9,
       io,busx,...(d2d.length?{d2d}:{}),
       ...(linkTable.some(Boolean)?{links:linkTable}:{}),
@@ -14800,7 +14831,7 @@ $("#fileEmo").addEventListener("change",async e=>{
       setStatus("Reading the .emo session…");
       const spec=await emoImport(new Uint8Array(await f.arrayBuffer()),f.name.replace(/\.emo$/i,""));
       loadSpec(spec);markClean();
-      setStatus("Imported “"+f.name+"”. Patch numbers are regenerated top-down; mic / stand / position / notes are not stored in .emo and start empty.");
+      setStatus("Imported “"+f.name+"”. "+(spec._note?spec._note+" ":"")+"Patch numbers are regenerated top-down; mic / stand / position / notes are not stored in .emo and start empty.",!!spec._note);
     }catch(err){setStatus(".emo import failed: "+(err.message||err),true);}
   }
   e.target.value="";
