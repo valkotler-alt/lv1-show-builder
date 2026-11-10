@@ -678,6 +678,9 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
 .slotrow .pugui+.nudge{margin-left:4px;}
 .slotrow.edited .sname::after{content:" ✎";color:var(--accent);}
 .slotrow .pustate{font-size:10px;color:var(--warn-fg);letter-spacing:.04em;}
+.slotrow .rksc{display:flex;align-items:center;gap:4px;flex:none;}
+.slotrow .rksc small{font-size:10px;color:var(--dim);letter-spacing:.05em;}
+.slotrow .rksc select{font-size:11px;padding:2px 4px;max-width:150px;}
 #puWin{position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:12px;}
 #puWin .pubox{background:#1a1a1a;border:1px solid #3a3a3a;border-radius:8px;box-shadow:0 12px 50px rgba(0,0,0,.6);display:flex;flex-direction:column;max-width:100%;}
 #puWin .puhead{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid #333;color:#ddd;font-size:13px;}
@@ -1523,6 +1526,7 @@ const cfg=()=>CONFIGS.find(c=>c.id===state.configId)||CONFIGS[3];
    are excluded. Formats: M=mono, S=stereo, X=mono-to-stereo. The converter
    resolves each name to the right 4cc variant + factory preset. */
 const PLUGINS=[["Abbey Road Chambers","MSX","Delay"],["Abbey Road EMI TG12345 Ch","MS","Dynamics"],["Abbey Road J37 Tape","MS","Delay"],["Abbey Road Plates","MSX","Reverb"],["Abbey Road REDD.17","MS","Harmonic"],["Abbey Road REDD.37.51","MS","Harmonic"],["Abbey Road Reel ADT","MSX","Modulation"],["Abbey Road Reel ADT Live","MSX","Modulation"],["Abbey Road Reel ADT2V","SX","Modulation"],["Abbey Road Reel ADT2V Live","SX","Modulation"],["Abbey Road RS124","MS","Dynamics"],["Abbey Road RS56 Passive EQ","MS","EQ"],["Abbey Road Saturator","MS","Harmonic"],["Abbey Road Studio 3","S","Sound Field"],["Abbey Road TG Mastering","MS","Harmonic"],["Abbey Road TG Mastering Live","MS","Harmonic"],["Abbey Road TG Meter Bridge","MS","Dynamics"],["Abbey Road The King's Microphones","MS","EQ"],["Abbey Road Vinyl","MS","Harmonic"],["Abbey Road Vinyl Light","MS","Harmonic"],["Aphex Vintage Exciter","MS","Harmonic"],["API-2500","MS","Dynamics"],["API-550A","MS","EQ"],["API-550B","MS","EQ"],["API-560","MS","EQ"],["APNNFeedback","MS","Noise Reduction"],["Atlas Reverb","SX","Reverb"],["AudioTrack","MS","Dynamics"],["Bass Rider","MS","Dynamics"],["Bass Rider Live","MS","Dynamics"],["BB Tubes","MS","Harmonic"],["Berzerk Distortion","MS","Harmonic"],["Brauer Motion","SX","Sound Field"],["Butch Vig Vocals","MS","Effect"],["C1 comp","MS","Dynamics"],["C1 comp-gate","MS","Dynamics"],["C1 comp-sc","MS","Dynamics"],["C1 gate","MS","Dynamics"],["C4","MS","Dynamics"],["C6","MS","Dynamics"],["C6-SideChain","MS","Dynamics"],["Center","S","Sound Field"],["CLA Bass","SX","Effect"],["CLA Drums","SX","Effect"],["CLA EchoSphere","SX","Delay"],["CLA Effects","SX","Effect"],["CLA Epic","SX","Delay"],["CLA Guitars","SX","Effect"],["CLA MixDown","MS","Dynamics"],["CLA MixHub","MS","Harmonic"],["CLA MixHub Lite","MS","Harmonic"],["CLA Nx","S","Sound Field"],["CLA Unplugged","SX","Effect"],["CLA Vocals","SX","Effect"],["CLA-2A","MS","Dynamics"],["CLA-3A","MS","Dynamics"],["CLA-76","MS","Dynamics"],["Clarix LB","MS","Noise Reduction"],["Curves AQ Live","MS","Dynamics"],["Curves Equator Live","MS","Dynamics"],["Curves Resolve Live","MS","Dynamics"],["dbx-160","MS","Dynamics"],["DeEsser","MS","Dynamics"],["Doppler","SX","Other"],["Dorrough","MS","Sound Field"],["Doubler2","MSX","Pitch Shift"],["Doubler4","MSX","Pitch Shift"],["DPR-402","MS","Dynamics"],["DrumReplacer","S","Effect"],["DTS Neural UpMix","S","Sound Field"],["EKramer BA","MS","Effect"],["EKramer DR","MS","Effect"],["EKramer FX","SX","Effect"],["EKramer GT","SX","Effect"],["EKramer VC","SX","Effect"],["EMO D-5","MS","Dynamics"],["EMO-D5","MS","Dynamics"],["EMO-F2","MS","EQ"],["EMO-Generator","MS","Other"],["EMO-IEM","S","Sound Field"],["EMO-Q4","MS","EQ"],["Enigma","SX","Modulation"],["EXT Insert","MS","Other"],["F6","MS","Dynamics"],["F6-RTA","MS","Dynamics"],["Feedback Hunter","MS","Other"],["GEQ Classic","MS","EQ"],["GEQ Modern","MS","EQ"],["GTR Amp","MSX","GTR"],["GTR Amp 2Cab","M","GTR"],["GTR Stomp 2","MSX","GTR"],["GTR Stomp 4","MSX","GTR"],["GTR Stomp 6","MSX","GTR"],["GTR Tool Rack","SX","GTR"],["GTR Tuner","M","GTR"],["GW MixCentric","MS","Dynamics"],["GW PianoCentric","MSX","Effect"],["GW ToneCentric","MS","Harmonic"],["GW VoiceCentric","MSX","Delay"],["H-Comp","MS","Dynamics"],["H-Delay","MSX","Delay"],["H-EQ","MS","EQ"],["H-EQ-Light","MS","EQ"],["H-Reverb","MSX","Reverb"],["H-Reverb long","MSX","Reverb"],["IDX LIVE Intelligent Dynamics","MS","Dynamics"],["IMPusher","MS","Dynamics"],["InPhase","MS","EQ"],["InPhase Live","MS","EQ"],["InPhase LT","MS","EQ"],["InPhase LT Live","MS","EQ"],["InTrigger Live","MSX","Effect"],["IR-L","MX","Reverb"],["IR-L efficient","S","Reverb"],["IR-L full","S","Reverb"],["IR1","MX","Reverb"],["IR1 efficient","S","Reverb"],["IR1 full","S","Reverb"],["IRLive","MSX","Reverb"],["JJP-Bass","MSX","Effect"],["JJP-Cymb-Perc","SX","Effect"],["JJP-Drums","MSX","Effect"],["JJP-Guitars","SX","Effect"],["JJP-Strings-Keys","SX","Effect"],["JJP-Vocals","SX","Effect"],["Kaleidoscopes","MSX","Modulation"],["Kramer HLS","MS","EQ"],["Kramer PIE","MS","Dynamics"],["Kramer Tape","MS","Delay"],["L1 limiter","MS","Dynamics"],["L2","MS","Dynamics"],["L2-SC","MS","Dynamics"],["L3 MultiMaximizer","MS","Dynamics"],["L3 UltraMaximizer","MS","Dynamics"],["L3-LL Multi","MS","Dynamics"],["L3-LL Ultra","MS","Dynamics"],["L4 Live","M","Dynamics"],["L4 Ultramaximizer","M","Dynamics"],["LFE360","M","EQ"],["LinEQ Broadband","MS","EQ"],["LinMB","MS","Dynamics"],["LoAir","MS","Harmonic"],["Lofi Space","MSX","Effect"],["Magma BB Tubes","MS","Harmonic"],["Magma Channel Strip","MS","Harmonic"],["Magma Lil Tube","MS","Harmonic"],["Magma Springs","MSX","Reverb"],["Magma StressBox","MS","Dynamics"],["MannyM Delay","SX","Delay"],["MannyM Distortion","MS","Harmonic"],["MannyM EQ","MS","EQ"],["MannyM Reverb","MSX","Reverb"],["MannyM Tone Shaper","MS","Dynamics"],["MannyM TripleD","MS","Dynamics"],["Maserati ACG","SX","Effect"],["Maserati B72","MSX","Effect"],["Maserati DRM","MS","Effect"],["Maserati GRP","MS","Effect"],["Maserati GTi","SX","Effect"],["Maserati HMX","SX","Effect"],["Maserati VX1","SX","Effect"],["MaxxBass","MS","Other"],["MaxxVolume","MS","Dynamics"],["MDMX Fuzz","MS","Harmonic"],["MDMX OverDrive","MS","Harmonic"],["MDMX Screamer","MS","Harmonic"],["MetaFlanger","MSX","Modulation"],["MixAssist","S","Instrument"],["MondoMod","MSX","Modulation"],["Morphoder","MSX","Modulation"],["MultiMod Rack","MSX","Modulation"],["MV2","MS","Dynamics"],["NLS Buss","MS","Harmonic"],["NLS Channel","MS","Harmonic"],["NS1","MS","Noise Reduction"],["NX","MS","Sound Field"],["Nx Germano Studios","S","Sound Field"],["Nx Ocean Way Nashville","S","Sound Field"],["OneKnob Brighter","MS","EQ"],["OneKnob Driver","MS","Harmonic"],["OneKnob Filter","MS","EQ"],["OneKnob Louder","MS","Dynamics"],["OneKnob Phatter","MS","EQ"],["OneKnob Pressure","MS","Dynamics"],["OneKnob Wetter","MSX","Reverb"],["OneKnobBrighter","MS","EQ"],["OneKnobLouder","MS","Dynamics"],["OVox","SX","Modulation"],["PAZ- Analyzer","S","Sound Field"],["PAZ- Frequency","MS","Sound Field"],["PAZ- Meters","MS","Sound Field"],["PAZ- Position","S","Sound Field"],["PlaylistRider","MS","Dynamics"],["Primary Source Expander","MS","Dynamics"],["PRS Archon","MX","Harmonic"],["PRS Dallas","MX","Harmonic"],["PRS V9","MX","Harmonic"],["PS22 Split","MS","Sound Field"],["PS22 Spread","MS","Sound Field"],["PS22 Spread(10)","MS","Sound Field"],["PS22 XSplit","MS","Sound Field"],["PSE","MS","Dynamics"],["PuigChild 660","M","Dynamics"],["PuigChild 670","S","Dynamics"],["PuigTec EQP1A","MS","EQ"],["PuigTec MEQ5","MS","EQ"],["Q-Clone","MS","EQ"],["Q1","MS","EQ"],["Q10","MS","EQ"],["Q2","MS","EQ"],["Q3","MS","EQ"],["Q4","MS","EQ"],["Q6","MS","EQ"],["Q8","MS","EQ"],["RBass","MS","Other"],["RChannel","MSX","Dynamics"],["RCompressor","MS","Dynamics"],["Renaissance Axx","MS","Dynamics"],["REQ 2","MS","EQ"],["REQ 4","MS","EQ"],["REQ 6","MS","EQ"],["Retro Fi","MSX","Effect"],["RVerb","SX","Reverb"],["RVox","MS","Dynamics"],["S1 Imager","S","Sound Field"],["S1 MS Matrix","S","Sound Field"],["S1 Shuffler","S","Sound Field"],["Saphira","MS","Modulation"],["Scheps 73","MS","EQ"],["Scheps Omni Channel 2","MS","Harmonic"],["Scheps Parallel Particles","MS","Harmonic"],["Sibilance","MS","Dynamics"],["Sibilance-Live","MS","Dynamics"],["Silk Vocal Live","MS","Dynamics"],["Smack Attack","MS","Dynamics"],["Space Rider","SX","Reverb"],["SSL EV2 Channel","MS","Dynamics"],["SSLChannel","MS","Dynamics"],["SSLComp","MS","Dynamics"],["SSLEQ","MS","EQ"],["SSLGChannel","MS","Dynamics"],["StreamerRack","MS","Instrument"],["StudioVerse Audio Effects","MSX","Instrument"],["Sub Align","MS","Sound Field"],["Submarine","MS","Harmonic"],["SuperTap 2-Taps","MSX","Delay"],["SuperTap 6-Taps","MSX","Delay"],["Sync Vx","M","Other"],["Sync Vx Non ARA","M","Other"],["T1","MS","Dynamics"],["Torque","MS","Pitch Shift"],["Torque-Live","MS","Pitch Shift"],["TRACT","MS","EQ"],["TRACT LinPhase","MS","EQ"],["TRACT Measure","M","Other"],["TRACT SPL Meter","M","Dynamics"],["TransX","MS","Dynamics"],["TransX Multi","MS","Dynamics"],["TransX Wide","MS","Dynamics"],["TrueVerb","MSX","Reverb"],["VComp","MS","Dynamics"],["VEQ3","MS","EQ"],["VEQ4","MS","EQ"],["Vitamin","MS","Harmonic"],["Vocal Bender","MS","Pitch Shift"],["Vocal Rider","MS","Dynamics"],["Vocal Rider Live","MS","Dynamics"],["Voltage Amps Bass","MSX","Harmonic"],["Voltage Amps Guitar","MSX","Harmonic"],["VU Meter","MS","Sound Field"],["W43","MS","Noise Reduction"],["Waves Harmony","SX","Pitch Shift"],["WLM Meter","MS","Dynamics"],["WLM Plus","MS","Dynamics"],["WNS","MS","Noise Reduction"],["X-Click","MS","Noise Reduction"],["X-Crackle","MS","Noise Reduction"],["X-FDBK","MS","Other"],["X-Hum","MS","Noise Reduction"],["X-Noise","MS","Noise Reduction"]];
+const SC_PLUGINS=new Set(["API-2500","Berzerk Distortion","Brauer Motion","C1 comp","C1 gate","C6-SideChain","CLA MixHub","CLA MixHub Lite","Curves AQ Live","Curves Equator Live","Curves Resolve Live","dbx-160","DPR-402","EMO-D5","F6","F6-RTA","GEQ Classic","GEQ Modern","H-Comp","InPhase","InPhase Live","Kaleidoscopes","L2-SC","L4 Live","L4 Ultramaximizer","Magma StressBox","Morphoder","OVox","PSE","RChannel","RCompressor","Scheps Omni Channel 2","SSL EV2 Channel","SSLComp","StudioVerse Audio Effects","VComp","Vocal Rider","Vocal Rider Live"]);
 const PLUGIN_FMT=new Map(PLUGINS);
 
 /* LV1's 32-color strip palette (SurfaceDriver_App/Resources/Palettes/LV1.xml);
@@ -1816,7 +1820,8 @@ function rackRow(kind,i,r,colspan,stereo){
   const avail=PLUGINS.filter(([,f])=>need.test(f));
   const cats=[...new Set(avail.map(p=>p[2]||"Other"))].sort();
   const plugRow=(x)=>{const q=(r.params||[])[x]||{};return `<div class="slotrow ins${pEdited(q)?" edited":""}" draggable="true" data-k="${kind}" data-i="${i}" data-x="${x}" title="Drag to reorder">
-      <span class="sno">${x+1}</span><span class="grip">⋮⋮</span><span class="sname">${esc(r.slots[x])}${q.off?' <small class="pustate">off</small>':q.byp?' <small class="pustate">bypassed</small>':""}${q.sc?` <small class="pustate" title="Side-chain source">SC ← ${esc(q.sc.type==="main"?"MASTER":q.sc.name||"Channel "+((q.sc.index??0)+1))}</small>`:""}</span>
+      <span class="sno">${x+1}</span><span class="grip">⋮⋮</span><span class="sname">${esc(r.slots[x])}${q.off?' <small class="pustate">off</small>':q.byp?' <small class="pustate">bypassed</small>':""}</span>
+      ${SC_PLUGINS.has(r.slots[x])||q.sc?scPicker(kind,i,x,q.sc):""}
       ${puHasGui(r.slots[x])?`<button class="small pugui" data-k="${kind}" data-i="${i}" data-f="rkGui" data-n="${x}" title="Open ${esc(r.slots[x])} — see and change its settings, load / save presets">Edit</button>`:""}
       <button class="small nudge danger" data-k="${kind}" data-i="${i}" data-f="rkDel" data-n="${x}" title="Remove plugin (its slot stays empty)">✕</button></div>`;};
   const addRow=(slot)=>`<div class="slotrow add" data-k="${kind}" data-i="${i}" data-x="${slot}">
@@ -1854,6 +1859,43 @@ const holderStereo=(k,h)=>k==="mst"?true:!!h.stereo;
 function rackFits(name,stereo){ // unknown names (legacy) are kept as-is
   const p=PLUGINS.find(x=>x[0]===name);
   return !p||(stereo?/[SX]/:/[MX]/).test(p[1]);
+}
+/* Side-chain of a rack plugin (rack.params[x].sc): the source strip + where on it LV1 taps the signal
+   (plug_sidechain AsgnType a / SectionType st / controlID ctl; WavesMixerAPI eChainPosType Pre 0 / Post 1,
+   section Output 7 (Gain 0, PanArc 2) or Input 0 (Trim 8)). Named strips are referenced by name, so a
+   rename follows; unnamed channels by index (the export maps both onto obj_type / obj_index). */
+const SC_TAPS=[["Pre-Fader",{a:0,st:7,ctl:0}],["Post-Fader",{a:1,st:7,ctl:0}],
+  ["Post-Pan",{a:1,st:7,ctl:2}],["Input",{a:1,st:0,ctl:8}]];
+const scTapOf=s=>Math.max(0,SC_TAPS.findIndex(([,t])=>t.a===(s.a??1)&&t.st===(s.st??7)&&t.ctl===(s.ctl??0)));
+const scKey=s=>!s?"":s.type==="main"?"main":s.name!==undefined?`${s.type}|n|${s.name}`:`${s.type}|i|${s.index??0}`;
+function scPicker(kind,i,x,sc){
+  const opt=(v,label)=>`<option value="${esc(v)}"${v===cur?" selected":""}>${esc(label)}</option>`;
+  const cur=scKey(sc);let found=!cur;
+  const grp=(k,label)=>{const o=listFor[k]().map((s,j)=>{
+      const nm=(s.name||"").trim();
+      if(k!=="ch"&&!nm)return""; // LV1 needs a strip the export can find: unnamed busses have no stable ref
+      const v=nm?`${k}|n|${s.name}`:`${k}|i|${j}`;if(v===cur)found=true;
+      return opt(v,nm||DEFNAME[k](j));}).join("");
+    return o?`<optgroup label="${label}">${o}</optgroup>`:"";};
+  const groups=grp("ch","Channels")+grp("grp","Groups")+grp("fx","FX")+grp("aux","Monitors")+grp("mtx","Matrixes");
+  if(cur==="main")found=true;
+  const lost=found?"":opt(cur,(sc.name||"Channel "+((sc.index??0)+1))+" (missing)");
+  const tap=sc?scTapOf(sc):0;
+  return `<span class="rksc" title="Side-chain: the strip that feeds this plugin's key input, and where LV1 taps it">
+    <small>SC</small><select data-k="${kind}" data-i="${i}" data-x="${x}" data-f="rkScSrc">${opt("","— none —")}${lost}${groups}${opt("main",rackLabel("mst"))}</select>
+    ${sc?`<select data-k="${kind}" data-i="${i}" data-x="${x}" data-f="rkScTap">${SC_TAPS.map(([n],j)=>`<option value="${j}"${j===tap?" selected":""}>${n}</option>`).join("")}</select>`:""}</span>`;
+}
+function setRackSc(k,i,x,src,tapIx){
+  const h=rackHolder(k,i);if(!h||!h.rack)return;
+  const ps=rackParams(h.rack),q=ps[x]||{},old=q.sc;
+  if(src===undefined)src=scKey(old);
+  if(!src){const {sc,...rest}=q;ps[x]=hasP(rest)?rest:null;render();return;}
+  if(tapIx===undefined)tapIx=old?scTapOf(old):0;
+  const [type,how,...v]=src.split("|"),ref=type==="main"?{type}:how==="n"?{type,name:v.join("|")}:{type,index:+v[0]};
+  // keep a kept ref's other fields (an imported show's exact row) unless the tap changes
+  const keep=old&&scKey(old)===src&&scTapOf(old)===tapIx?old:{c:2,si:-1,ci:-1};
+  ps[x]={...q,sc:{...keep,...ref,...SC_TAPS[tapIx][1]}};
+  render();setStatus(`${h.rack.slots[x]} side-chain ← ${type==="main"?rackLabel("mst"):how==="n"?v.join("|"):"Channel "+(+v[0]+1)} (${SC_TAPS[tapIx][0]}).`);
 }
 function rackLabel(kind,i){
   if(kind==="mst")return (state.master.name||"").trim()||"MASTER";
@@ -10486,6 +10528,8 @@ document.addEventListener("input",e=>{
       b.style.display=(!q||b.dataset.n.toLowerCase().includes(q))&&(!c||b.dataset.c===c)?"":"none";});
     return;
   }
+  if(f==="rkScSrc"){setRackSc(k,+t.dataset.i,+t.dataset.x,t.value);return;}
+  if(f==="rkScTap"){setRackSc(k,+t.dataset.i,+t.dataset.x,undefined,+t.value);return;}
   if(f==="out"&&k==="main"){setOutPick("main",state.master,t.value);render();return;} // master L/R output patch
   const list=listFor[k]();const it=list[+t.dataset.i];if(!it)return;
   // Editing a SELECTED row's color or stage position applies to every selected row.
