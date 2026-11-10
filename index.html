@@ -1224,6 +1224,10 @@ const CONFIGS=[
   {id:"64",    ch:64, grp:8,  mon:16, mains:3, label:"64 INPUT CHANNELS", sub:"8 GRP / 24 AUX / 3 MAIN / 8 MTX / CUE"},
   {id:"80-16", ch:80, grp:16, mon:16, mains:3, label:"80 INPUT CHANNELS", sub:"16 GRP / 24 AUX / 3 MAIN / 8 MTX / CUE"},
   {id:"80-32", ch:80, grp:8,  mon:24, mains:3, label:"80 INPUT CHANNELS", sub:"8 GRP / 32 AUX / 3 MAIN / 8 MTX / CUE"},
+  // LV1 V17's factory layout (8 FX + 24 Mon). Template = V17's "Empty Session" downgraded to the
+  // V16 schema by the V17 session converter; V17 upgrades the export on load. Keep it last
+  // (inferConfig takes the first config that fits).
+  {id:"80-16-32", ch:80, grp:16, mon:24, mains:3, label:"80 INPUT CHANNELS", sub:"16 GRP / 32 AUX / 3 MAIN / 8 MTX / CUE · LV1 V17"},
 ];
 const FX_COUNT=8, MTX_COUNT=8;
 /* SoundGrid I/O devices of the INVENTORY IO tab (mirrors IO_MODELS in
