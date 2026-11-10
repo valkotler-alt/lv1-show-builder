@@ -691,6 +691,9 @@ tr.rackrow td{background:var(--panel2);padding:10px 12px;}
 #puWin .pufoot{padding:6px 10px;color:#8a8a8a;font-size:11.5px;border-top:1px solid #2a2a2a;}
 #puWin .puro{color:#f0a83a;}
 #puWin .pupre{position:relative;display:inline-flex;gap:2px;}
+#puWin #puSc .rksc{display:inline-flex;align-items:center;gap:4px;}
+#puWin #puSc small{font-size:10px;color:#999;letter-spacing:.05em;}
+#puWin #puSc select{font-size:11px;padding:2px 4px;max-width:150px;}
 #puPresetBtn{min-width:150px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;}
 #puPop{position:absolute;top:100%;left:0;margin-top:4px;z-index:5;width:320px;background:#232323;border:1px solid #4a4a4a;border-radius:6px;box-shadow:0 10px 30px rgba(0,0,0,.55);padding:6px;}
 #puPop[hidden]{display:none;}
@@ -877,8 +880,11 @@ body[data-tab="stage"] section[data-tab="stage"]{display:block;}
 .lpchip.in{background:color-mix(in srgb,var(--kc) 20%,var(--panel));border-color:var(--kc);}
 .lpchip.dim{color:var(--dim);}
 .lpchip .grip{color:var(--dim);font-size:10px;letter-spacing:-2px;margin-right:6px;}
-#cfm{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;}
-#cfm[hidden]{display:none;}
+#cfm,#evd{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;}
+#cfm[hidden],#evd[hidden]{display:none;}
+#evd .evopt{display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.45;margin:0 0 10px;cursor:pointer;}
+#evd .evopt.off{opacity:.45;cursor:not-allowed;}
+#evd .evopt small{display:block;color:var(--dim);}
 .cfmbox{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:18px 20px;max-width:480px;box-shadow:0 12px 40px rgba(0,0,0,.45);}
 #cfmText{font-size:13px;line-height:1.55;margin-bottom:14px;white-space:pre-line;}
 .cfmbtns{display:flex;gap:8px;justify-content:flex-end;}
@@ -1205,6 +1211,17 @@ settings go into the .emo and come back on import. Untouched “stock” racks (
   <div class="cfmbox">
     <div id="cfmText"></div>
     <div class="cfmbtns"><button id="cfmNo" class="small">Cancel</button><button id="cfmOk" class="danger">OK — remove</button></div>
+  </div>
+</div>
+
+<div id="evd" hidden role="dialog" aria-modal="true" aria-labelledby="evdT">
+  <div class="cfmbox">
+    <div id="evdT" style="font-size:13px;margin-bottom:12px"><b>Save the .emo for which LV1 version?</b></div>
+    <label class="evopt"><input type="radio" name="emover" value="16"><span><b>LV1 V16</b> (session schema 5.1)
+      <small>Opens in V16; V17 converts it when it loads.</small></span></label>
+    <label class="evopt"><input type="radio" name="emover" value="17"><span><b>LV1 V17</b> (session schema 5.2)
+      <small>V17's own format: V16 cannot open it.</small></span></label>
+    <div class="cfmbtns"><button id="evdNo" class="small">Cancel</button><button id="evdOk" class="primary">Export .emo</button></div>
   </div>
 </div>
 
@@ -1885,17 +1902,22 @@ function scPicker(kind,i,x,sc){
     <small>SC</small><select data-k="${kind}" data-i="${i}" data-x="${x}" data-f="rkScSrc">${opt("","— none —")}${lost}${groups}${opt("main",rackLabel("mst"))}</select>
     ${sc?`<select data-k="${kind}" data-i="${i}" data-x="${x}" data-f="rkScTap">${SC_TAPS.map(([n],j)=>`<option value="${j}"${j===tap?" selected":""}>${n}</option>`).join("")}</select>`:""}</span>`;
 }
+function puScHead(){ // the side-chain picker in the plugin window's header (same as the rack row's)
+  const el=document.getElementById("puSc");if(!el||!PU)return;
+  const h=rackHolder(PU.k,PU.i),q=h&&h.rack&&(h.rack.params||[])[PU.x]||{};
+  el.innerHTML=SC_PLUGINS.has(PU.name)||q.sc?scPicker(PU.k,PU.i,PU.x,q.sc):"";
+}
 function setRackSc(k,i,x,src,tapIx){
   const h=rackHolder(k,i);if(!h||!h.rack)return;
   const ps=rackParams(h.rack),q=ps[x]||{},old=q.sc;
   if(src===undefined)src=scKey(old);
-  if(!src){const {sc,...rest}=q;ps[x]=hasP(rest)?rest:null;render();return;}
+  if(!src){const {sc,...rest}=q;ps[x]=hasP(rest)?rest:null;render();if(PU&&!PU.isKid&&PU.k===k&&PU.i===i&&PU.x===x)puScHead();return;}
   if(tapIx===undefined)tapIx=old?scTapOf(old):0;
   const [type,how,...v]=src.split("|"),ref=type==="main"?{type}:how==="n"?{type,name:v.join("|")}:{type,index:+v[0]};
   // keep a kept ref's other fields (an imported show's exact row) unless the tap changes
   const keep=old&&scKey(old)===src&&scTapOf(old)===tapIx?old:{c:2,si:-1,ci:-1};
   ps[x]={...q,sc:{...keep,...ref,...SC_TAPS[tapIx][1]}};
-  render();setStatus(`${h.rack.slots[x]} side-chain ← ${type==="main"?rackLabel("mst"):how==="n"?v.join("|"):"Channel "+(+v[0]+1)} (${SC_TAPS[tapIx][0]}).`);
+  render();if(PU&&!PU.isKid&&PU.k===k&&PU.i===i&&PU.x===x)puScHead();setStatus(`${h.rack.slots[x]} side-chain ← ${type==="main"?rackLabel("mst"):how==="n"?v.join("|"):"Channel "+(+v[0]+1)} (${SC_TAPS[tapIx][0]}).`);
 }
 function rackLabel(kind,i){
   if(kind==="mst")return (state.master.name||"").trim()||"MASTER";
@@ -1985,7 +2007,7 @@ function puWarm(ctl){
   const P=PU.pack,ids=new Set();
   for(const v of Object.values(ctl.img||{}))ids.add(String(v));
   for(const i of ctl.cimg||[])if(i.ResID!==undefined)for(let k=0;k<(i.SequenceSteps||1);k++)ids.add(String(i.ResID+k));
-  for(const p of ctl.p||[])for(const v of p.bmp||[])ids.add(String(v));
+  for(const p of ctl.p||[])for(const v of p.bmp||[])for(const id of typeof v==="object"?v.a:[v])ids.add(String(id));
   const known=[...ids].filter(id=>P.imgs[id]);
   if(known.reduce((a,id)=>a+P.imgs[id][1],0)<=4*2**20)for(const id of known)void P.img[id];
 }
@@ -2136,6 +2158,7 @@ async function openPlugUi(k,i,x){
     <div class="puhead">
       <span class="putitle"><b>${esc(name)}</b> · ${esc(rackLabel(k,i))} · slot ${x+1} · ${st?"stereo":"mono"}${noedit?' · <span class="puro" title="Its LV1 default preset has no editable values yet">view only</span>':""}</span>
       <span class="puacts">
+        <span id="puSc"></span>
         <span class="pupre"><button class="small" id="puPrev" title="Previous preset">◀</button><button class="small" id="puPresetBtn" aria-haspopup="listbox"></button><button class="small" id="puNext" title="Next preset">▶</button>
           <div id="puPop" hidden><input type="search" placeholder="Search presets…" aria-label="Search presets"><div class="pulist" role="listbox"></div></div></span>
         <button class="small" id="puSave" title="Save the current settings as a user preset (kept in this browser)">Save preset…</button>
@@ -2150,7 +2173,7 @@ async function openPlugUi(k,i,x){
   document.body.append(d);
   PU.cv=d.querySelector("#puCv");PU.ctx=PU.cv.getContext("2d");PU.w=w;PU.h=hh;
   PU.preset=null;PU.presetVals=null;PU.popOpen=new Set();
-  puFit();puDraw();puPresetLabel();
+  puScHead();puFit();puDraw();puPresetLabel();
   PU.cv.addEventListener("pointerdown",puDown);
   PU.cv.addEventListener("dblclick",puDbl);
   PU.cv.addEventListener("pointermove",puHover);
@@ -2291,12 +2314,19 @@ function puStackPick(shown){
   for(const c of shown){const k=puKind(c);
     if(k==="marker"||k==="graph"||!(c.groups||(c.fl||[]).includes("HideWhenDisabled")))continue;
     const key=c.r.join();if(!stacks.has(key))stacks.set(key,[]);stacks.get(key).push(c);}
-  const hide=new Set(),num=c=>{const m=c.groups?/(\d+)\D*$/.exec(c.groups[0]):/(\d+)/.exec(c.n);return m?+m[1]:null;};
+  // band number: group name, else control name, else the lead param's BAND_<n> (F6 "HPF Q" = PARAM_BAND_7_Q)
+  const hide=new Set(),kept=new Set(),num=c=>{const m=c.groups?/(\d+)\D*$/.exec(c.groups[0]):/(\d+)/.exec(c.n)||/BAND_?(\d+)/i.exec(c.p[0]&&c.p[0].n||"");return m?+m[1]:null;};
   for(const cs of stacks.values()){
     if(cs.length<2||new Set(cs.map(num)).size<2)continue;
     const keep=cs.find(c=>target!==null&&num(c)===target)||cs[0];
-    for(const c of cs)if(c!==keep)hide.add(c);
+    kept.add(keep);for(const c of cs)if(c!==keep)hide.add(c);
   }
+  // the hidden bands' params are disabled: no control on them takes a click (X_CStandardGUI.cpp:3124 skips disabled
+  // controls) -- F6's invisible Q scale marks of the other filter sit on the same spots
+  const keepP=new Set([...kept].flatMap(c=>c.p.map(p=>p.n)));
+  // (only for stacks the plugin hides by DISABLING -- HideWhenDisabled without a group; Waves Harmony hides its voice
+  // panels by group and its params stay live: the per-voice Solo buttons share them)
+  PU.disP=new Set([...hide].filter(c=>!c.groups&&(c.fl||[]).includes("HideWhenDisabled")).flatMap(c=>c.p.map(p=>p.n)).filter(n=>!keepP.has(n)));
   return hide.size?shown.filter(c=>!hide.has(c)):shown;
 }
 function puShown(ctl){
@@ -2318,21 +2348,58 @@ function puShown(ctl){
 function puKind(ctl){
   if(ctl.kind)return ctl.kind;
   const c=ctl.cls||"",seq=(ctl.cimg||[]).some(i=>i.SequenceSteps);
-  return ctl.kind=ctl.tab?"tab":ctl.digits?"digits":ctl.arc?"arc":/Marker/.test(c)&&!seq?"marker":seq?"knob":/RadioButton/.test(c)||ctl.div?"radio"
+  return ctl.kind=ctl.tab?"tab":ctl.digits?"digits":ctl.arc?(ctl.arc.mk?"arcmarker":"arc"):/Marker/.test(c)&&!seq?"marker":seq?"knob":/RadioButton/.test(c)||ctl.div?"radio"
     :/Graph/.test(c)?"graph":/Slider/.test(c)?"slider":/Popup/.test(c)||ctl.menu||ctl.menuParam?"popup":/TextKnob/.test(c)?"textknob"
     :/IncDec|Increment|Decrement/.test(c)?"incdec":/VU|Meter/i.test(c)?"vu":"other";
 }
 /* Arc (CArc_X, WavesLib X_CArc.cpp): a ring segment between the states of the (one or two) "Graph"-registered params,
    one point per degree, 0° at the bottom turning through left / top (ArcStartDeg..ArcEndDeg), ArcThickness px wide,
    centred in the ControlRect shrunk by round(thickness/2); A > B draws the "swapped" colour. */
-function puDrawArc(ctl){
-  const A=ctl.arc,[l,t,w,h]=ctl.r,k=Math.floor(.5+A.t*.5),rx=(w-2*k)/2,ry=(h-2*k)/2,cx=l+k+rx,cy=t+k+ry,wd=A.e-A.s;
+function puArcSpan(ctl){ // the drawn segment: [start deg, count] (CArc_X::UpdatePointerSelf, X_CArc.cpp:615-661)
+  const A=ctl.arc,wd=A.e-A.s;
   const ed=ctl.p.filter(p=>p.reg.some(r=>r.split(/[:=]/)[0]==="Graph")).slice(0,2).map(p=>{const q=puQ(p.n),v=puVal(p.n);return q&&v!==null?puState(q,v):null;});
-  if(ed.some(x=>x===null))return;
+  if(ed.some(x=>x===null))return null;
   let st=0,n=wd,sw=false;
   if(ed.length===1)n=Math.floor(.5+ed[0]/PU_GRAN*wd);
   else if(ed.length===2){let a=Math.floor(.5+ed[0]/PU_GRAN*wd),b=Math.floor(.5+ed[1]/PU_GRAN*wd);if(!(ed[0]<ed[1])){[a,b]=[b,a];sw=true;}st=a;n=b-a;}
-  st=Math.min(st+A.s,360);n=Math.min(n,360-st);if(n<1)n=1;
+  st=Math.min(st+A.s,360);n=Math.min(n,360-st);
+  return {st,n,sw};
+}
+/* Arc hit geometry (CArcBase_X): centre of GeneralRect1 (= the control rect), mouse angle 0 deg at the bottom turning
+   clockwise, selection margin = atan(MarkThickness / mean radius) (negated with UseOpositeMargin). */
+function puArcGeo(ctl,x,y){
+  const A=ctl.arc,[l,t,w,h]=ctl.r,cx=Math.floor((2*l+w)/2),cy=Math.floor((2*t+h)/2);
+  let deg=Math.atan2(cx-x,y-cy)*180/Math.PI;if(deg<0)deg+=360;
+  return {deg,margin:Math.atan((A.mt??3)/((w+h)*0.25))*180/Math.PI*(A.opm?-1:1)};
+}
+function puArcIn(ctl,x,y){ // CArc_X::IsPointInsideSelf (X_CArc.cpp:449): on the drawn segment's angles, +- margin
+  const S=puArcSpan(ctl);if(!S||S.n===0)return false;
+  const G=puArcGeo(ctl,x,y),d=Math.floor(G.deg+.5);
+  return d>=S.st-G.margin&&d<=S.st+S.n+G.margin;
+}
+function puArcMarkIn(ctl,x,y){ // CArcMarker_X::IsPointInsideSelf (:243) + UpdatePointerSelf (:366): the side of the other marker
+  const A=ctl.arc,wd=A.e-A.s,P=ctl.p.map(p=>{const q=puQ(p.n),v=puVal(p.n);return q&&v!==null?puState(q,v)/PU_GRAN:null;});
+  if(P[0]===null)return false;
+  const mDeg=A.s+P[0]*wd;let edge=180;
+  if(P.length>1&&P[1]!==null){
+    if(P[0]===P[1]){if(!ctl._dir||A.aur)ctl._dir=ctl.p[0].reg.includes("User1")?1:-1;}
+    else ctl._dir=P[0]<P[1]?1:-1;
+    edge=A.sre!==undefined&&P[0]===P[1]?A.sre:(360-Math.abs(P[0]-P[1])*wd)*0.5;
+  }
+  const G=puArcGeo(ctl,x,y);let diff=(mDeg-G.deg)*(ctl._dir||1)-G.margin;diff-=Math.floor(diff/360)*360;
+  return diff<edge;
+}
+function puDrawArcMarker(ctl){ // CArcMarker_X::GetDrawInstructionsMarkerLine: a MarkLength line across the ring at the value
+  const A=ctl.arc,c=A.mc||[255,255,255,255];if(!(c[3]>0))return; // Space Rider's markers: alpha 0 until highlighted
+  const q=ctl.p[0]&&puQ(ctl.p[0].n),v=q&&puVal(ctl.p[0].n);if(!q||v===null)return;
+  const [l,t,w,h]=ctl.r,cx=l+w/2,cy=t+h/2,f=(A.s+puState(q,v)/PU_GRAN*(A.e-A.s))*Math.PI/180,r0=Math.min(w,h)/2-A.t/2;
+  const P=o=>[cx-Math.sin(f)*(r0+o),cy+Math.cos(f)*(r0+o)],x=PU.ctx;
+  x.beginPath();x.moveTo(...P(-A.ml/2));x.lineTo(...P(A.ml/2));x.strokeStyle=`rgba(${c[0]},${c[1]},${c[2]},${c[3]/255})`;x.lineWidth=A.mt||3;x.stroke();
+}
+function puDrawArc(ctl){
+  const A=ctl.arc,[l,t,w,h]=ctl.r,k=Math.floor(.5+A.t*.5),rx=(w-2*k)/2,ry=(h-2*k)/2,cx=l+k+rx,cy=t+k+ry;
+  const S=puArcSpan(ctl);if(!S)return;
+  let {st,n,sw}=S;if(n<1)n=1;
   const [r,g,b,a]=(sw?A.cs:A.c)[0],c=PU.ctx,pt=(d,o)=>{const f=d*Math.PI/180;return [cx-Math.sin(f)*(rx+o),cy+Math.cos(f)*(ry+o)];};
   c.beginPath();
   for(let i=0;i<n;i++)c.lineTo(...pt(st+i,A.t/2));
@@ -2385,7 +2452,7 @@ function puPlaceDeps(){
 function puPlaced(c){
   if(c.r)return true;
   const tr=/Popup/.test(c.cls||"")&&((c.p||[]).find(p=>p.text&&p.text.r)||{}).text;
-  return !!(c.r=c.digits&&c.dda||tr&&tr.r||null);
+  return !!(c.r=c.digits&&puArea(c.dda,null)||tr&&tr.r||null);
 }
 function puImg(id,x,y){const im=id!==undefined&&PU.pack.img[id];if(im&&im.naturalWidth)PU.ctx.drawImage(im,x,y);return im;}
 function puDraw(){
@@ -2401,7 +2468,7 @@ function puDraw(){
     if(ctl.slots){puDrawSlots(ctl);continue;}
     if((ctl.fl||[]).includes("DefaultDraw")&&kind!=="vu"&&!(kind==="popup"&&ctl.img&&ctl.img.Idle)){
       // DefaultDraw (WCGUIControl): Idle grey box + 1 px black frame instead of the selection image
-      const [rl,rt,rw,rh]=kind==="slider"?(ctl.tma||ctl.r):ctl.r;
+      const [rl,rt,rw,rh]=kind==="slider"?puArea(ctl.tma,ctl.r):ctl.r;
       c.fillStyle="rgb(220,220,220)";c.fillRect(rl,rt,rw,rh);c.strokeStyle="#000";c.lineWidth=1;c.strokeRect(rl+.5,rt+.5,rw-1,rh-1);
     }else if(ctl.img&&ctl.img.Idle&&kind!=="slider")puImg(ctl.img.Idle,l,t);
     switch(kind){
@@ -2416,11 +2483,12 @@ function puDraw(){
         if(!q||v===null)break;
         if(!ctl.div){ // 1st generation (CRadioButton_X: hor x vert grid): BackGround, then ForeGround clipped to the value's cell
           const bg=puImgOf(ctl,"BackGround"),fg=puImgOf(ctl,"ForeGround");if(bg)puImg(bg,l,t);if(!fg)break;
-          const [hn,vn]=ctl.grid||[1,1],[bl,bt,bw,bh]=ctl.bda||ctl.r,k=puIdx(q,v),hs=bw/hn,vs=bh/vn;
+          const [hn,vn]=ctl.grid||[1,1],[bl,bt,bw,bh]=puArea(ctl.bda,ctl.r),k=puIdx(q,v),hs=bw/hn,vs=bh/vn;
           const x0=bl+Math.trunc(hs*(k%hn)),y0=bt+Math.trunc(vs*Math.floor(k/hn));
           c.save();c.beginPath();c.rect(x0,y0,Math.trunc(hs)+1,Math.trunc(vs)+1);c.clip();puImg(fg,l,t);c.restore();break;}
         const dv=(ctl.div||[])[puIdx(q,v)];if(dv&&dv[1]!==null)puImg(dv[1],l,t);break;}
       case "arc":puDrawArc(ctl);break;
+      case "arcmarker":puDrawArcMarker(ctl);break;
       case "vu":if(puImgOf(ctl,"BackGround"))puImg(puImgOf(ctl,"BackGround"),l,t);break;
       default:{
         const g=puGraph(ctl.n);
@@ -2435,7 +2503,7 @@ function puDraw(){
     }
     for(const pp of ctl.p){ // bitmap windows (AlgBitmap: image k for value k), then value text
       const pq=puQ(pp.n),pv=puVal(pp.n);
-      if(pp.bmp&&pq&&pv!==null&&puIsTog(pq))puImg(pp.bmp[puIdx(pq,pv)],l,t);
+      if(pp.bmp&&pq&&pv!==null&&puIsTog(pq))puImg(puBmpId(pp.bmp[puIdx(pq,pv)]),l,t);
       if(pp.text&&!pp.text.hover)puDrawText(pp);
       if(pp.label&&pq)puDrawText(pp,pp.label,pq.lab||"");
     }
@@ -2446,7 +2514,7 @@ function puDraw(){
    orientation from the lead param's MouseVertical / MouseHorizontal registration. */
 function puSliderGeo(ctl){
   const im=ctl.img&&PU.pack.img[ctl.img.Idle];if(!im||!im.naturalWidth)return null;
-  const B=ctl.tma||ctl.r,vert=ctl.p[0]&&ctl.p[0].reg.some(r=>r.startsWith("MouseVertical"));
+  const B=puArea(ctl.tma,ctl.r),vert=ctl.p[0]&&ctl.p[0].reg.some(r=>r.startsWith("MouseVertical"));
   const T=vert?im.naturalHeight:im.naturalWidth,Ts=Math.floor(T/2),Tb=T-Ts;
   return vert?{im,B,vert,a:B[1]+Ts,b:B[1]+B[3]-Tb,Ts,Tb}:{im,B,vert,a:B[0]+Tb,b:B[0]+B[2]-Ts,Ts,Tb};
 }
@@ -2466,7 +2534,7 @@ function puDrawDigits(ctl,q,v){
   s=s.slice(0,D.max);
   const ims=[...s].map(ch=>PU.pack.img[D.g[ch+"|0"]]);
   if(ims.some(im=>!im||!im.naturalWidth))return; // engine: nothing when a glyph is missing
-  const W=ims.reduce((a,im)=>a+im.naturalWidth,0)-D.ovl*(ims.length-1),[l,t,w,h]=ctl.dda||ctl.r;
+  const W=ims.reduce((a,im)=>a+im.naturalWidth,0)-D.ovl*(ims.length-1),[l,t,w,h]=puArea(ctl.dda,ctl.r);
   let x=D.align==="Left"?l:D.align==="Right"?l+w-W:l+(w-W)/2;
   for(const im of ims){PU.ctx.drawImage(im,Math.round(x),Math.round(t+(h-im.naturalHeight)/2));x+=im.naturalWidth-D.ovl;}
 }
@@ -2578,7 +2646,11 @@ function puInCtl(c,x,y){
   return !(c.fl||[]).includes("IgnoreMouseOnTextWin")&&c.p.some(p=>p.text&&p.text.r&&puIn(p.text.r,x,y));
 }
 function puHit(x,y){
-  for(let j=PU.markers.length-1;j>=0;j--){const m=PU.markers[j];if(!m.ctl.ms0&&Math.abs(m.x-x)<=m.hw&&Math.abs(m.y-y)<=m.hh)return {marker:m};} // the marker image's own rect
+  for(let j=PU.markers.length-1;j>=0;j--){const m=PU.markers[j];if(!m.ctl.ms0&&Math.abs(m.x-x)<=m.hw&&Math.abs(m.y-y)<=m.hh){ // the marker image's own rect
+    // ...unless one of its own dependents sits under the point (Curves AQ's HP / LP slope popup on the filter's pill):
+    // every control there gets the mouse-down (ModifyControlsOnMouseDown) and the popup opens
+    if((m.ctl.deps||[]).some(d=>{const c=PU.shown.find(s=>s.n===d.n);return c&&puInCtl(c,x,y);}))continue;
+    return {marker:m};}}
   for(let j=PU.shown.length-1;j>=0;j--){
     // MaxSelection 0: the engine never selects it, so it never gets a click (CSelectableHome.cpp:375) -- e.g. Curves
     // Resolve's full-screen "BYPASS Screen" curtain, AQ's "Learn DONE!" overlay
@@ -2589,12 +2661,21 @@ function puHit(x,y){
       continue;
     }
     if(kd==="marker"||kd==="vu"||c.ms0||!puInCtl(c,x,y))continue;
-    const p=c.p.find(pp=>{const q=puQ(pp.n);return q&&!q.ro&&pp.reg.some(r=>/^(Mouse|RadioButton|FixedState|PopUp)/.test(r));});
-    if(!p)continue;
+    if(kd==="arc"&&!puArcIn(c,x,y)||kd==="arcmarker"&&!puArcMarkIn(c,x,y))continue;
+    // a DisplayOnly param is never dragged (WCGUIControl.cpp:2912 skips its Touch) -- Space Rider's A/B range arc --
+    // but its FixedState / RadioButton / PopUp still set it (F6's band buttons select the band so); a modifier
+    // registration ("MouseVertical:Primary") acts only with its key held (CompareParamModifiers)
+    const p=c.p.find(pp=>{const q=puQ(pp.n),dOnly=pp.reg.includes("DisplayOnly");
+      return q&&!q.ro&&pp.reg.some(r=>(/^(RadioButton|FixedState|PopUp)/.test(r)||!dOnly&&/^Mouse/.test(r))&&puModOk(r));});
+    if(!p||(PU.disP&&PU.disP.has(p.n)))continue;
+    // a momentary touch overlay (MouseDown + MouseUp: 1 while held) over a control of the same rect: every control
+    // under the point gets the mouse-down, the one beneath takes the drag (Reel ADT VariSpeed Touch, Vocal Rider
+    // UserTouchHidden) -- the engine's ModifyControlsOnMouseDown; the overlay itself stores nothing
+    if(puMomentary(p)&&PU.shown.slice(0,j).some(d=>d!==c&&d.r.join()===c.r.join()&&puInCtl(d,x,y)))continue;
     const all=c.p.filter(pp=>pp.reg[0]===p.reg[0]&&puQ(pp.n)).map(pp=>pp.n);
     if(kd==="radio"){
       if(!c.div){ // 1st-gen grid: the cell under the mouse is the state (row-major)
-        const [hn,vn]=c.grid||[1,1],[bl,bt,bw,bh]=c.bda||c.r;if(!puIn([bl,bt,bw,bh],x,y))continue;
+        const [hn,vn]=c.grid||[1,1],[bl,bt,bw,bh]=puArea(c.bda,c.r);if(!puIn([bl,bt,bw,bh],x,y))continue;
         if(hn*vn<2)return {ctl:c,p,all,div:puIdx(puQ(p.n),puVal(p.n))?0:1}; // a single cell toggles
         return {ctl:c,p,all,div:Math.min(vn-1,Math.floor((y-bt)/(bh/vn)))*hn+Math.min(hn-1,Math.floor((x-bl)/(bw/hn)))};}
       const dv=(c.div||[]).find(d=>d[2]&&puIn([c.r[0]+d[2][0],c.r[1]+d[2][1],d[2][2],d[2][3]],x,y));
@@ -2604,6 +2685,22 @@ function puHit(x,y){
   }
   return null;
 }
+// ButtonsDrawArea / ThumbMovementArea / DigitDrawArea: an empty one is the control's own rect (X_CRadioButton.cpp:217,
+// X_CSlider.cpp:43, X_CDigitDisplay.cpp:84) -- DeEsser's Monitor radio has ButtonsDrawArea 0,0,0,0
+const puArea=(a,r)=>a&&a[2]>0&&a[3]>0?a:r;
+/* An AlgBitmap state is an image, or an <Animation> {t: ms per frame, a: frames} (Berzerk SC Listen, Curves Freeze
+   blink when on): the frame by the clock, and a redraw when it changes while the window is open. */
+function puBmpId(b){
+  if(!b||typeof b!=="object")return b;
+  const H=PU.host||PU,t=Math.max(50,b.t||500);
+  if(!H._anim)H._anim=setTimeout(()=>{H._anim=0;if(PU===H)puRedrawSoon();},t-performance.now()%t);
+  return b.a[Math.floor(performance.now()/t)%b.a.length];
+}
+// a registration's modifier (":Primary" = Ctrl / Cmd, ":Alt", ":Shift") is held; unmodified ones always act
+// (Ctrl also means "fine" in this page)
+const puModOk=r=>{const m=/:(\w+)/.exec(r);if(!m)return true;const M=(PU.host||PU).mods||{};
+  return m[1]==="Primary"?!!M.ctrl:m[1]==="Alt"?!!M.alt:m[1]==="Shift"?!!M.shift:true;};
+const puMomentary=p=>p.reg.includes("MouseDown")&&p.reg.includes("MouseUp");
 function puHover(e){
   if(!PU||PU.drag)return;
   const [x,y]=puPt(e),hit=puHit(x,y);
@@ -2613,6 +2710,7 @@ function puHover(e){
 }
 function puDown(e){
   if(!PU||e.button!==0)return;
+  PU.mods={ctrl:e.ctrlKey||e.metaKey,alt:e.altKey,shift:e.shiftKey};
   const [x,y]=puPt(e),hit=puHit(x,y);if(!hit)return;
   if(hit.kid){ // a docked child: its own context and coordinates; the host's pointer handlers drive its drag
     const kc=hit.kid;e.preventDefault();kc.drag=null;
@@ -2641,6 +2739,7 @@ function puDownAt(e,x,y,hit){
       puEdit(all,puIsTog(q)?puRW(q,Math.min(puStates(q)-1,Math.max(0,puIdx(q,puVal(p.n))+Math.sign(d)))):puIncStep(q,puVal(p.n),d));return;}
     if(kd==="slider"){const G=puSliderGeo(ctl);if(G){PU.drag={p:p.n,all,q,x0:x,y0:y,s0:puState(q,puVal(p.n)),horiz:!G.vert,span:Math.max(1,G.b-G.a)};
       PU.cv.setPointerCapture(e.pointerId);PU.cv.onpointermove=puMove;PU.cv.onpointerup=PU.cv.onpointercancel=()=>{if(PU){PU.drag=null;PU.cv.onpointermove=null;}};return;}}
+    if(puIsTog(q)&&puMomentary(p))return; // pressed only while held: back to its value on release, nothing to store
     if(puIsTog(q)&&!/knob|slider|textknob/.test(kd)){puEdit(all,puRW(q,(puIdx(q,puVal(p.n))+1)%puStates(q)));return;}
     PU.drag={p:p.n,all,q,x0:x,y0:y,s0:puState(q,puVal(p.n)),horiz:p.reg[0].startsWith("MouseHorizontal"),span:puKind(ctl)==="textknob"?200:500};
   }
@@ -14282,7 +14381,295 @@ function emoTemplatePresets(db,pack){
   return out;
 }
 
-async function emoExport(spec){
+/* ---- emo_v17.js (pasted verbatim; edit that file + src/emo_v17.py, then re-paste) ---- */
+/* emoUpgradeV17(db): upgrade an open sql.js Database holding an LV1 V16 session (schema 5.1.0.3) in place to
+   V17 (5.2.0.29), statement for statement like LV1 V17's MixerSessionConverter.dll (target app LV1).
+   Mirror: src/emo_v17.py (same statements, same order). Check: tests/test_emo_v17_port.py.
+   Sources (XPLATFORM Apps/Mixer/SessionConverters/MixerSessionConverter/Source):
+     WCConversionMgr.cpp  InitializeSourceInfo 389 -> ValidateDatabase 595 (quick_check 506, foreign_key_check 537);
+                          PreConversion 685 -> DropAllTriggers (Common/sql_utils.cpp 837)
+     5_1__to__5_2/Converter_5_2.cpp  Upgrade 105: foreign_keys OFF, BEGIN, Upgrade_5_1_to_5_2 177:
+       GEQRole 288 | AddMonitorTrackType 308 (+ Helper_Upgrade_UpdateSnapshotChainerParams_ByDefault 481) |
+       ovvLayerTrack 858 | PlugSidechain 1592 | MutePosition 622 (LV1 rows) | MidiLearn 651 |
+       SnapshotPerformanceIndexes 737 | RecallSafeOutputDelayTime 838 | UserKeys 973 | SmallFaderDisplayMode 1024 |
+       3BaysModes 1052 | Overview_Link_ViewAll 1164 | DockedWindowInfo 1210 |
+       LRLinkParams 1310 (+ Helper_Upgrade_LRLinkByEQPlug 1426, presets parsed like Common/WCPluginPresetUtilsPugiXml.cpp) |
+       ModesPreset 1561 | ChainerColors 1661 | FixExtInsertRole 1699 | ChangeDefault48VParamsOfBankB 1711 (LV1) |
+       RenameDelayGroupsToDelayGroup 1753 | UpdateVersion (Common/ConverterBase.cpp) -> 5.2.0.29; COMMIT, foreign_keys ON
+     WCConversionMgr.cpp  PostConversion 714: CreateAllTriggers_FixAllRefCounts_DeleteAllUnusedPresets (sql_utils.cpp 868),
+                          VACUUM, UpdateHistoryTable 778, ValidateDatabase, VACUUM.
+   Double-quoted string literals of the C++ are written single-quoted (same values). */
+function emoUpgradeV17(db) {
+  const run = (sql, p) => db.run(sql, p);
+  const rows = (sql, p) => {
+    const st = db.prepare(sql), out = [];
+    try { if (p) st.bind(p); while (st.step()) out.push(st.get()); } finally { st.free(); }
+    return out;
+  };
+  const hasTable = n => rows("SELECT name FROM sqlite_master WHERE type=='table' AND name==?1", [n]).length > 0;
+  const validate = () => {   // WCConversionMgr::ValidateDatabase
+    const qc = rows("PRAGMA quick_check");
+    if (qc.length !== 1 || String(qc[0][0]).toLowerCase() !== "ok") throw new Error("Database is corrupted: " + qc.join("; "));
+    const fk = rows("PRAGMA foreign_key_check");
+    if (fk.length) throw new Error("Database contains foreign-keys violations: " + fk.map(r => r.join("/")).join("; "));
+  };
+  const v = rows("SELECT schema_version_major, schema_version_minor, schema_version_revision, schema_version_patch FROM info")[0];
+  if (!v || v.join(".") !== "5.1.0.3") throw new Error("emoUpgradeV17: expected a 5.1.0.3 session, got " + (v ? v.join(".") : "none"));
+  const fkWas = rows("PRAGMA foreign_keys")[0][0];
+  validate();
+  for (const [n] of rows("SELECT name FROM sqlite_master WHERE type = 'trigger'")) run("DROP TRIGGER " + n);
+
+  // Helper_Upgrade_LRLinkByEQPlug: WCPluginPresetUtilsPugiXml::ParsePresetParameters (pugixml, parse_default) -> values or null
+  const presetParams = xml => {
+    if (!xml) return null;
+    const ent = s => s.replace(/&(#x[0-9a-fA-F]+|#[0-9]+|lt|gt|amp|apos|quot);/g, (m, e) =>
+      e[0] === "#" ? String.fromCodePoint(e[1] === "x" ? parseInt(e.slice(2), 16) : +e.slice(1)) :
+      { lt: "<", gt: ">", amp: "&", apos: "'", quot: '"' }[e]);
+    const doc = { c: [] }, stack = [doc];
+    const re = /<!--[\s\S]*?-->|<!\[CDATA\[([\s\S]*?)\]\]>|<\?[\s\S]*?\?>|<!DOCTYPE[^>]*>|<\/([^\s>]+)\s*>|<([^\s\/>!?]+)((?:\s+[^\s=\/>]+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*(\/?)>|([^<]+)/g;
+    const src = xml.replace(/\r\n?/g, "\n");
+    let m, at = 0;
+    while ((m = re.exec(src)) && m.index === at) {
+      at = re.lastIndex;
+      const top = stack[stack.length - 1];
+      if (m[1] !== undefined) top.c.push({ t: m[1] });
+      else if (m[2] !== undefined) { if (stack.length < 2 || top.n !== m[2]) return null; stack.pop(); }
+      else if (m[3] !== undefined) {
+        const el = { n: m[3], a: {}, c: [] }, ar = /([^\s=]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
+        let a;
+        while ((a = ar.exec(m[4]))) if (!(a[1] in el.a)) el.a[a[1]] = ent((a[2] ?? a[3]).replace(/[\t\n]/g, " "));
+        top.c.push(el);
+        if (!m[5]) stack.push(el);
+      } else if (m[6] !== undefined && /\S/.test(m[6])) top.c.push({ t: ent(m[6]) });
+    }
+    if (at !== src.length || stack.length !== 1) return null;
+    const kids = (e, n) => (e ? e.c : []).filter(k => k.n === n);
+    const text = e => { const k = e && e.c.find(k => k.t !== undefined); return k ? k.t : ""; };
+    const root = doc.c.find(k => k.n !== undefined);
+    if (!root || root.n !== "PresetChunkXMLTree") return null;
+    for (const preset of kids(root, "Preset")) {
+      const setupNode = kids(kids(preset, "PresetHeader")[0], "ActiveSetup")[0];
+      if (!setupNode) return null;
+      const setup = text(setupNode);
+      if (!setup) return null;
+      for (const data of kids(preset, "PresetData")) {
+        if (data.a.Setup !== setup) continue;
+        for (const par of kids(data, "Parameters")) {
+          if ("Type" in par.a && par.a.Type !== "RealWorld") continue;
+          const s = text(par);
+          if (/[^0-9+\-,.*R \t\r\n;]/.test(s)) continue;          // EParamCharType::Unknown -> this node fails
+          return s.split(/[ \t\r\n;]+/).filter(Boolean).map(tok => {   // AppendParsedParam: '*' = not loaded, else atof
+            if (tok[0] === "*") return null;
+            const n = /^[+-]?(\d+\.?\d*|\.\d+)/.exec(tok);
+            return n ? parseFloat(n[0]) : 0;
+          });
+        }
+      }
+    }
+    return null;
+  };
+  const isParam = (p, i, want) => i < p.length && p[i] !== null && Math.abs(p[i] - want) < 1e-9;  // IsPresetParamValue
+
+  run("PRAGMA foreign_keys=OFF");
+  run("BEGIN TRANSACTION;");
+  try {
+    // Upgrade_GEQRole
+    run("UPDATE plug SET plug_role = 128 WHERE rowid IN(   SELECT MIN(rowid)   FROM plug   WHERE plugin_4cc IN('SHQM', 'GQMM', 'SHQS', 'GQMS')   GROUP BY chainer_id ); ");
+    // Upgrade_AddMonitorTrackType
+    run("INSERT INTO cluster_type ( id, name) VALUES (25,'Mon')");
+    run("INSERT INTO config_info (track_type, num_tracks) VALUES ( 25, 0) ON CONFLICT(track_type) DO UPDATE SET num_tracks=0");
+    run("UPDATE config_info SET num_tracks=(SELECT num_tracks-8 FROM config_info WHERE track_type=2) WHERE track_type=25 AND EXISTS(SELECT 1 FROM config_info WHERE track_type=2 AND num_tracks>8); ");
+    run("UPDATE config_info SET num_tracks=8 WHERE (track_type=2 AND num_tracks>8); ");
+    run("UPDATE object SET obj_type=25 WHERE(obj_type=2 AND obj_index>=8); ");
+    run("UPDATE object SET obj_index=obj_index-8 WHERE obj_type=25; ");
+    run("UPDATE ovv_layer_track SET track_type=25 WHERE(track_type=2 AND track_index>=8); ");
+    run("UPDATE ovv_layer_track SET track_index=track_index+1000 WHERE track_type=25; ");
+    run("UPDATE ovv_layer_track SET track_index=track_index-1008 WHERE track_type=25; ");
+    run("UPDATE plug_sidechain SET TrackType=25, TrackHandle=TrackHandle-8 WHERE TrackType=2 AND TrackHandle>=8; ");
+    run("UPDATE routes SET src_cluster_type=25 WHERE (src_cluster_type=2 AND src_cluster_type_index>=8); ");
+    run("UPDATE routes SET dst_cluster_type=25 WHERE (dst_cluster_type=2 AND dst_cluster_type_index>=8); ");
+    run("UPDATE routes SET src_cluster_type_index=src_cluster_type_index-8 WHERE src_cluster_type=25; ");
+    run("UPDATE routes SET dst_cluster_type_index=dst_cluster_type_index-8 WHERE dst_cluster_type=25; ");
+    run("INSERT INTO chainer_params_default_values (obj_type, param_id, param_value) SELECT 25, param_id, param_value FROM chainer_params_default_values WHERE obj_type=2; ");
+    //   Helper_Upgrade_UpdateSnapshotChainerParams_ByDefault
+    run("CREATE TEMPORARY TABLE TEMP_old_snapshot_chainer_params(chainer_id, snapshot_id, param_id, param_value);");
+    run("UPDATE chainer_params_default_values SET param_value=3 WHERE obj_type=25 AND param_id=592;");
+    run("INSERT INTO TEMP_old_snapshot_chainer_params(chainer_id, snapshot_id, param_id, param_value) SELECT object.id, snapshot.id AS snapshot_id, chainer_params.id AS param_id, 2 FROM object, snapshot, chainer_params WHERE object.obj_type=25 AND chainer_params.id=592; ");
+    run("DELETE FROM TEMP_old_snapshot_chainer_params WHERE EXISTS(SELECT 1 FROM snapshot_chainer_params WHERE snapshot_chainer_params.chainer_id = TEMP_old_snapshot_chainer_params.chainer_id AND snapshot_chainer_params.snapshot_id = TEMP_old_snapshot_chainer_params.snapshot_id AND snapshot_chainer_params.param_id = TEMP_old_snapshot_chainer_params.param_id);     ");
+    run("WITH T(chainer_id, snapshot_id, param_id, param_value) AS ( SELECT scp.chainer_id, scp.snapshot_id, scp.param_id, scp.param_value FROM snapshot_chainer_params as scp INNER JOIN chainer_params_default_values ON scp.param_id = chainer_params_default_values.param_id AND scp.param_value = chainer_params_default_values.param_value INNER JOIN object ON object.id = scp.chainer_id AND object.obj_type = chainer_params_default_values.obj_type ) DELETE FROM snapshot_chainer_params WHERE(chainer_id, snapshot_id, param_id, param_value) IN(SELECT * FROM T); ");
+    run("INSERT INTO snapshot_chainer_params SELECT * FROM TEMP_old_snapshot_chainer_params; ");
+    run("DROP TABLE TEMP_old_snapshot_chainer_params; ");
+    run("UPDATE mixer_settings SET cue_alt_track_index = cue_alt_track_index-8, cue_alt_track_type = 25 WHERE cue_alt_track_type = 2 AND cue_alt_track_index >= 8; ");
+    // Upgrade_ovvLayerTrack
+    run("CREATE TABLE NEW_config_info( track_type           INTEGER NOT NULL  PRIMARY KEY, num_tracks           INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(track_type) REFERENCES cluster_type(id)); ");
+    run("INSERT INTO NEW_config_info SELECT * FROM config_info;");
+    run("DROP TABLE config_info; ");
+    run("ALTER TABLE NEW_config_info RENAME TO config_info; ");
+    run("CREATE TABLE NEW_ovv_layer_track(     id                   INTEGER NOT NULL  PRIMARY KEY,     layer_id             INTEGER NOT NULL,     obj_id               INTEGER NOT NULL,     strip_index          INTEGER NOT NULL,     FOREIGN KEY(layer_id) REFERENCES ovv_layer(id) ON DELETE CASCADE ON UPDATE CASCADE,     FOREIGN KEY(obj_id) REFERENCES object(id) ON DELETE CASCADE ON UPDATE CASCADE ); ");
+    run("WITH to_insert(id, layer_id, obj_id, strip_index) AS (     SELECT olt.id, olt.layer_id, o.id, olt.strip_index FROM object o     INNER JOIN ovv_layer_track olt ON olt.track_type = o.obj_type AND olt.track_index = o.obj_index ) INSERT INTO NEW_ovv_layer_track SELECT * FROM to_insert; ");
+    run("DROP TABLE ovv_layer_track; ");
+    run("ALTER TABLE NEW_ovv_layer_track RENAME TO ovv_layer_track; ");
+    run("CREATE INDEX idx_ovv_layer_track_layer ON ovv_layer_track ( layer_id ); ");
+    run("CREATE UNIQUE INDEX unq_ovv_layer_track_strip_index_in_layer ON ovv_layer_track ( layer_id, strip_index ); ");
+    run("CREATE UNIQUE INDEX unq_ovv_layer_track_layer_trackid ON ovv_layer_track ( layer_id, obj_id ); ");
+    // Upgrade_PlugSidechain
+    run("CREATE TABLE NEW_plug_sidechain( \tid                   INTEGER NOT NULL  PRIMARY KEY, \tplug_id              INTEGER NOT NULL, \tAsgnType             INTEGER NOT NULL, \tControlType          INTEGER NOT NULL, \tsidechain_src_chainer_id INTEGER NOT NULL, \tSectionType          INTEGER NOT NULL, \tSectionIndex         INTEGER NOT NULL, \tChannelIndex         INTEGER NOT NULL, \tcontrolID            INTEGER NOT NULL, \tCONSTRAINT Unq_plug_sidechain UNIQUE(plug_id), \tFOREIGN KEY(plug_id) REFERENCES plug(id) ON DELETE CASCADE ON UPDATE CASCADE, \tFOREIGN KEY(sidechain_src_chainer_id) REFERENCES chainer(obj_id) ON DELETE CASCADE ON UPDATE CASCADE ); ");
+    run("INSERT INTO NEW_plug_sidechain   SELECT psc.id, psc.plug_id, psc.AsgnType, psc.ControlType,     sc_src_o.id AS sidechain_src_chainer_id,     psc.SectionType, psc.SectionIndex, psc.ChannelIndex, psc.controlID FROM plug_sidechain AS psc   INNER JOIN object sc_src_o ON sc_src_o.obj_type = psc.TrackType AND sc_src_o.obj_index = psc.TrackHandle; ");
+    run("DROP TABLE plug_sidechain; ");
+    run("ALTER TABLE NEW_plug_sidechain RENAME TO plug_sidechain; ");
+    // Upgrade_MutePosition (+ the LV1 rows)
+    run("CREATE TABLE mute_positions(     id                   INTEGER NOT NULL  PRIMARY KEY,     track_type           INTEGER NOT NULL,     input                INTEGER NOT NULL DEFAULT 1,     pre_fader            INTEGER NOT NULL DEFAULT 1,     post_fader           INTEGER NOT NULL DEFAULT 1,     post_pan             INTEGER NOT NULL DEFAULT 1,     FOREIGN KEY(track_type) REFERENCES cluster_type(id) ON DELETE CASCADE ON UPDATE CASCADE ); ");
+    for (const t of [0, 1, 2]) run(`INSERT INTO mute_positions(track_type, input, pre_fader, post_fader, post_pan) VALUES(${t} , 1, 1, 1, 1); `);
+    // Upgrade_MidiLearn
+    const lookup = (tbl, names) => {
+      run(`CREATE TABLE ${tbl}(     id                   INTEGER NOT NULL  PRIMARY KEY,     name                 TEXT NOT NULL ); `);
+      for (const [id, name] of names) run(`INSERT INTO ${tbl}(id, name) VALUES(${id}, '${name}'); `);
+    };
+    lookup("midi_event_type", ["Note_Off", "Note_On", "Polyphonic_Key_Pressure", "Control_Change", "Program_Change",
+      "Channel_Pressure", "Pitch_Wheel_Change", "System_Common"].map((n, i) => [i, n]));
+    lookup("midi_event_subtype", ["SysEx", "MTC_QuarterFrame", "SongPosPointer", "SongSelect", "Reserved_0x04", "Reserved_0x05",
+      "TuneRequest", "SysExEnd", "TimingClock", "Reserved_0x09", "Start", "Continue", "Stop", "Reserved_0x0D", "ActiveSensing",
+      "Reset", "Size"].map((n, i) => [i, n]));
+    lookup("midi_event_flags", [[0, "None"], [1, "Error or 14BitKey"], [2, "3ByteSysExKey"], [4, "14BitValue"], [16, "USysEx"], [32, "PCKeyboard"]]);
+    run("CREATE TABLE midi_learn(     id                   INTEGER NOT NULL  PRIMARY KEY,     plug_id              INTEGER  DEFAULT - 1,     ctl_id_track_type    INTEGER NOT NULL DEFAULT - 1,     ctl_id_track_idx     INTEGER NOT NULL DEFAULT - 1,     ctl_id_section_type  INTEGER NOT NULL DEFAULT - 1,     ctl_id_section_idx   INTEGER NOT NULL DEFAULT - 1,     ctl_id_channel_idx   INTEGER NOT NULL DEFAULT - 1,     ctl_id_section_ctl_id INTEGER NOT NULL DEFAULT - 1,     midi_event_type      INTEGER NOT NULL DEFAULT 0,     midi_event_sub_type  INTEGER NOT NULL DEFAULT 0,     midi_event_flags     INTEGER NOT NULL DEFAULT 0,     midi_event_channel   INTEGER NOT NULL DEFAULT 0,     midi_event_key       INTEGER NOT NULL DEFAULT 0,     CONSTRAINT unq_midi_learn_ctl_id UNIQUE(plug_id, ctl_id_section_idx, ctl_id_channel_idx, ctl_id_section_ctl_id),     FOREIGN KEY(plug_id) REFERENCES plug(id) ON DELETE CASCADE ON UPDATE CASCADE,     FOREIGN KEY(midi_event_type) REFERENCES midi_event_type(id),     FOREIGN KEY(midi_event_sub_type) REFERENCES midi_event_subtype(id),     FOREIGN KEY(midi_event_flags) REFERENCES midi_event_flags(id),     FOREIGN KEY(ctl_id_track_type) REFERENCES cluster_type(id) ); ");
+    run("CREATE INDEX idx_midi_learn_plug_id ON midi_learn(plug_id); ");
+    // Upgrade_SnapshotPerformanceIndexes
+    for (const [n, on] of [
+      ["idx_recall_safe_settings_filter_state", "recall_safe_settings(snapshot_settings_filter, check_state)"],
+      ["idx_snapshot_scope_settings_filter_state", "snapshot_scope_settings(snapshot_settings_filter, check_state, snapshot_id)"],
+      ["idx_chainer_recall_safe_settings_filter_state", "chainer_recall_safe_settings(snapshot_settings_filter, check_state, chainer_id)"],
+      ["idx_chainer_recall_safe_settings_chainer_first", "chainer_recall_safe_settings(chainer_id, snapshot_settings_filter, check_state)"],
+      ["idx_chainer_snapshot_scope_settings_filter_state", "chainer_snapshot_scope_settings(snapshot_settings_filter, check_state, snapshot_id, chainer_id)"],
+      ["idx_chainer_snapshot_scope_settings_chainer_first", "chainer_snapshot_scope_settings(chainer_id, snapshot_id, snapshot_settings_filter, check_state)"],
+      ["idx_object_scope_recall", "object(ch_scope_type_id, recall_safe)"],
+      ["idx_snapshot_chainer_params_param_id", "snapshot_chainer_params(param_id)"],
+      ["idx_snapshot_assignment_src_id", "snapshot_assignment(src_id)"],
+      ["idx_snapshot_assignment_dst_id", "snapshot_assignment(dst_id)"],
+      ["idx_snapshot_assignment_src_dst", "snapshot_assignment(src_id, dst_id)"],
+      ["idx_routes_src_cluster", "routes(src_cluster_type, src_cluster_type_index)"],
+      ["idx_routes_dst_cluster", "routes(dst_cluster_type, dst_cluster_type_index)"],
+      ["idx_plug_role", "plug(plug_role)"],
+      ["idx_snapshot_chainer_scope_filter", "snapshot_chainer(snapshot_id, ch_scope_type_id, in_scope)"]])
+      run(`CREATE INDEX IF NOT EXISTS ${n} ON ${on};`);
+    run("CREATE INDEX idx_chainer_params_default_values_param_first ON chainer_params_default_values(param_id, obj_type);");
+    // Upgrade_RecallSafeOutputDelayTime
+    run("INSERT INTO recall_safe_groups ( snapshot_settings_filter, chainer_param_id) VALUES ( (SELECT id FROM snapshot_settings_filters WHERE name='ChainerParams_AlwaysInRecallSafe'), (SELECT id FROM chainer_params WHERE name='PARAM_OUTPUT_DELAY_TIME'));");
+    // Upgrade_UserKeys
+    run("UPDATE user_keys SET key_action = 16, selection_index = 10 WHERE key_action = 56; ");
+    run("UPDATE user_keys SET obj_type=25 WHERE(obj_type=2 AND obj_index>=8); ");
+    run("UPDATE user_keys SET obj_index=obj_index-8 WHERE obj_type=25; ");
+    run("UPDATE user_keys SET key_action = 0, selection_index = -1, obj_type = -1, obj_index = -1, uk_friendly_name = '' WHERE key_action = 57 AND obj_type = -1 AND obj_index IN (3, 10, 11); ");
+    // Upgrade_SmallFaderDisplayMode
+    run("INSERT INTO surface_property_type(id, name) VALUES(1067, 'eProp_SmallFaderDisplayMode');");
+    run("INSERT INTO surface_property_int(surface, property, value) VALUES(1, 1067, 0);");
+    // Upgrade_3BaysModes
+    for (const [id, n] of [[3, "RouteGrp"], [4, "RouteMain"], [5, "Fx_1_8"], [6, "Mon_1_8"], [7, "Mon_9_16"], [9, "Dugan"],
+      [12, "Mon_17_24"], [13, "IEM"], [14, "Fader"]])
+      run(`UPDATE ovv_section_mapping_type SET name = '${n}' WHERE id = ${id};`);
+    run("UPDATE surface_property_int SET value = (value << 24) | 0x000E01 WHERE property = 13;");
+    run("INSERT OR IGNORE INTO ovv_section_mapping_type (id, name) VALUES (14, 'Fader'); ");
+    run("CREATE TABLE NEW_ovv_page_data(     id                   INTEGER NOT NULL  PRIMARY KEY,     track_mode_id        INTEGER NOT NULL,     selected_mode_preset_id INTEGER NOT NULL DEFAULT 1,     section_mapping_type_top_bay INTEGER NOT NULL,     section_mapping_type_middle_bay INTEGER NOT NULL,     section_mapping_type_bottom_bay INTEGER NOT NULL,     big_faders           INTEGER NOT NULL DEFAULT 1,     flip_aux_index       INTEGER NOT NULL DEFAULT -1,     FOREIGN KEY(track_mode_id) REFERENCES ovv_track_mode(id) ON DELETE CASCADE ON UPDATE CASCADE,     FOREIGN KEY(section_mapping_type_top_bay) REFERENCES ovv_section_mapping_type(id) ON DELETE CASCADE ON UPDATE CASCADE,     FOREIGN KEY(section_mapping_type_middle_bay) REFERENCES ovv_section_mapping_type(id) ON DELETE CASCADE ON UPDATE CASCADE,     FOREIGN KEY(section_mapping_type_bottom_bay) REFERENCES ovv_section_mapping_type(id) ON DELETE CASCADE ON UPDATE CASCADE ); ");
+    run("INSERT INTO NEW_ovv_page_data SELECT    id,    track_mode_id,    1,    CASE    WHEN section_mapping_type = 10 THEN 5    WHEN section_mapping_type = 11 THEN 6    ELSE section_mapping_type    END AS section_mapping_type,    0,    14,    1,    flip_aux_index FROM ovv_page_data; ");
+    run("DROP TABLE ovv_page_data; ");
+    run("ALTER TABLE NEW_ovv_page_data RENAME TO ovv_page_data; ");
+    // Upgrade_Overview_Link_ViewAll
+    run("INSERT INTO surface_type(id, name) VALUES(5, 'eSurface_OVVAll');");
+    run("INSERT INTO surface_property_int(surface, property, value) VALUES(5, 9, 4294967295);");
+    run("INSERT INTO surface_property_int(surface, property, value) VALUES(5, 10, 4294967295);");
+    run("INSERT INTO surface_property_int(surface, property, value) VALUES(5, 11, 0);");
+    run("DELETE FROM surface_property_int WHERE surface IN (2, 3) AND property=17;");
+    // Upgrade_DockedWindowInfo
+    run("CREATE TABLE NEW_snapshot_plugin(     id                   INTEGER NOT NULL  PRIMARY KEY,     plug_id              INTEGER NOT NULL,     preset_id            INTEGER NOT NULL,     snapshot_id          INTEGER NOT NULL,     setup_type_id        INTEGER NOT NULL,     bypass               NUMERIC NOT NULL,     mute                 NUMERIC NOT NULL,     docked               NUMERIC NOT NULL DEFAULT true,     fw_posx              INTEGER  DEFAULT -9999,     fw_posy              INTEGER  DEFAULT -9999,     fw_scale_precentage  INTEGER  DEFAULT -1,     fw_always_on_top     NUMERIC  DEFAULT false,     dw_posx              INTEGER  DEFAULT -9999,     dw_posy              INTEGER  DEFAULT -9999,     dw_scale_precentage  INTEGER  DEFAULT -1,     CONSTRAINT idx_snapshot_plugin__plug_id__snapshot_id__setup_type_id UNIQUE(plug_id, snapshot_id, setup_type_id),     FOREIGN KEY(plug_id) REFERENCES plug(id) ON DELETE CASCADE ON UPDATE CASCADE,     FOREIGN KEY(preset_id) REFERENCES plugin_preset(id) ON DELETE CASCADE ON UPDATE CASCADE,     FOREIGN KEY(snapshot_id) REFERENCES snapshot(id) ON DELETE CASCADE ON UPDATE CASCADE,     FOREIGN KEY(setup_type_id) REFERENCES setup_type(id) ON DELETE CASCADE ON UPDATE CASCADE ); ");
+    run("INSERT INTO NEW_snapshot_plugin SELECT id, plug_id, preset_id, snapshot_id, setup_type_id, bypass, mute, docked, fw_posx, fw_posy,  CASE   WHEN fw_scale_precentage = 100 THEN -1   ELSE fw_scale_precentage END, fw_always_on_top, -9999, -9999, -1 FROM snapshot_plugin; ");
+    run("DROP TABLE snapshot_plugin; ");
+    run("ALTER TABLE NEW_snapshot_plugin RENAME TO snapshot_plugin; ");
+    run("CREATE INDEX idx_scene_plugin ON snapshot_plugin(plug_id);");
+    run("CREATE INDEX idx_scene_plugin_2 ON snapshot_plugin(preset_id);");
+    run("CREATE INDEX idx_snapshot_plugin ON snapshot_plugin(snapshot_id);");
+    run("CREATE INDEX idx_snapshot_plugin_0 ON snapshot_plugin(setup_type_id);");
+    run("CREATE INDEX Idx_snapshot_plugin_snapshot_and_plug ON snapshot_plugin(snapshot_id, plug_id);");
+    // Upgrade_LRLinkParams (LV1)
+    run("INSERT INTO chainer_params(id, name) VALUES(972, 'PARAM_EQFILTER_LINK_MODE');");
+    run("INSERT INTO chainer_params(id, name) VALUES(973, 'PARAM_EQFILTER_LRDISPLAY');");
+    for (const g of ["recall_safe_groups", "scope_groups"]) for (const p of ["PARAM_EQFILTER_LINK_MODE", "PARAM_EQFILTER_LRDISPLAY"])
+      run(`INSERT INTO ${g}(snapshot_settings_filter, chainer_param_id) VALUES((SELECT id FROM snapshot_settings_filters WHERE name = 'EQ'), (SELECT id FROM chainer_params WHERE name = '${p}'));`);
+    // the C++ loop prints its index (0..15), not aSaveableTrackTypes[index]
+    for (let t = 0; t < 16; t++) {
+      run(`INSERT INTO chainer_params_default_values (obj_type, param_id, param_value) VALUES (${t}, 972, 1);`);
+      run(`INSERT INTO chainer_params_default_values (obj_type, param_id, param_value) VALUES (${t}, 973, 0);`);
+    }
+    //   Helper_Upgrade_LRLinkByEQPlug
+    run("CREATE TEMPORARY TABLE scene_stereo_eq_presets_temp_table AS WITH stereo_eq_temp_table(id, chainer_id, plugin_name, plugin_4cc) AS (    SELECT id, chainer_id, plugin_name, plugin_4cc FROM plug     WHERE (?1 = (plug_role & ?1)) AND plugin_4cc = 'MQ4S'), scene_stereo_eq_temp_table(id, chainer_id, plugin_name, plugin_4cc, snapshot_id, preset_id) AS (    SELECT snapshot_plugin.id, stereo_eq_temp_table.chainer_id, stereo_eq_temp_table.plugin_name,     stereo_eq_temp_table.plugin_4cc, snapshot_plugin.snapshot_id, snapshot_plugin.preset_id     FROM stereo_eq_temp_table     INNER JOIN snapshot_plugin ON stereo_eq_temp_table.id = snapshot_plugin.plug_id) SELECT scene_stereo_eq_temp_table.id, scene_stereo_eq_temp_table.chainer_id, scene_stereo_eq_temp_table.plugin_name, scene_stereo_eq_temp_table.plugin_4cc, scene_stereo_eq_temp_table.snapshot_id, scene_stereo_eq_temp_table.preset_id, plugin_preset.preset FROM scene_stereo_eq_temp_table INNER JOIN plugin_preset ON plugin_preset.id = scene_stereo_eq_temp_table.preset_id;", [2]);
+    const changed = [];
+    for (const [id] of rows("SELECT id FROM scene_stereo_eq_presets_temp_table;")) {
+      const pr = rows("SELECT preset FROM scene_stereo_eq_presets_temp_table WHERE id = ?1;", [id]);
+      const p = pr.length ? presetParams(pr[0][0] == null ? "" : String(pr[0][0])) : null;
+      if (!p) continue;
+      if (isParam(p, 72, 0.0)) changed.push([id, 972, 0]);
+      if (isParam(p, 73, 1.0)) changed.push([id, 973, 1]);
+    }
+    run("CREATE TEMPORARY TABLE changed_lr_links_temp_table(id INTEGER, chainer_id INTEGER, plugin_name TEXT, plugin_4cc TEXT, snapshot_id INTEGER, preset_id INTEGER, par_index INTEGER, par_value INTEGER);");
+    for (const c of changed)
+      run("INSERT INTO changed_lr_links_temp_table(id, chainer_id, plugin_name, plugin_4cc, snapshot_id, preset_id, par_index, par_value) SELECT ?1, chainer_id, plugin_name, plugin_4cc, snapshot_id, preset_id, ?2, ?3 FROM scene_stereo_eq_presets_temp_table WHERE id = ?1;", c);
+    run("INSERT INTO snapshot_chainer_params(chainer_id, snapshot_id, param_id, param_value) SELECT chainer_id, snapshot_id, par_index, par_value FROM changed_lr_links_temp_table;");
+    // Upgrade_ModesPreset
+    run("CREATE TABLE ovv_modes_presets(     id                   INTEGER NOT NULL  PRIMARY KEY,     preset_name          TEXT NOT NULL,     section_mapping_type_top_bay INTEGER NOT NULL,     section_mapping_type_middle_bay INTEGER NOT NULL,     section_mapping_type_bottom_bay INTEGER NOT NULL,     big_faders           INTEGER NOT NULL DEFAULT 1,     FOREIGN KEY(section_mapping_type_top_bay) REFERENCES ovv_section_mapping_type(id) ON DELETE CASCADE ON UPDATE CASCADE,     FOREIGN KEY(section_mapping_type_middle_bay) REFERENCES ovv_section_mapping_type(id) ON DELETE CASCADE ON UPDATE CASCADE,     FOREIGN KEY(section_mapping_type_bottom_bay) REFERENCES ovv_section_mapping_type(id) ON DELETE CASCADE ON UPDATE CASCADE ); ");
+    for (const r of [[1, "Home", 2, 0, 14, 1], [2, "Setup", 0, 3, 4, 0], [3, "SndChk", 0, 2, 14, 0], [4, "Edit", 8, 1, 14, 0],
+      [5, "Fx", 5, 2, 14, 0], [6, "Monitor", 6, 7, 12, 0], [7, "Status", 1, 0, 14, 1], [8, "Dugan", 9, 0, 14, 1]])
+      run("INSERT INTO ovv_modes_presets(id, preset_name, section_mapping_type_top_bay, section_mapping_type_middle_bay, section_mapping_type_bottom_bay, big_faders) VALUES(?, ?, ?, ?, ?, ?);", r);
+    // Upgrade_ChainerColors
+    for (const [t, c] of [[3, 8], [4, 8], [5, 8], [6, 8], [7, 8], [8, 8], [12, 24]])
+      run(`UPDATE chainer_params_default_values SET param_value=${c} WHERE obj_type=${t} AND param_id=592; `);
+    // Upgrade_FixExtInsertRole
+    run("UPDATE plug SET plug_role=8 WHERE disabled=0 AND plug_role!=8 AND (plugin_4cc='INSM' OR plugin_4cc='INSS' OR plugin_4cc='INSX')");
+    // Upgrade_ChangeDefault48VParamsOfBankB (LV1)
+    for (const [id, n] of [[13, "PARAM_INPUT_HW_48V_ONOFF_L_A"], [14, "PARAM_INPUT_HW_48V_ONOFF_R_A"], [107, "PARAM_INPUT_HW_48V_ONOFF_L_B"],
+      [108, "PARAM_INPUT_HW_48V_ONOFF_R_B"], [109, "PARAM_INPUT_RESERVED_0"]])
+      run(`UPDATE chainer_params SET name = '${n}' where id = ${id}; `);
+    for (const g of ["scope_groups", "recall_safe_groups"]) for (const p of ["PARAM_INPUT_HW_48V_ONOFF_L_B", "PARAM_INPUT_HW_48V_ONOFF_R_B"])
+      run(`INSERT INTO ${g}(snapshot_settings_filter, chainer_param_id) VALUES ((SELECT id FROM snapshot_settings_filters WHERE name = 'Preamp'), (SELECT id FROM chainer_params WHERE name = '${p}')); `);
+    // Upgrade_RenameDelayGroupsToDelayGroup
+    run("UPDATE snapshot_chainer SET name = (     SELECT 'Delay Group ' || (o.obj_index + 1)     FROM object o     WHERE o.id = snapshot_chainer.chainer_id AND o.obj_type = 17 ) WHERE EXISTS (     SELECT 1 FROM object o     WHERE o.id = snapshot_chainer.chainer_id     AND o.obj_type = 17     AND snapshot_chainer.name = 'Delay Groups ' || (o.obj_index + 1) );");
+    // UpdateVersion
+    run("UPDATE info SET schema_version_major = ?1, schema_version_minor = ?2, schema_version_revision = ?3, schema_version_patch = ?4 WHERE id = 0", [5, 2, 0, 29]);
+    run("END TRANSACTION;");
+  } catch (e) {
+    try { run("ROLLBACK TRANSACTION;"); } catch (_) { /* already rolled back */ }
+    run(`PRAGMA foreign_keys=${fkWas ? "ON" : "OFF"}`);
+    throw e;
+  }
+  run("PRAGMA foreign_keys=ON");
+  for (const t of ["scene_stereo_eq_presets_temp_table", "changed_lr_links_temp_table"]) run(`DROP TABLE IF EXISTS temp.${t}`);
+
+  // PostConversion: FixReferenceCountOnAllTables, RemoveAllUnusedPresetsFromAllTables, CREATE_ALL_TRIGGERS
+  const ir = hasTable("internal_routes");
+  run("UPDATE plugin_preset SET ref_count=IFNULL((SELECT COUNT(*) FROM snapshot_plugin WHERE plugin_preset.id=preset_id),0);");
+  run("UPDATE iom_chunks SET ref_count=IFNULL((SELECT COUNT(*) FROM snapshot_iom WHERE iom_chunks.id=iom_chunk_id),0);");
+  if (ir) run("UPDATE internal_routes SET ref_count=IFNULL((SELECT COUNT(*) FROM snapshot_chainer WHERE internal_routes.id=internal_routes_id),0);");
+  run("DELETE FROM plugin_preset WHERE ref_count=0;");
+  run("DELETE FROM iom_chunks WHERE ref_count=0;");
+  if (ir) run("DELETE FROM internal_routes WHERE ref_count=0;");
+  const T = (name, on, body) => run(`CREATE TRIGGER ${name} ${on}\r\nBEGIN\r\n${body.join("\r\n")}\r\nEND;`);
+  T("delete_snapshot_plugin_trigger", "AFTER DELETE ON snapshot_plugin", ["   UPDATE plugin_preset SET ref_count =  ref_count - 1 WHERE id = old.preset_id;", "   DELETE FROM plugin_preset WHERE ref_count = 0 AND id = old.preset_id;"]);
+  T("delete_snapshot_iom_trigger", "AFTER DELETE ON snapshot_iom", ["   UPDATE iom_chunks SET ref_count =  ref_count - 1 WHERE id = old.iom_chunk_id;", "   DELETE FROM iom_chunks WHERE ref_count = 0 AND id = old.iom_chunk_id;"]);
+  if (ir) T("delete_snapshot_chainer_trigger", "AFTER DELETE ON snapshot_chainer", ["   UPDATE internal_routes SET ref_count =  ref_count - 1 WHERE id = old.internal_routes_id;", "   DELETE FROM internal_routes WHERE ref_count = 0;"]);
+  T("insert_snapshot_plugin_trigger", "AFTER INSERT ON snapshot_plugin", ["   UPDATE plugin_preset SET ref_count =  ref_count + 1 WHERE id = new.preset_id;"]);
+  T("insert_snapshot_iom_trigger", "AFTER INSERT ON snapshot_iom", ["   UPDATE iom_chunks SET ref_count =  ref_count + 1 WHERE id = new.iom_chunk_id;"]);
+  if (ir) T("insert_snapshot_chainer_trigger", "AFTER INSERT ON snapshot_chainer", ["   UPDATE internal_routes SET ref_count =  ref_count + 1 WHERE id = new.internal_routes_id;"]);
+  T("update_snapshot_plugin_trigger", "AFTER UPDATE OF preset_id ON snapshot_plugin", ["    UPDATE plugin_preset SET ref_count =  ref_count + 1 WHERE id = new.preset_id;", "    UPDATE plugin_preset SET ref_count =  ref_count - 1 WHERE id = old.preset_id;", "    DELETE FROM plugin_preset WHERE ref_count = 0 AND id = old.preset_id;"]);
+  T("update_snapshot_iom_trigger", "AFTER UPDATE OF iom_chunk_id ON snapshot_iom", ["\tUPDATE iom_chunks SET ref_count =  ref_count + 1 WHERE id = new.iom_chunk_id;", "\tUPDATE iom_chunks SET ref_count =  ref_count - 1 WHERE id = old.iom_chunk_id;", "\tDELETE FROM iom_chunks WHERE ref_count = 0 AND id = old.iom_chunk_id;"]);
+  if (ir) T("update_snapshot_chainer_trigger", "AFTER UPDATE OF internal_routes_id ON snapshot_chainer", ["\tUPDATE internal_routes SET ref_count =  ref_count + 1 WHERE id = new.internal_routes_id;", "\tUPDATE internal_routes SET ref_count =  ref_count - 1 WHERE id = old.internal_routes_id;", "\tDELETE FROM internal_routes WHERE ref_count = 0 AND id = old.internal_routes_id;"]);
+  run("VACUUM");
+  // UpdateHistoryTable (the description names the installed V17 converter's build stamp)
+  if (hasTable("file_history"))
+    run("INSERT INTO file_history (event,description) VALUES ('CONVERTER', :_desc);",
+      { ":_desc": "Session upgrade from [5.1.0.3] to [5.2.0.29] by Converter built on Sep  2 2026, 10:24:30" });
+  validate();
+  run("VACUUM;");
+  run(`PRAGMA foreign_keys=${fkWas ? "ON" : "OFF"}`);
+}
+/* ---- end emo_v17.js ---- */
+async function emoExport(spec,{v17=false}={}){
   const [SQL,pack]=await Promise.all([emoSql(),emoDataPack()]);
   const cfgId=(spec.config&&spec.config.id)||"80-16";
   const db=new SQL.Database(await emoTemplateBytes(cfgId));
@@ -14578,6 +14965,7 @@ async function emoExport(spec){
     erun(db,"UPDATE plugin_preset SET ref_count = "+
       "(SELECT COUNT(*) FROM snapshot_plugin sp WHERE sp.preset_id = plugin_preset.id)");
     erun(db,"DELETE FROM plugin_preset WHERE ref_count = 0");
+    if(v17)emoUpgradeV17(db); // LV1 V17's session converter (5.1.0.3 -> 5.2), statement for statement
     erun(db,"VACUUM");
     return db.export();
   }finally{db.close();}
@@ -14929,13 +15317,34 @@ async function emoImport(bytes,fileStemName){
   }finally{db.close();}
 }
 
+/* Which LV1 the .emo is for: V16 (5.1.0.3, the builder's native format) or V17 (5.2, emoUpgradeV17 = LV1 V17's own
+   session converter, Converter_5_2.cpp). A V17-only mixer layout has no V16 choice. Remembers the last pick. */
+function askEmoVersion(){
+  const v17only=cfg().id==="80-16-32",d=$("#evd"),r16=d.querySelector('[value="16"]'),r17=d.querySelector('[value="17"]');
+  let last="16";try{last=localStorage.getItem("lv1sb.emoVersion")||"16";}catch(_){}
+  r16.disabled=v17only;r16.closest(".evopt").classList.toggle("off",v17only);
+  r16.closest(".evopt").title=v17only?"This mixer layout (80 in / 16 grp / 8 FX + 24 Mon) exists only in LV1 V17":"";
+  (v17only||last==="17"?r17:r16).checked=true;
+  d.hidden=false;$("#evdOk").focus();
+  return new Promise(res=>{
+    const end=v=>{d.hidden=true;$("#evdOk").onclick=$("#evdNo").onclick=d.onkeydown=null;
+      if(v)try{localStorage.setItem("lv1sb.emoVersion",v);}catch(_){}
+      res(v);};
+    $("#evdOk").onclick=()=>end(r17.checked?"17":"16");
+    $("#evdNo").onclick=()=>end(null);
+    d.onkeydown=e=>{if(e.key==="Escape"){e.preventDefault();e.stopPropagation();end(null);}
+      else if(e.key==="Enter"&&e.target.tagName!=="BUTTON"){e.preventDefault();$("#evdOk").click();}};
+    d.onclick=e=>{if(e.target===d)end(null);};
+  });
+}
 $("#btnEmoExp").onclick=async()=>{
   try{
+    const ver=await askEmoVersion();if(!ver)return;
     setStatus("Building the .emo session (fetching the factory template)…");
-    const bytes=await emoExport(buildSpec());
+    const bytes=await emoExport(buildSpec(),{v17:ver==="17"});
     const blob=new Blob([bytes],{type:"application/octet-stream"});
     if(dl)await dl.save({filename:fileStem()+".emo",data:blob});
-    setStatus(".emo exported — open it in LV1 (File > Load Session).");
+    setStatus(`.emo exported for LV1 V${ver} — open it in LV1 (File > Load Session).`);
   }catch(err){if(err&&err.code==="declined")return;setStatus(".emo export failed: "+(err.message||err),true);}
 };
 $("#btnEmoImp").onclick=()=>$("#fileEmo").click();
