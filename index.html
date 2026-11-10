@@ -1772,16 +1772,18 @@ const STOCK_RACK=()=>({slots:[...STOCK_SLOTS]});
    cc = its LV1 variant when not the one the strip format picks (e.g. a mono-to-stereo X);
    sc = its side-chain: {type, name} of the source strip (like a layer slot; an unnamed input: {type:"ch", index})
    + LV1's plug_sidechain fields a / c / st / si / ci / ctl (AsgnType, ControlType, Section type / index,
-   ChannelIndex, controlID) as stored.
+   ChannelIndex, controlID) as stored;
+   kids = a suite chainer's docked child plugins' edits {"<slot>": {"<param index>": value}}, written over the child
+   presets its <PluginSpecificXMLData> carries (<slot index="N">...<plugin_preset><![CDATA[child preset]]>).
    rack.slots may hold null = an empty slot (LV1 racks keep gaps). */
 const hasP=p=>!!p&&Object.keys(p).length>0;
-const P_META=["ps","pre","role","off","byp","cc","sc"];
+const P_META=["ps","pre","role","off","byp","cc","sc","kids"];
 // the variant a slot is written as: its own LV1 variant (p.cc) while it fits the strip (mono: M, stereo: S; the
 // mono-to-stereo X sits on both in real shows), else stereo S > X > M, mono M > X > S. Mirrors
 // make_lv1_session.resolve_cc (keep in sync).
 const slotCc=(v,stereo,want)=>want&&(want===v.x||want===(stereo?v.s:v.m))?want:(stereo?(v.s||v.x||v.m):(v.m||v.x||v.s));
 const pNums=p=>Object.keys(p||{}).filter(k=>!P_META.includes(k));
-const pEdited=p=>!!p&&(pNums(p).length>0||!!p.ps||!!p.pre); // settings, not just the slot's LV1 role / state
+const pEdited=p=>!!p&&(pNums(p).length>0||!!p.ps||!!p.pre||!!p.kids); // settings, not just the slot's LV1 role / state
 const presetSubComp=t=>(/<PluginSubComp>(\w+)</.exec(t||"")||[])[1]||"";
 function rackTrim(r){ // no trailing empty slots
   const ps=rackParams(r);
@@ -1854,7 +1856,7 @@ function rackFits(name,stereo){ // unknown names (legacy) are kept as-is
   return !p||(stereo?/[SX]/:/[MX]/).test(p[1]);
 }
 function rackLabel(kind,i){
-  if(kind==="mst")return "MASTER";
+  if(kind==="mst")return (state.master.name||"").trim()||"MASTER";
   const it=listFor[kind]()[i];
   return (it&&it.name.trim())||DEFNAME[kind](i);
 }
@@ -2081,10 +2083,11 @@ async function openPlugUi(k,i,x){
   closePlugUi();
   PU={k,i,x,name,cc,pack,P,noedit,pIdx:Object.fromEntries(P.map((q,j)=>[q.n,j])),defs,base,pre:preT?p.pre:null,
     vals:base.map((d,j)=>j in p?+p[j]:d),ps:p.ps||null,head:(ix.head||{})[cc],ctrls:pack.controls[cc],drag:null};
-  // suite chainers: the child plugins docked in fixed slots (their own packs; view only)
-  PU.kids={};
+  // suite chainers: the child plugins docked in fixed slots (their own packs), each edited in its own context
+  PU.kids={};PU.emoText=typeof (emo.presets||{})[cc]==="string"?emo.presets[cc]:"";
   for(const sp of [...new Set(PU.ctrls.flatMap(c=>(c.slots||[]).map(s=>s.pack)).filter(Boolean))])
     try{PU.kids[sp]=await plugUiPack(sp);}catch(_){/* a slot without its child pack stays empty */}
+  puKidInit(p.kids||{});
   const [w,hh]=pack.view[cc];
   const d=document.createElement("div");d.id="puWin";
   d.innerHTML=`<div class="pubox" role="dialog" aria-modal="true" aria-label="${esc(name)}">
@@ -2111,7 +2114,7 @@ async function openPlugUi(k,i,x){
   PU.cv.addEventListener("pointermove",puHover);
   PU.cv.addEventListener("wheel",puWheel,{passive:false});
   d.querySelector("#puClose").onclick=closePlugUi;
-  d.querySelector("#puReset").onclick=()=>{PU.vals=[...PU.defs];PU.preset=null;PU.ps=null;PU.pre=null;puCommit();setStatus(name+" reset to its default settings.");};
+  d.querySelector("#puReset").onclick=()=>{PU.vals=[...PU.defs];PU.preset=null;PU.ps=null;PU.pre=null;puKidInit({});puCommit();setStatus(name+" reset to its default settings.");};
   d.querySelector("#puSave").onclick=puSaveUser;
   d.querySelector("#puXpsOut").onclick=puXpsOut;
   d.querySelector("#puXpsIn").onclick=puXpsIn;
@@ -2149,6 +2152,7 @@ function puFit(){
 
 /* ---- state: vals -> rack.params ---- */
 function puCommit(){
+  if(PU.isKid){const kc=PU;PU=kc.host;try{puCommit();}finally{PU=kc;}return;} // a docked child: through its host
   const h=rackHolder(PU.k,PU.i);if(!h)return closePlugUi();
   if(!h.rack)h.rack=STOCK_RACK();
   const ps=rackParams(h.rack),p={},old=ps[PU.x]||{};
@@ -2157,6 +2161,10 @@ function puCommit(){
   if(PU.ps)p.ps=PU.ps;
   if(PU.pre)p.pre=PU.pre;
   for(const k of ["role","off","byp","cc","sc"])if(old[k])p[k]=old[k]; // the slot's LV1 state is not a setting of the window
+  const kd={}; // docked children: their edits over their base (the child presets of the slot's own / default preset)
+  for(const kc of PU.kc||[]){const ed={};
+    kc.vals.forEach((v,j)=>{const q=kc.P[j];if(v!==null&&v!==kc.base[j]&&!(q&&q.ro))ed[j]=v;});if(hasP(ed))kd[kc.slot]=ed;}
+  if(hasP(kd))p.kids=kd;
   ps[PU.x]=hasP(p)?p:null;
   puDraw();puPresetLabel();
   const btn=document.querySelector(`.rackbtn[data-k="${PU.k}"][data-i="${PU.i}"]`);
@@ -2194,7 +2202,9 @@ function puEdit(names,v){
 }
 /* A variant whose default preset carries no RealWorld values (index "noedit") is shown, not edited:
    its settings could not be written into the .emo. */
-function puViewOnly(){if(PU&&PU.noedit){setStatus(PU.name+": view only — its LV1 default preset has no editable values yet.",true);return true;}return false;}
+function puViewOnly(){if(PU&&PU.noedit){setStatus(PU.isKid&&PU.kidNoSlot
+    ?PU.name+": this module is view only here — the plugin's default preset carries no module settings (a show imported from LV1 does)."
+    :PU.name+": view only — its LV1 default preset has no editable values yet.",true);return true;}return false;}
 const puDefault=n=>PU.defs[PU.pIdx[n]];
 
 /* ---- per-plugin visibility: Q4 stereo stacks its L and R band controls; the L/R display switch picks the side ---- */
@@ -2421,21 +2431,42 @@ function puDrawDigits(ctl,q,v){
 /* Suite-chainer slots (CSuiteSlotsContainer): left to right from the container's origin + SlotsOffsets,
    SlotGap apart; each child plugin's own GUI at the slot's top-left, at its initial values (view only —
    the children's settings live in a plugin-specific preset chunk the builder does not write). */
-function puDrawSlots(ctl){
-  let x=ctl.r[0]+(ctl.slotOff||[0,0])[0];const y=ctl.r[1]+(ctl.slotOff||[0,0])[1];
-  for(const sl of ctl.slots){
-    const kid=sl.pack&&PU.kids&&PU.kids[sl.pack];
-    if(kid&&kid.controls[sl.cc])puDrawChild(kid,sl.cc,x,y,sl.w,sl.h);
-    x+=sl.w+(ctl.slotGap||0);
+/* Suite chainers: one context per docked child (PU.kc) shaped like PU -- its pack, params, values (base = the child
+   preset in the slot's own / default preset, + its edits), controls, view -- at the slot's origin (ox, oy). Drawing,
+   hit testing, drags, menus and text entry run inside it (puWithKid); its edits commit through the host (puCommit). */
+function puKidInit(eds){
+  const H=PU,text=H.pre||H.emoText||"";H.kc=[];
+  for(const ctl of H.ctrls){
+    if(!ctl.slots)continue;
+    let x=ctl.r[0]+(ctl.slotOff||[0,0])[0];const y=ctl.r[1]+(ctl.slotOff||[0,0])[1];
+    ctl.slots.forEach((sl,s)=>{
+      // the module in slot s is the one its child preset names (Scheps Omni lets the user reorder them), else the slot's own
+      const span=presetKidSpan(text,s),ktext=span?text.slice(span[0],span[1]):"",sub=presetSubComp(ktext);
+      const kid=(sub&&Object.values(H.kids||{}).find(k=>k.controls[sub]))||(sl.pack&&H.kids&&H.kids[sl.pack]);
+      const cc=kid&&kid.controls[sub]?sub:sl.cc;
+      if(kid&&kid.controls[cc]&&kid.params[cc]){
+        const P=kid.params[cc],defs=((kid.defaults||{})[cc]||[]).map(t=>t==="*"||t==="R"?null:puTok(t)),tk=presetTokens(ktext)||[];
+        const base=P.map((q,j)=>{const t=tk[j];return t===undefined||t==="*"||t==="R"?(defs[j]??null):puTok(t);}),ed=eds[s]||{};
+        const [vw,vh]=kid.view[cc]||[sl.w,sl.h];
+        H.kc.push({...H,isKid:true,host:H,slot:s,ox:x,oy:y,sw:sl.w||vw,sh:sl.h||vh,pack:kid,cc,P,
+          pIdx:Object.fromEntries(P.map((q,j)=>[q.n,j])),defs,base,vals:base.map((d,j)=>j in ed?+ed[j]:d),ctrls:kid.controls[cc],
+          w:vw,h:vh,kids:{},kc:null,hidden:null,drag:null,pre:null,ps:null,preset:null,presetVals:null,markers:[],shown:[],
+          // no child preset in the slot's preset (CLA MixHub / Scheps Omni defaults carry none; LV1 writes them in
+          // shows): nowhere to write an edit, so the module is shown, not edited
+          noedit:!span||sub!==cc,kidNoSlot:!span});
+      }
+      x+=sl.w+(ctl.slotGap||0);
+    });
   }
 }
-function puDrawChild(kid,cc,x,y,w,h){
-  const host=PU,P=kid.params[cc],defs=((kid.defaults||{})[cc]||[]).map(t=>t==="*"?null:+t);
-  const [vw,vh]=kid.view[cc]||[w,h];
-  PU={...host,pack:kid,cc,P,pIdx:Object.fromEntries(P.map((q,j)=>[q.n,j])),defs,vals:defs,ctrls:kid.controls[cc],
-    w:vw,h:vh,kids:{},hidden:null};
-  const c=host.ctx;c.save();c.translate(x,y);c.beginPath();c.rect(0,0,Math.min(vw,w||vw),Math.min(vh,h||vh));c.clip();
-  try{puDraw();}finally{c.restore();PU=host;}
+function puWithKid(kc,f){const host=PU;kc.ctx=kc.host.ctx;kc.cv=kc.host.cv;PU=kc;try{return f();}finally{PU=host;}} // the host's canvas
+const puRun=(kc,f)=>kc&&kc.isKid?puWithKid(kc,f):f();
+function puDrawSlots(){
+  const c=PU.ctx;
+  for(const kc of PU.kc||[]){
+    c.save();c.translate(kc.ox,kc.oy);c.beginPath();c.rect(0,0,Math.min(kc.w,kc.sw),Math.min(kc.h,kc.sh));c.clip();
+    try{puWithKid(kc,puDraw);}finally{c.restore();}
+  }
 }
 function puDrawText(pp,tw,str){ // a param's Value TextWin (or tw + fixed text: its Label)
   const q=puQ(pp.n),v=puVal(pp.n);if(!q||(v===null&&str===undefined))return;
@@ -2486,10 +2517,36 @@ function puDrawMarker(ctl){
 /* ---- interaction (drag: 500 px = full range, TextKnob 200 px, Ctrl ÷4; up / right = more) ---- */
 function puPt(e){const b=PU.cv.getBoundingClientRect();return [(e.clientX-b.left)*PU.w/b.width,(e.clientY-b.top)*PU.h/b.height];}
 const puIn=(r,x,y)=>r&&x>=r[0]&&y>=r[1]&&x<r[0]+r[2]&&y<r[1]+r[3];
+/* Is (x, y) a click on control c? WCGUIControl::IsInside (WavesLib/Code/Controls/WCGUIControl.cpp:1811): inside its rect
+   AND on a pixel of its AlphaSelection image whose alpha is not 0 (outside the image = transparent too,
+   WCBaseImage::IsPixelTransparent) -- or, unless IgnoreMouseOnTextWin, on a value window of a param it registers.
+   Packs carry the mask as pack.masks[c.am] = [w, h, [[rows, [x0, x1, ...]], ...]] (build_plugui.alpha_mask); a control
+   without one keeps the plain rect (e.g. the Curves BYPASS curtain covers the whole graph but is clickable only on
+   its button). */
+function puInCtl(c,x,y){
+  const m=c.am!=null&&PU.pack.masks&&PU.pack.masks[c.am];
+  if(!m)return puIn(c.r,x,y);
+  if(puIn(c.r,x,y)){
+    const [w,h,rows]=m,lx=Math.floor(x-c.r[0]);let ly=Math.floor(y-c.r[1]);
+    if(lx<w&&ly<h)for(const [n,runs] of rows){
+      if(ly<n){for(let k=0;k<runs.length;k+=2)if(lx>=runs[k]&&lx<runs[k+1])return true;break;}
+      ly-=n;
+    }
+  }
+  return !(c.fl||[]).includes("IgnoreMouseOnTextWin")&&c.p.some(p=>p.text&&p.text.r&&puIn(p.text.r,x,y));
+}
 function puHit(x,y){
-  for(let j=PU.markers.length-1;j>=0;j--){const m=PU.markers[j];if(Math.abs(m.x-x)<=m.hw&&Math.abs(m.y-y)<=m.hh)return {marker:m};} // the marker image's own rect
+  for(let j=PU.markers.length-1;j>=0;j--){const m=PU.markers[j];if(!m.ctl.ms0&&Math.abs(m.x-x)<=m.hw&&Math.abs(m.y-y)<=m.hh)return {marker:m};} // the marker image's own rect
   for(let j=PU.shown.length-1;j>=0;j--){
-    const c=PU.shown[j],kd=puKind(c);if(kd==="marker"||kd==="vu"||!puIn(c.r,x,y))continue;
+    // MaxSelection 0: the engine never selects it, so it never gets a click (CSelectableHome.cpp:375) -- e.g. Curves
+    // Resolve's full-screen "BYPASS Screen" curtain, AQ's "Learn DONE!" overlay
+    const c=PU.shown[j],kd=puKind(c);
+    if(c.slots){ // a suite chainer's slots: the docked child under the point, in its own context and coordinates
+      for(const kc of PU.kc||[])if(x>=kc.ox&&y>=kc.oy&&x<kc.ox+Math.min(kc.w,kc.sw)&&y<kc.oy+Math.min(kc.h,kc.sh)){
+        const h=puWithKid(kc,()=>puHit(x-kc.ox,y-kc.oy));if(h)return {...h,kid:kc};}
+      continue;
+    }
+    if(kd==="marker"||kd==="vu"||c.ms0||!puInCtl(c,x,y))continue;
     const p=c.p.find(pp=>{const q=puQ(pp.n);return q&&!q.ro&&pp.reg.some(r=>/^(Mouse|RadioButton|FixedState|PopUp)/.test(r));});
     if(!p)continue;
     const all=c.p.filter(pp=>pp.reg[0]===p.reg[0]&&puQ(pp.n)).map(pp=>pp.n);
@@ -2508,13 +2565,24 @@ function puHit(x,y){
 function puHover(e){
   if(!PU||PU.drag)return;
   const [x,y]=puPt(e),hit=puHit(x,y);
-  const q=hit&&!hit.marker&&puQ(hit.p.n);
+  const q=hit&&!hit.marker&&puRun(hit.kid,()=>puQ(hit.p.n));
   PU.cv.style.cursor=!hit?"":hit.marker?"move":puIsTog(q)?"pointer":hit.p.reg[0].startsWith("MouseHorizontal")?"ew-resize":"ns-resize";
-  PU.cv.title=q?(q.lab||hit.p.n)+": "+puText(q,puVal(hit.p.n))+(q.unit?" "+q.unit:""):"";
+  PU.cv.title=q?puRun(hit.kid,()=>(q.lab||hit.p.n)+": "+puText(q,puVal(hit.p.n))+(q.unit?" "+q.unit:"")):"";
 }
 function puDown(e){
   if(!PU||e.button!==0)return;
   const [x,y]=puPt(e),hit=puHit(x,y);if(!hit)return;
+  if(hit.kid){ // a docked child: its own context and coordinates; the host's pointer handlers drive its drag
+    const kc=hit.kid;e.preventDefault();kc.drag=null;
+    puWithKid(kc,()=>puDownAt(e,x-kc.ox,y-kc.oy,hit));
+    PU.drag=kc.drag?{kid:kc}:null;
+    if(PU.drag){PU.cv.setPointerCapture(e.pointerId);PU.cv.onpointermove=puMove;
+      PU.cv.onpointerup=PU.cv.onpointercancel=()=>{kc.drag=null;if(PU){PU.drag=null;PU.cv.onpointermove=null;}};}
+    return;
+  }
+  puDownAt(e,x,y,hit);
+}
+function puDownAt(e,x,y,hit){
   e.preventDefault();
   if(hit.marker){
     PU.drag={marker:hit.marker.ctl,alt:e.altKey,x0:x,y0:y,st:{},m0:[hit.marker.x,hit.marker.y]};
@@ -2540,7 +2608,12 @@ function puDown(e){
 }
 function puMove(e){
   const D=PU&&PU.drag;if(!D)return;
-  const [x,y]=puPt(e),fine=e.ctrlKey||e.metaKey?0.25:1;
+  const [x,y]=puPt(e);
+  if(D.kid){const kc=D.kid;if(kc.drag)puWithKid(kc,()=>puMoveAt(e,x-kc.ox,y-kc.oy));return;}
+  puMoveAt(e,x,y);
+}
+function puMoveAt(e,x,y){
+  const D=PU.drag,fine=e.ctrlKey||e.metaKey?0.25:1;
   if(D.marker){ // marker: its registered params move with the pointer (Alt = the Alt-registered one)
     const [l,t,w,h]=puGraph("area")?.(D.marker)||D.marker.r;
     for(const p of D.marker.p){
@@ -2576,28 +2649,34 @@ function puMenu(ctl,p,all){
   let items=ctl.menu&&!ctl.menuParam?ctl.menu:null;
   if(!items)items=puGraph("menu")?.(p.n)||null; // a plugin-built menu (CreateMenuWithAlg): [[text, state, 0, []], ...]
   if(!items){const n=puIsTog(q)?puStates(q):0;if(!n)return;items=Array.from({length:n},(_,k)=>[puText(q,puRW(q,k)),k,0,[]]);}
-  const b=PU.cv.getBoundingClientRect(),s=b.width/PU.w;
+  const C=PU,H=PU.host||PU,b=PU.cv.getBoundingClientRect(),s=b.width/H.w,ox=PU.ox||0,oy=PU.oy||0; // a docked child: host scale + slot origin
   const m=document.createElement("div");m.className="pumenu";
-  m.style.left=(b.left+ctl.r[0]*s)+"px";m.style.top=(b.top+(ctl.r[1]+ctl.r[3])*s)+"px";
+  m.style.left=(b.left+(ox+ctl.r[0])*s)+"px";m.style.top=(b.top+(oy+ctl.r[1]+ctl.r[3])*s)+"px";
   let path="";
   m.innerHTML=items.map(([t,st,sep,fp])=>{const f=fp.join(" › "),hd=f&&f!==path?`<div class="pumh">${esc(f)}</div>`:"";path=f;
     return hd+(sep?`<hr>`:`<div class="pumi${st===cur?" on":""}${fp.length?" in":""}" data-s="${st}">${esc(t)}</div>`);}).join("");
   const close=()=>{m.remove();removeEventListener("pointerdown",out,true);};
   const out=e=>{if(!m.contains(e.target))close();};
-  m.addEventListener("click",e=>{const it=e.target.closest(".pumi");if(it){puEdit(all,puRW(q,+it.dataset.s));close();}});
+  m.addEventListener("click",e=>{const it=e.target.closest(".pumi");if(it){puRun(C,()=>puEdit(all,puRW(q,+it.dataset.s)));close();}});
   document.body.append(m);addEventListener("pointerdown",out,true);
 }
 function puWheel(e){
   if(!PU)return;
   const [x,y]=puPt(e),hit=puHit(x,y);if(!hit||hit.marker)return;
-  const q=puQ(hit.p.n);if(puIsTog(q)&&!/knob|slider/.test(puKind(hit.ctl)))return;
-  e.preventDefault();
-  const dir=e.deltaY<0?1:-1;
-  puEdit(hit.all,puIsTog(q)?puRW(q,Math.min(puStates(q)-1,Math.max(0,puIdx(q,puVal(hit.p.n))+dir))):puRW(q,puState(q,puVal(hit.p.n))+dir*(e.ctrlKey?2:10)));
+  puRun(hit.kid,()=>{
+    const q=puQ(hit.p.n);if(puIsTog(q)&&!/knob|slider/.test(puKind(hit.ctl)))return;
+    e.preventDefault();
+    const dir=e.deltaY<0?1:-1;
+    puEdit(hit.all,puIsTog(q)?puRW(q,Math.min(puStates(q)-1,Math.max(0,puIdx(q,puVal(hit.p.n))+dir))):puRW(q,puState(q,puVal(hit.p.n))+dir*(e.ctrlKey?2:10)));
+  });
 }
 function puDbl(e){
   if(!PU)return;
   const [x,y]=puPt(e),hit=puHit(x,y);if(!hit)return;
+  if(hit.kid)return puWithKid(hit.kid,()=>puDblAt(hit));
+  puDblAt(hit);
+}
+function puDblAt(hit){
   if(hit.marker){ // MarkerSwitchOnDoubleClick
     const on=hit.marker.ctl.p.find(p=>p.reg.includes("OnOff"));
     if(on)puEdit([on.n],puVal(on.n)?0:1);
@@ -2605,12 +2684,13 @@ function puDbl(e){
   }
   const {ctl,p,all}=hit,q=puQ(p.n);
   if(!(ctl.fl||[]).includes("ReciveTextEntery")||puIsTog(q))return;
-  const tr=(p.text&&p.text.r)||ctl.r,b=PU.cv.getBoundingClientRect(),s=b.width/PU.w;
+  const C=PU,H=PU.host||PU,ox=PU.ox||0,oy=PU.oy||0; // a docked child: host scale + slot origin
+  const tr=(p.text&&p.text.r)||ctl.r,b=PU.cv.getBoundingClientRect(),s=b.width/H.w;
   const inp=document.createElement("input");inp.className="puedit";
   inp.value=puText(q,puVal(p.n));
-  Object.assign(inp.style,{left:(b.left+tr[0]*s)+"px",top:(b.top+tr[1]*s)+"px",width:Math.max(56,tr[2]*s)+"px",height:Math.max(20,tr[3]*s)+"px"});
+  Object.assign(inp.style,{left:(b.left+(ox+tr[0])*s)+"px",top:(b.top+(oy+tr[1])*s)+"px",width:Math.max(56,tr[2]*s)+"px",height:Math.max(20,tr[3]*s)+"px"});
   const done=ok=>{if(!inp.isConnected)return;
-    if(ok&&PU){const m=/^\s*(-?[\d.]+)\s*(k)?/i.exec(inp.value);if(m)puEdit(all,+m[1]*(m[2]?1000:1));}
+    if(ok&&PU){const m=/^\s*(-?[\d.]+)\s*(k)?/i.exec(inp.value);if(m)puRun(C,()=>puEdit(all,+m[1]*(m[2]?1000:1)));}
     inp.remove();};
   inp.onkeydown=ev=>{if(ev.key==="Enter")done(true);else if(ev.key==="Escape"){ev.stopPropagation();done(false);}};
   inp.onblur=()=>done(true);
@@ -9928,7 +10008,8 @@ PU_GRAPHS["Vocal Bender:groups"] = () => ({
 function renderMaster(){
   const r=state.master.rack;
   $("#mstTable tbody").innerHTML=
-    `<tr><td style="font-family:var(--font-num);font-size:12px;white-space:nowrap">MASTER L/R${xsBadge("main",state.master)}</td>${outCell("main",0,state.master,resolveOut(),true)}${rackCell("mst",0,r)}</tr>`+
+    `<tr><td style="font-family:var(--font-num);font-size:12px;white-space:nowrap">MASTER L/R${xsBadge("main",state.master)}
+      <input id="mstName" class="nmin" value="${esc(state.master.name||"")}" placeholder="LR" title="The master strip's name in LV1 (empty = LR)" spellcheck="false"></td>${outCell("main",0,state.master,resolveOut(),true)}${rackCell("mst",0,r)}</tr>`+
     rackRow("mst",0,r,3,true);
 }
 
@@ -11477,6 +11558,7 @@ document.addEventListener("drop",e=>{
 });
 
 $("#showName").addEventListener("input",e=>state.show.name=e.target.value);
+document.addEventListener("input",e=>{if(e.target&&e.target.id==="mstName")state.master.name=e.target.value;}); // the master's LV1 name
 // The show date is shown and typed as day/month/year; state.show.date stays ISO (yyyy-mm-dd).
 $("#showDate").addEventListener("input",e=>{
   const t=e.target.value.trim(),iso=isoDate(t);
@@ -11573,7 +11655,7 @@ function buildSpec(){
       ...(a.color!==null&&a.color!==undefined?{color:a.color}:{}),...lm(a),...xk(a)}:null).filter(Boolean),
     matrixes:state.matrixes.map((m,i)=>m.name.trim()?{name:m.name.trim(),stereo:m.stereo,...outKeys(m,op.mtx[i]),
       ...(m.color!==null&&m.color!==undefined?{color:m.color}:{}),...lm(m),...xk(m)}:null).filter(Boolean),
-    master:{...outKeys(state.master,op.mst),...xk(state.master)},
+    master:{...((state.master.name||"").trim()?{name:state.master.name.trim()}:{}),...outKeys(state.master,op.mst),...xk(state.master)},
     busx:Object.fromEntries(Object.entries(state.busx).map(([b,o])=>[b,{...pk(o),...xk(o)}])),
     ...(state.d2d.length?{d2d:state.d2d.map(x=>({i:{d:x.i.d,c:x.i.c},o:{d:x.o.d,c:x.o.c}}))}:{}),
   };
@@ -11663,7 +11745,7 @@ function loadSpec(spec){
     linkColors:Array.from({length:LINK_COUNT},(_,i)=>{const c=(spec.linkColors||[])[i];return Number.isInteger(c)?c:null;}),
     layers:(spec.layers||[]).slice(0,LAYER_COUNT).map(l=>({name:String((l&&l.name)||""),
       strips:((l&&l.strips)||[]).slice(0,LAYER_SLOTS).map(s=>s&&LAYER_KINDS.includes(s.type)?[s.type,s.type==="main"?"":String(s.name||"")]:null)})),
-    master:{rack:rackIn(spec.master?.rack),outs:null,...pk(spec.master||{},true),...xsIn(spec.master||{})},
+    master:{name:String(spec.master?.name||""),rack:rackIn(spec.master?.rack),outs:null,...pk(spec.master||{},true),...xsIn(spec.master||{})},
     busx:Object.fromEntries(["cue","center","mono"].map(b=>[b,{outs:[],ipf:2,...pk((spec.busx||{})[b]||{},false),...xsIn((spec.busx||{})[b]||{})}])),
     d2d:(Array.isArray(spec.d2d)?spec.d2d:[]).filter(x=>x&&isPin(x.i)&&isPin(x.o)).map(x=>({i:{d:x.i.d,c:x.i.c},o:{d:x.o.d,c:x.o.c}})),
     io:Array.isArray(spec.io)?spec.io:[{model:"MGB"}], // normalized by applyConfig()
@@ -13984,7 +14066,7 @@ function plugUiIndex(){
 }
 let _emoDataP=null;
 function emoDataPack(){
-  if(!_emoDataP)_emoDataP=fetch(EMO_ROOT+"emodata/presets.json")
+  if(!_emoDataP)_emoDataP=fetch(EMO_ROOT+"emodata/presets.json",{cache:"no-cache"}) /* revalidate: rebuilt with the packs */
     .then(r=>{if(!r.ok)throw new Error("preset pack fetch failed ("+r.status+")");return r.json();});
   return _emoDataP;
 }
@@ -14039,7 +14121,30 @@ function presetWithParams(text,params){
     text=text.replace(new RegExp(head+')<Parameters\\b[^>]*?(?:/>|>[^<]*</Parameters>)'),
       (m,h)=>h+'<Parameters Type="RealWorld">\n'+lines.join("\n")+"\n</Parameters>");
   }
-  return params.ps?presetWithChunks(text,setup,params.ps):text;
+  if(params.ps)text=presetWithChunks(text,setup,params.ps);
+  return params.kids?presetWithKids(text,params.kids):text;
+}
+/* Suite chainers (TG Mastering Chain, CLA MixHub, Scheps Omni Channel ...): each docked child plugin is a whole child
+   preset inside the active setup's <PluginSpecificXMLData>: <slot index="N"> ... <plugin_preset><![CDATA[ <child preset>
+   ]]>. presetKidSpan = [start, end) of slot N's child preset text; presetWithKids writes a slot's edits over it
+   (presetWithParams on the child). Mirrors make_lv1_session._preset_with_kids (keep in sync). */
+function presetSetupSpan(text){
+  const setup=(/<ActiveSetup>(\w+)</.exec(text||"")||[])[1]||"SETUP_A",a=(text||"").indexOf('<PresetData Setup="'+setup+'"');
+  if(a<0)return null;const b=presetIdx(text,"</PresetData>",a);return b<0?null:[a,b];
+}
+function presetKidSpan(text,slot){
+  const sp=presetSetupSpan(text);if(!sp)return null;
+  const a=text.indexOf('<slot index="'+slot+'"',sp[0]);if(a<0||a>sp[1])return null;
+  const c0=text.indexOf("<![CDATA[",a),c1=c0<0?-1:text.indexOf("]]>",c0),nx=text.indexOf("<slot index=",a+1);
+  if(c0<0||c1<0||c0>sp[1]||(nx>=0&&nx<c0))return null;
+  return [c0+9,c1];
+}
+function presetWithKids(text,kids){
+  for(const [slot,ed] of Object.entries(kids||{})){
+    const sp=hasP(ed)&&presetKidSpan(text,slot);if(!sp)continue;
+    text=text.slice(0,sp[0])+presetWithParams(text.slice(sp[0],sp[1]),ed)+text.slice(sp[1]);
+  }
+  return text;
 }
 /* A preset's plugin-specific chunks (rack.params[slot].ps): the <PluginSpecific> elements a setup carries after its
    <PluginSpecificXMLData> (sPresetData::ReadFromXML reads both) — e.g. GTR's amp / cabinet references, IRLive's
@@ -14186,6 +14291,7 @@ async function emoExport(spec){
     for(let i=auxes.length;i<nAux;i++)emoRename(db,FX0+8+i,"Mon "+(i+1));
     mtxs.forEach((m,i)=>{emoRename(db,MTX0+i,m.name);emoSetStripFormat(db,MTX0+i,m.stereo!==false);});
     for(let i=mtxs.length;i<nMtx;i++)emoRename(db,MTX0+i,"Matrix "+(i+1));
+    if(spec.master&&spec.master.name)emoRename(db,LR,spec.master.name); // the master's own name (template: "LR")
 
     // 4a. colors
     const colorRows=[];
@@ -14520,7 +14626,8 @@ async function emoImport(bytes,fileStemName){
       // an untouched fixed module may carry any factory version of its default (the templates mix EMO versions)
       const fac=EMO_FIX[cc]===role&&t&&(facTok[cc]||[]).some(f=>f.length===t.length&&f.every((x,k)=>x===t[k]));
       if(!fac&&text){
-        if(d&&t&&(d.length===t.length||(t.includes("R")&&t.length<=d.length))){ // an "R" list may stop early
+        // a suite chainer's docked children are whole presets inside it: keep it as stored (pre)
+        if(d&&t&&(d.length===t.length||(t.includes("R")&&t.length<=d.length))&&!text.includes("<plugin_preset>")){ // an "R" list may stop early
           t.forEach((v,k)=>{const x=puTok(v);if(v==="*"||!isFinite(x)||(d[k]!=="*"&&puTok(d[k])===x))return;p[k]=x;}); // "50*" tokens = 50
           const ps=presetChunks(text);if(ps)p.ps=ps; // plugin-specific chunks (IR, amp models, curves) come back as-is
         }else p.pre=text; // another layout than the default's (other plugin version), or none: kept exactly as stored
@@ -14773,7 +14880,7 @@ async function emoImport(bytes,fileStemName){
       show:{name:fileStemName||"Imported show",date:"",venue:""},
       channels,groups,fx:fxs,auxes,matrixes,
       ...(layers.some(l=>l.name||l.strips.some(Boolean))?{layers}:{}),
-      master:{...master,...(mRack?{rack:mRack}:{})},
+      master:{...master,...((nameOf[LR]||"").trim()&&nameOf[LR].trim()!=="LR"?{name:nameOf[LR].trim()}:{}),...(mRack?{rack:mRack}:{})},
     };
   }finally{db.close();}
 }
